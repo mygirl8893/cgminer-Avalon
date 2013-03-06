@@ -924,7 +924,6 @@ struct pool {
 	pthread_cond_t cr_cond;
 	struct list_head curlring;
 
-	time_t last_work_time;
 	time_t last_share_time;
 	double last_share_diff;
 
@@ -951,6 +950,7 @@ struct pool {
 	struct stratum_work swork;
 	pthread_t stratum_thread;
 	pthread_mutex_t stratum_lock;
+	int sshares; /* stratum shares submitted waiting on response */
 
 	/* GBT  variables */
 	bool has_gbt;
