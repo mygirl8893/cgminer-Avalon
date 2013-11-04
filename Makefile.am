@@ -89,7 +89,7 @@ cgminer_SOURCES += driver-bab.c
 endif
 
 if HAS_AVALON2
-cgminer_SOURCES += driver-avalon2.c driver-avalon2.h
+cgminer_SOURCES += driver-avalon2.c driver-avalon2.h crc16.c crc.h
 endif
 
 if HAS_MODMINER
