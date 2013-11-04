@@ -15,7 +15,7 @@
 
 #ifdef USE_AVALON2
 
-#define AVA2_RESET_FAULT_DECISECONDS 1
+#define AVA2_RESET_FAULT_DECISECONDS 10
 #define AVA2_MINER_THREADS	1
 #define AVA2_IO_SPEED	115200
 #define AVA2_DEFAULT_MINER_NUM	32
@@ -28,7 +28,7 @@
 #define AVA2_T1	'O'
 #define AVA2_T2	'N'
 
-#define AVA2_P_COUNT		(41 - 2)
+#define AVA2_P_COUNT		41
 #define AVA2_P_DETECT	0
 #define AVA2_P_STATIC	1
 #define AVA2_P_JOB_ID	2
@@ -39,6 +39,7 @@
 #define AVA2_P_NAK		6
 #define AVA2_P_NONCE		7
 #define AVA2_P_HEARTBEAT	8
+#define AVA2_P_ACTDETECT	9
 
 
 struct avalon2_pkg {
@@ -49,7 +50,8 @@ struct avalon2_pkg {
 	uint8_t data[32];
 	uint8_t crc[2];
 	uint8_t tail[2];
-} __attribute__((packed, aligned(4)));
+};
+#define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
 	int baud;
@@ -77,7 +79,7 @@ struct avalon2_info {
 	int matching_work[AVA2_DEFAULT_MINER_NUM];
 };
 
-#define AVA2_WRITE_SIZE (sizeof(struct ava2_pkg))
+#define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
 #define AVA2_READ_SIZE AVA2_WRITE_SIZE
 
 #define AVA2_GETS_ERROR -1
@@ -87,13 +89,11 @@ struct avalon2_info {
 
 #define AVA2_SEND_ERROR -1
 #define AVA2_SEND_OK 0
-#define AVA2_SEND_BUFFER_EMPTY 1
-#define AVA2_SEND_BUFFER_FULL 2
 
 #define avalon2_open(devpath, baud, purge)  serial_open(devpath, baud, AVA2_RESET_FAULT_DECISECONDS, purge)
 #define avalon2_close(fd) close(fd)
 
-extern struct ava2_info **ava2_info;
+extern struct avalon2_info **avalon2_info;
 
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */

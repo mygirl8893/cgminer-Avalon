@@ -36,6 +36,7 @@
 #include "miner.h"
 #include "fpgautils.h"
 #include "driver-avalon2.h"
+#include "crc.h"
 #include "hexdump.c"
 
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
@@ -48,6 +49,7 @@ struct device_drv avalon2_drv;
 static int avalon2_init_task(struct avalon2_pkg *pkg, uint8_t type)
 {
 	int i;
+	unsigned short crc;
 
 	pkg->head[0] = AVA2_H1;
 	pkg->head[1] = AVA2_H2;
@@ -59,10 +61,12 @@ static int avalon2_init_task(struct avalon2_pkg *pkg, uint8_t type)
 	pkg->cnt = 1;
 
 	for (i = 0; i < 32; i++)
-		pkg->data[i] = 0;
+		pkg->data[i] = i;
 
-	pkg->crc[0] = 0;
-	pkg->crc[1] = 0;
+	crc = crc16(pkg->data, 32);
+
+	pkg->crc[0] = crc & 0x00ff;
+	pkg->crc[1] = (crc & 0xff00) >> 8;
 
 	return 0;
 }
@@ -72,20 +76,79 @@ static inline void avalon2_create_task(struct avalon2_task *at,
 {
 }
 
-static int avalon2_send_task(int fd, const struct avalon2_task *at,
-			    struct cgpu_info *avalon)
-
+static int avalon2_send_task(int fd, const struct avalon2_pkg *pkg)
 {
+	int ret;
+	uint8_t buf[AVA2_WRITE_SIZE];
+	size_t nr_len = AVA2_WRITE_SIZE;
+
+	memcpy(buf, pkg, AVA2_WRITE_SIZE);
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: Sent(%d):", nr_len);
+		hexdump((uint8_t *)buf, nr_len);
+	}
+
+	ret = write(fd, buf, nr_len);
+	if (unlikely(ret != nr_len))
+		return AVA2_SEND_ERROR;
+
+	return AVA2_SEND_OK;
 }
 
-static inline int avalon2_gets(int fd, uint8_t *buf, struct thr_info *thr,
-		       struct timeval *tv_finish)
+static inline int avalon2_gets(int fd, uint8_t *buf)
 {
+	int read_amount = AVA2_READ_SIZE;
+	ssize_t ret = 0;
+
+	while (true) {
+		struct timeval timeout;
+		fd_set rd;
+
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 100000;
+
+		FD_ZERO(&rd);
+		FD_SET(fd, &rd);
+		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
+		if (unlikely(ret < 0)) {
+			applog(LOG_ERR, "Avalon2: Error %d on select in avalon_gets", errno);
+			return AVA2_GETS_ERROR;
+		}
+		if (ret) {
+			ret = read(fd, buf, read_amount);
+			if (unlikely(ret < 0)) {
+				applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets", errno);
+				return AVA2_GETS_ERROR;
+			}
+			if (likely(ret >= read_amount))
+				return AVA2_GETS_OK;
+			buf += ret;
+			read_amount -= ret;
+			continue;
+		}
+
+		return AVA2_GETS_TIMEOUT;
+	}
 }
 
-static int avalon2_get_result(int fd, struct avalon2_result *ar,
-			     struct thr_info *thr, struct timeval *tv_finish)
+static int avalon2_get_result(int fd, struct avalon2_ret *ar)
 {
+	uint8_t result[AVA2_READ_SIZE];
+	int ret;
+
+	memset(result, 0, AVA2_READ_SIZE);
+	ret = avalon2_gets(fd, result);
+
+	if (ret == AVA2_GETS_OK) {
+		if (opt_debug) {
+			applog(LOG_DEBUG, "Avalon: get:");
+			hexdump((uint8_t *)result, AVA2_READ_SIZE);
+		}
+		memcpy((uint8_t *)ar, result, AVA2_READ_SIZE);
+	}
+
+	applog(LOG_DEBUG, "Avalon: get: %d", ret);
+	return ret;
 }
 
 static bool avalon2_decode_nonce(struct thr_info *thr, struct avalon2_result *ar,
@@ -117,6 +180,8 @@ static bool avalon2_detect_one(const char *devpath)
 	int baud, miner_count, asic_count, timeout, frequency;
 
 	struct cgpu_info *avalon2;
+	struct avalon2_pkg detect_pkg;
+	struct avalon2_ret ret_pkg;
 
 	applog(LOG_DEBUG, "Avalon2 Detect: Attempting to open %s", devpath);
 
@@ -126,6 +191,9 @@ static bool avalon2_detect_one(const char *devpath)
 		return false;
 	}
 	/* Send out detect pkg */
+	avalon2_init_task(&detect_pkg, AVA2_P_DETECT);
+	avalon2_send_task(fd, &detect_pkg);
+	avalon2_get_result(fd, &ret_pkg);
 
 	/* We have a real Avalon! */
 	avalon2 = calloc(1, sizeof(struct cgpu_info));
@@ -163,6 +231,8 @@ static bool avalon2_detect_one(const char *devpath)
 	avalon2->device_id = -1;
 	avalon2_close(fd);
 
+
+	quit(1, "DEBUG");
 	return true;
 }
 
