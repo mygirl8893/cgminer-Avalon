@@ -470,7 +470,7 @@ struct cgpu_info {
 #ifdef USE_USBUTILS
 	struct cg_usb_device *usbdev;
 #endif
-#ifdef USE_AVALON
+#if defined(USE_AVALON) || defined(USE_AVALON2)
 	struct work **works;
 	int work_array;
 	int queued;

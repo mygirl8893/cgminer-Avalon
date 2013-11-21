@@ -65,8 +65,8 @@ static int avalon2_init_task(struct avalon2_pkg *pkg, uint8_t type)
 
 	crc = crc16(pkg->data, 32);
 
-	pkg->crc[0] = crc & 0x00ff;
-	pkg->crc[1] = (crc & 0xff00) >> 8;
+	pkg->crc[0] = (crc & 0xff00) >> 8;
+	pkg->crc[1] = crc & 0x00ff;
 
 	return 0;
 }
@@ -137,8 +137,9 @@ static int avalon2_get_result(int fd, struct avalon2_ret *ar)
 	int ret;
 
 	memset(result, 0, AVA2_READ_SIZE);
-	ret = avalon2_gets(fd, result);
 
+	/* Try to get the ACK */
+	ret = avalon2_gets(fd, result);
 	if (ret == AVA2_GETS_OK) {
 		if (opt_debug) {
 			applog(LOG_DEBUG, "Avalon: get:");
@@ -149,15 +150,6 @@ static int avalon2_get_result(int fd, struct avalon2_ret *ar)
 
 	applog(LOG_DEBUG, "Avalon: get: %d", ret);
 	return ret;
-}
-
-static bool avalon2_decode_nonce(struct thr_info *thr, struct avalon2_result *ar,
-				uint32_t *nonce)
-{
-}
-
-static void avalon2_get_reset(int fd, struct avalon2_result *ar)
-{
 }
 
 static int avalon2_reset(int fd, struct avalon2_result *ar)
@@ -193,6 +185,7 @@ static bool avalon2_detect_one(const char *devpath)
 	/* Send out detect pkg */
 	avalon2_init_task(&detect_pkg, AVA2_P_DETECT);
 	avalon2_send_task(fd, &detect_pkg);
+	avalon2_get_result(fd, &ret_pkg);
 	avalon2_get_result(fd, &ret_pkg);
 
 	/* We have a real Avalon! */
@@ -231,18 +224,12 @@ static bool avalon2_detect_one(const char *devpath)
 	avalon2->device_id = -1;
 	avalon2_close(fd);
 
-
-	quit(1, "DEBUG");
 	return true;
 }
 
 static inline void avalon2_detect()
 {
 	serial_detect(&avalon2_drv, avalon2_detect_one);
-}
-
-static void __avalon2_init(struct cgpu_info *avalon)
-{
 }
 
 static void avalon2_init(struct cgpu_info *avalon)
@@ -253,36 +240,39 @@ static bool avalon2_prepare(struct thr_info *thr)
 {
 }
 
-static void avalon2_free_work(struct thr_info *thr)
-{
-}
-
-static void do_avalon2_close(struct thr_info *thr)
-{
-}
-
-static inline void record_temp_fan(struct avalon2_info *info, struct avalon2_result *ar, float *temp_avg)
-{
-}
-
-static inline void adjust_fan(struct avalon2_info *info)
-{
-}
-
 /* We use a replacement algorithm to only remove references to work done from
  * the buffer when we need the extra space for new work. */
-static bool avalon2_fill(struct cgpu_info *avalon)
+static bool avalon_fill(struct cgpu_info *avalon)
 {
-	return false;
-}
+	struct avalon2_info *info = avalon->device_data;
+	int subid, slot, mc;
+	struct work *work;
+	bool ret = true;
 
-static void avalon2_rotate_array(struct cgpu_info *avalon)
-{
+	mc = info->miner_count;
+	if (avalon->queued >= mc)
+		goto out_unlock;
+	work = get_queued(avalon);
+	if (unlikely(!work)) {
+		ret = false;
+		goto out_unlock;
+	}
+	subid = avalon->queued++;
+	work->subid = subid;
+	slot = avalon->work_array * mc + subid;
+	if (likely(avalon->works[slot]))
+		work_completed(avalon, avalon->works[slot]);
+	avalon->works[slot] = work;
+	if (avalon->queued < mc)
+		ret = false;
+out_unlock:
+	return ret;
 }
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
 {
-	return 0;
+
+	return 0xffff;
 }
 
 static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
@@ -295,19 +285,17 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 
 static void avalon2_shutdown(struct thr_info *thr)
 {
-	do_avalon2_close(thr);
 }
 
 struct device_drv avalon2_drv = {
 	.drv_id = DRIVER_avalon2,
 	.dname = "avalon2",
 	.name = "AV2",
+	.get_api_stats = avalon2_api_stats,
 	.drv_detect = avalon2_detect,
+	.reinit_device = avalon2_init,
 	.thread_prepare = avalon2_prepare,
 	.hash_work = hash_queued_work,
-	.queue_full = avalon2_fill,
 	.scanwork = avalon2_scanhash,
-	.get_api_stats = avalon2_api_stats,
-	.reinit_device = avalon2_init,
 	.thread_shutdown = avalon2_shutdown,
 };
