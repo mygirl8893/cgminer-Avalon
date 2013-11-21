@@ -68,6 +68,10 @@ char *curly = ":D";
 #include "driver-avalon.h"
 #endif
 
+#ifdef USE_AVALON2
+#include "driver-avalon2.h"
+#endif
+
 #ifdef USE_BFLSC
 #include "driver-bflsc.h"
 #endif
@@ -76,7 +80,7 @@ char *curly = ":D";
 #include "driver-hashfast.h"
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_AVALON2) || defined(USE_MODMINER)
 #	define USE_FPGA
 #endif
 
@@ -1498,6 +1502,9 @@ static char *opt_verusage_and_exit(const char *extra)
 	printf("%s\nBuilt with "
 #ifdef USE_AVALON
 		"avalon "
+#endif
+#ifdef USE_AVALON2
+		"avalon2 "
 #endif
 #ifdef USE_BFLSC
 		"bflsc "

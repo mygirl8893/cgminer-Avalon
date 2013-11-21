@@ -225,6 +225,18 @@ if test "x$knc" = xyes; then
 fi
 AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
 
+avalon2="no"
+
+AC_ARG_ENABLE([avalon2],
+	[AC_HELP_STRING([--enable-avalon2],[Compile support for Avalon2 (default disabled)])],
+	[avalon2=$enableval]
+	)
+if test "x$avalon2" = xyes; then
+	AC_DEFINE([USE_FPGA_SERIAL], [1], [Defined to 1 if serial support required])
+	AC_DEFINE([USE_AVALON2], [1], [Defined to 1 if Avalon2 support is wanted])
+fi
+AM_CONDITIONAL([HAS_AVALON2], [test x$avalon2 = xyes])
+
 modminer="no"
 
 AC_ARG_ENABLE([modminer],
@@ -266,7 +278,7 @@ else
 	want_usbutils=false
 fi
 
-AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer != xno])
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon2$modminer != xno])
 AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
@@ -453,6 +465,12 @@ else
 	echo "  BlackArrow.ASICs.....: Disabled"
 fi
 
+if test "x$avalon2" = xyes; then
+	echo "  Avalon2.ASICs.........: Enabled"
+else
+	echo "  Avalon2.ASICs.........: Disabled"
+fi
+
 if test "x$bflsc" = xyes; then
 	echo "  BFL.ASICs............: Enabled"
 else
@@ -501,7 +519,7 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
-if test "x$avalon$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer" = xnononononononononono; then
+if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer" = xnononononononononono; then
 	AC_MSG_ERROR([No mining configured in])
 fi
 
