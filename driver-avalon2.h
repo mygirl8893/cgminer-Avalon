@@ -29,18 +29,20 @@
 #define AVA2_T2	'N'
 
 #define AVA2_P_COUNT		41
-#define AVA2_P_DETECT	0
-#define AVA2_P_STATIC	1
-#define AVA2_P_JOB_ID	2
-#define AVA2_P_COINBASE	3
-#define AVA2_P_MERKLES	4
 
-#define AVA2_P_ACK		5
-#define AVA2_P_NAK		6
-#define AVA2_P_NONCE		7
-#define AVA2_P_HEARTBEAT	8
-#define AVA2_P_ACTDETECT	9
+#define AVA2_P_ERROR	0
 
+#define AVA2_P_DETECT	10
+#define AVA2_P_STATIC	11
+#define AVA2_P_JOB_ID	12
+#define AVA2_P_COINBASE	13
+#define AVA2_P_MERKLES	14
+
+#define AVA2_P_ACK		21
+#define AVA2_P_NAK		22
+#define AVA2_P_NONCE		23
+#define AVA2_P_HEARTBEAT	24
+#define AVA2_P_ACKDETECT	25
 
 struct avalon2_pkg {
 	uint8_t head[2];

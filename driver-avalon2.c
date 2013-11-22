@@ -131,6 +131,36 @@ static inline int avalon2_gets(int fd, uint8_t *buf)
 	}
 }
 
+static int decode_pkg(struct avalon2_ret *ar, uint8_t *pkg)
+{
+	int i;
+	unsigned int expected_crc;
+	unsigned int actual_crc;
+
+	int type = AVA2_P_ERROR;
+	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
+
+	if (ar->head[0] == AVA2_H1 &&
+	    ar->head[1] == AVA2_H2 &&
+	    ar->tail[0] == AVA2_T1 &&
+	    ar->tail[1] == AVA2_T2) {
+
+		expected_crc = crc16(ar->data, 32);
+		actual_crc = (ar->crc[0] & 0xff) |
+			((ar->crc[1] & 0xff) << 8);
+
+		applog(LOG_DEBUG, "Avalon: expected crc(%04x), actural_crc(%04x)", expected_crc, actual_crc);
+		if (expected_crc != actual_crc)
+			goto out;
+
+		type = ar->type;
+		/* TODO: decode type here */
+	}
+
+out:
+	return type;
+}
+
 static int avalon2_get_result(int fd, struct avalon2_ret *ar)
 {
 	uint8_t result[AVA2_READ_SIZE];
@@ -138,18 +168,16 @@ static int avalon2_get_result(int fd, struct avalon2_ret *ar)
 
 	memset(result, 0, AVA2_READ_SIZE);
 
-	/* Try to get the ACK */
 	ret = avalon2_gets(fd, result);
-	if (ret == AVA2_GETS_OK) {
-		if (opt_debug) {
-			applog(LOG_DEBUG, "Avalon: get:");
-			hexdump((uint8_t *)result, AVA2_READ_SIZE);
-		}
-		memcpy((uint8_t *)ar, result, AVA2_READ_SIZE);
+	if (ret != AVA2_GETS_OK)
+		return AVA2_P_ERROR;
+
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: get(ret = %d):", ret);
+		hexdump((uint8_t *)result, AVA2_READ_SIZE);
 	}
 
-	applog(LOG_DEBUG, "Avalon: get: %d", ret);
-	return ret;
+	return decode_pkg(ar, result);
 }
 
 static int avalon2_reset(int fd, struct avalon2_result *ar)
@@ -168,6 +196,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 static bool avalon2_detect_one(const char *devpath)
 {
 	struct avalon2_info *info;
+	int ack, ackdetect;
 	int fd, ret;
 	int baud, miner_count, asic_count, timeout, frequency;
 
@@ -185,8 +214,11 @@ static bool avalon2_detect_one(const char *devpath)
 	/* Send out detect pkg */
 	avalon2_init_task(&detect_pkg, AVA2_P_DETECT);
 	avalon2_send_task(fd, &detect_pkg);
-	avalon2_get_result(fd, &ret_pkg);
-	avalon2_get_result(fd, &ret_pkg);
+	ack = avalon2_get_result(fd, &ret_pkg);
+	ackdetect = avalon2_get_result(fd, &ret_pkg);
+	applog(LOG_ERR, "Avalon2 Detect: %d %d", ack, ackdetect);
+	if (ack != AVA2_P_ACK || ackdetect != AVA2_P_ACKDETECT)
+		return false;
 
 	/* We have a real Avalon! */
 	avalon2 = calloc(1, sizeof(struct cgpu_info));
