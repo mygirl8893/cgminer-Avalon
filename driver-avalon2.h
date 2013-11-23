@@ -19,7 +19,7 @@
 #define AVA2_MINER_THREADS	1
 #define AVA2_IO_SPEED	115200
 #define AVA2_DEFAULT_MINER_NUM	32
-#define AVA2_DEFAULT_FAN_MIN_PWM 0xff;
+#define AVA2_DEFAULT_FAN_PWM 0xff;
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -44,6 +44,8 @@
 #define AVA2_P_HEARTBEAT	24
 #define AVA2_P_ACKDETECT	25
 
+#define AVALON2_QUEUED_COUNT	2
+
 struct avalon2_pkg {
 	uint8_t head[2];
 	uint8_t type;
@@ -56,10 +58,10 @@ struct avalon2_pkg {
 #define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
+	int fd;
 	int baud;
 	int miner_count;
 	int asic_count;
-	int timeout;
 	int frequency;
 
 	int fan0;
@@ -79,6 +81,9 @@ struct avalon2_info {
 
 	int no_matching_work;
 	int matching_work[AVA2_DEFAULT_MINER_NUM];
+
+	pthread_mutex_t qlock;
+	bool first;
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
@@ -94,8 +99,6 @@ struct avalon2_info {
 
 #define avalon2_open(devpath, baud, purge)  serial_open(devpath, baud, AVA2_RESET_FAULT_DECISECONDS, purge)
 #define avalon2_close(fd) close(fd)
-
-extern struct avalon2_info **avalon2_info;
 
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */

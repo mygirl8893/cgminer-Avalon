@@ -43,8 +43,6 @@
 ASSERT1(sizeof(uint32_t) == 4);
 
 static int option_offset = -1;
-struct avalon2_info **avalon2_infos;
-struct device_drv avalon2_drv;
 
 static int avalon2_init_task(struct avalon2_pkg *pkg, uint8_t type)
 {
@@ -180,25 +178,12 @@ static int avalon2_get_result(int fd, struct avalon2_ret *ar)
 	return decode_pkg(ar, result);
 }
 
-static int avalon2_reset(int fd, struct avalon2_result *ar)
-{
-}
-
-static void avalon2_idle(struct cgpu_info *avalon)
-{
-}
-
-static void get_options(int this_option_offset, int *baud, int *miner_count,
-			int *asic_count, int *timeout, int *frequency)
-{
-}
-
 static bool avalon2_detect_one(const char *devpath)
 {
 	struct avalon2_info *info;
 	int ack, ackdetect;
 	int fd, ret;
-	int baud, miner_count, asic_count, timeout, frequency;
+	int baud, miner_count, asic_count, frequency;
 
 	struct cgpu_info *avalon2;
 	struct avalon2_pkg detect_pkg;
@@ -216,7 +201,7 @@ static bool avalon2_detect_one(const char *devpath)
 	avalon2_send_task(fd, &detect_pkg);
 	ack = avalon2_get_result(fd, &ret_pkg);
 	ackdetect = avalon2_get_result(fd, &ret_pkg);
-	applog(LOG_ERR, "Avalon2 Detect: %d %d", ack, ackdetect);
+	applog(LOG_DEBUG, "Avalon2 Detect: %d %d", ack, ackdetect);
 	if (ack != AVA2_P_ACK || ackdetect != AVA2_P_ACKDETECT)
 		return false;
 
@@ -224,36 +209,31 @@ static bool avalon2_detect_one(const char *devpath)
 	avalon2 = calloc(1, sizeof(struct cgpu_info));
 	avalon2->drv = &avalon2_drv;
 	avalon2->device_path = strdup(devpath);
-	avalon2->device_id = fd;
 	avalon2->threads = AVA2_MINER_THREADS;
 	add_cgpu(avalon2);
 
-
-	avalon2_infos = realloc(avalon2_infos,
-			       sizeof(struct avalon2_info *) *
-			       (total_devices + 1));
 	applog(LOG_INFO, "Avalon2 Detect: Found at %s, mark as %d",
 	       devpath, avalon2->device_id);
 
-	avalon2_infos[avalon2->device_id] = (struct avalon2_info *)
-		malloc(sizeof(struct avalon2_info));
-	if (unlikely(!(avalon2_infos[avalon2->device_id])))
-		quit(1, "Failed to malloc avalon2_infos");
-	info = avalon2_infos[avalon2->device_id];
-	memset(info, 0, sizeof(struct avalon2_info));
+	avalon2->device_data = calloc(sizeof(struct avalon2_info), 1);
+	if (unlikely(!(avalon2->device_data)))
+		quit(1, "Failed to malloc avalon2_info");
+
+	info = avalon2->device_data;
+
 	info->baud = baud;
 	info->miner_count = miner_count;
 	info->asic_count = asic_count;
-	info->timeout = timeout;
-	info->fan_pwm = AVA2_DEFAULT_FAN_MIN_PWM;
+	info->frequency = frequency;
+	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
+
 	info->temp_max = 0;
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
-	info->frequency = frequency;
 
+	info->fd = -1;
 	/* Set asic to idle mode after detect */
-	avalon2->device_id = -1;
 	avalon2_close(fd);
 
 	return true;
@@ -264,45 +244,107 @@ static inline void avalon2_detect()
 	serial_detect(&avalon2_drv, avalon2_detect_one);
 }
 
-static void avalon2_init(struct cgpu_info *avalon)
+static void avalon2_init(struct cgpu_info *avalon2)
 {
+	int fd, ret;
+	struct avalon2_info *info = avalon2->device_data;
+
+	fd = avalon2_open(avalon2->device_path, info->baud, true);
+	if (unlikely(fd == -1)) {
+		applog(LOG_ERR, "Avalon2: Failed to open on %s", avalon2->device_path);
+		return;
+	}
+	applog(LOG_DEBUG, "Avalon2: Opened on %s", avalon2->device_path);
+
+	info->fd = fd;
 }
 
 static bool avalon2_prepare(struct thr_info *thr)
 {
+	struct cgpu_info *avalon2 = thr->cgpu;
+	struct avalon2_info *info = avalon2->device_data;
+
+	free(avalon2->works);
+	avalon2->works = calloc(sizeof(struct work *), 2);
+	if (!avalon2->works)
+		quit(1, "Failed to calloc avalon2 works in avalon2_prepare");
+
+	if (info->fd == -1)
+		avalon2_init(avalon2);
+
+	info->first = true;
+
+	return true;
 }
 
 /* We use a replacement algorithm to only remove references to work done from
  * the buffer when we need the extra space for new work. */
-static bool avalon_fill(struct cgpu_info *avalon)
+static bool avalon2_fill(struct cgpu_info *avalon2)
 {
-	struct avalon2_info *info = avalon->device_data;
-	int subid, slot, mc;
+	struct avalon2_info *info = avalon2->device_data;
+	int slot;
 	struct work *work;
 	bool ret = true;
 
-	mc = info->miner_count;
-	if (avalon->queued >= mc)
+	if (avalon2->queued >= AVALON2_QUEUED_COUNT)
 		goto out_unlock;
-	work = get_queued(avalon);
+	work = get_queued(avalon2);
 	if (unlikely(!work)) {
 		ret = false;
 		goto out_unlock;
 	}
-	subid = avalon->queued++;
-	work->subid = subid;
-	slot = avalon->work_array * mc + subid;
-	if (likely(avalon->works[slot]))
-		work_completed(avalon, avalon->works[slot]);
-	avalon->works[slot] = work;
-	if (avalon->queued < mc)
+	slot = avalon2->queued++;
+	work->subid = slot;
+	avalon2->works[slot] = work;
+
+	if (avalon2->queued < AVALON2_QUEUED_COUNT)
 		ret = false;
+
 out_unlock:
+
 	return ret;
 }
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
 {
+	unsigned char merkle_root[32], merkle_sha[64];
+	uint32_t *data32, *swap32;
+	int i;
+
+	struct work *work;
+	struct pool *pool;
+
+	struct cgpu_info *avalon2 = thr->cgpu;
+	struct avalon2_info *info = avalon2->device_data;
+
+	if (thr->work_restart || info->first) {
+		if (unlikely(info->first))
+			info->first = false;
+
+		do {
+			cgsleep_ms(40);
+		} while (avalon2->queued < AVALON2_QUEUED_COUNT);
+
+		work = avalon2->works[AVALON2_QUEUED_COUNT - 1];
+		pool = work->pool;
+		if (!pool->has_stratum)
+			quit(1, "Avalon2: Miner manager have to use stratum pool");
+
+
+		applog(LOG_DEBUG, "Avalon2: Pool stratum message 1: %d, %d, %d, %d, %d",
+		       pool->swork.cb_len,
+		       pool->nonce2_offset,
+		       pool->n2size,
+		       pool->merkle_offset,
+		       pool->swork.merkles);
+
+		/* work->job_id = strdup(pool->swork.job_id); */
+		/* work->nonce1 = strdup(pool->nonce1); */
+		/* work->ntime = strdup(pool->swork.ntime); */
+		/* cg_runlock(&pool->data_lock); */
+	}
+	quit(1, "Avalon2: STOP");
+
 
 	return 0xffff;
 }
@@ -310,7 +352,6 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	struct avalon2_info *info = avalon2_infos[cgpu->device_id];
 
 	return root;
 }
@@ -328,6 +369,7 @@ struct device_drv avalon2_drv = {
 	.reinit_device = avalon2_init,
 	.thread_prepare = avalon2_prepare,
 	.hash_work = hash_queued_work,
+	.queue_full = avalon2_fill,
 	.scanwork = avalon2_scanhash,
 	.thread_shutdown = avalon2_shutdown,
 };
