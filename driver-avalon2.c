@@ -82,13 +82,15 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg)
 	if (unlikely(ret != nr_len))
 		return AVA2_SEND_ERROR;
 
+	cgsleep_ms(40);		/* Wait the MM read all data */
 	return AVA2_SEND_OK;
 }
 
 static void avalon2_stratum_pkgs(int fd, struct pool *pool)
 {
+	/* FIXME: what if new stratum arrive when writing */
 	struct avalon2_pkg pkg;
-	int tmp;
+	int i, a, b, tmp;
 
 	/* Send out the first stratum message STATIC */
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %d, %d, %d, %d, %d",
@@ -97,7 +99,6 @@ static void avalon2_stratum_pkgs(int fd, struct pool *pool)
 	       pool->n2size,
 	       pool->merkle_offset,
 	       pool->swork.merkles);
-
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
 	tmp = bswap_32(pool->swork.cb_len);
 	memcpy(pkg.data, &tmp, 4);
@@ -120,17 +121,45 @@ static void avalon2_stratum_pkgs(int fd, struct pool *pool)
 
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s",
 	       pool->swork.job_id);
-
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
 	strcpy(pkg.data, pool->swork.job_id);
 	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
 	avalon2_send_pkg(fd, &pkg);
 
-	applog(LOG_DEBUG, "Avalon2: Pool stratum message COINBASE: %s",
-	       pool->coinbase);
 
-	applog(LOG_DEBUG, "Avalon2: Pool stratum message MERKLES: %s",
-	       pool->nonce1);
+	a = pool->swork.cb_len / AVA2_P_DATA_LEN;
+	b = pool->swork.cb_len % AVA2_P_DATA_LEN;
+	applog(LOG_DEBUG, "Avalon2: Pool stratum message COINBASE: %d %d", a, b);
+	for (i = 0; i < a; i++) {
+		memcpy(pkg.data, pool->coinbase + i * 32, 32);
+		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, a + (b ? 1 : 0));
+		avalon2_send_pkg(fd, &pkg);
+	}
+	if (b) {
+		memset(pkg.data, 0, AVA2_P_DATA_LEN);
+		memcpy(pkg.data, pool->coinbase + i * 32, b);
+		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, i + 1);
+		avalon2_send_pkg(fd, &pkg);
+	}
+	cgsleep_ms(2000);
+
+
+	b = pool->swork.merkles;
+	applog(LOG_DEBUG, "Avalon2: Pool stratum message MERKLES: %d", b);
+	for (i = 0; i < b; i++) {
+		memset(pkg.data, 0, AVA2_P_DATA_LEN);
+		memcpy(pkg.data, pool->swork.merkle_bin[i], 32);
+		avalon2_init_pkg(&pkg, AVA2_P_MERKLES, i + 1, b);
+		avalon2_send_pkg(fd, &pkg);
+	}
+
+	applog(LOG_DEBUG, "Avalon2: Pool stratum message HEADER: 4");
+	for (i = 0; i < 4; i++) {
+		memset(pkg.data, 0, AVA2_P_HEADER);
+		memcpy(pkg.data, pool->header_bin + i * 32, 32);
+		avalon2_init_pkg(&pkg, AVA2_P_HEADER, i + 1, 4);
+		avalon2_send_pkg(fd, &pkg);
+	}
 }
 
 static inline int avalon2_gets(int fd, uint8_t *buf)
