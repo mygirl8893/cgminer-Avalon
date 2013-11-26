@@ -97,6 +97,7 @@ struct avalon2_info {
 #define AVA2_GETS_TIMEOUT 2
 
 #define AVA2_SEND_ERROR -1
+#define AVA2_SEND_RESTART 1
 #define AVA2_SEND_OK 0
 
 #define avalon2_open(devpath, baud, purge)  serial_open(devpath, baud, AVA2_RESET_FAULT_DECISECONDS, purge)
