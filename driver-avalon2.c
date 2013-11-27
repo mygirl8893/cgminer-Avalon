@@ -213,7 +213,7 @@ static int decode_pkg(struct avalon2_ret *ar, uint8_t *pkg)
 	unsigned int expected_crc;
 	unsigned int actual_crc;
 
-	int type = AVA2_P_ERROR;
+	int type = AVA2_GETS_ERROR;
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
 	if (ar->head[0] == AVA2_H1 &&
@@ -230,7 +230,19 @@ static int decode_pkg(struct avalon2_ret *ar, uint8_t *pkg)
 			goto out;
 
 		type = ar->type;
-		/* TODO: decode type here */
+		switch(type) {
+		case AVA2_P_NONCE:
+			/* TODO: submit result here */
+			break;
+		case AVA2_P_HEARTBEAT:
+		case AVA2_P_ACK:
+		case AVA2_P_ACKDETECT:
+		case AVA2_P_NAK:
+			break;
+		default:
+			type = AVA2_GETS_ERROR;
+			break;
+		}
 	}
 
 out:
@@ -246,7 +258,7 @@ static int avalon2_get_result(int fd, struct avalon2_ret *ar)
 
 	ret = avalon2_gets(fd, result);
 	if (ret != AVA2_GETS_OK)
-		return AVA2_P_ERROR;
+		return ret;
 
 	if (opt_debug) {
 		applog(LOG_DEBUG, "Avalon2: get(ret = %d):", ret);
@@ -355,32 +367,9 @@ static bool avalon2_prepare(struct thr_info *thr)
 	return true;
 }
 
-/* We use a replacement algorithm to only remove references to work done from
- * the buffer when we need the extra space for new work. */
-static bool avalon2_fill(struct cgpu_info *avalon2)
+static void avalon2_update_work(struct cgpu_info *avalon2)
 {
 	struct avalon2_info *info = avalon2->device_data;
-	int slot;
-	struct work *work;
-	bool ret = true;
-
-	if (avalon2->queued >= AVALON2_QUEUED_COUNT)
-		goto out_unlock;
-	work = get_queued(avalon2);
-	if (unlikely(!work)) {
-		ret = false;
-		goto out_unlock;
-	}
-	slot = avalon2->queued++;
-	work->subid = slot;
-	avalon2->works[slot] = work;
-
-	if (avalon2->queued < AVALON2_QUEUED_COUNT)
-		ret = false;
-
-out_unlock:
-
-	return ret;
 }
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
@@ -389,30 +378,32 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	uint32_t *data32, *swap32;
 	int i;
 
+	struct avalon2_ret ar;
+
 	struct work *work;
 	struct pool *pool;
 
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
-	if (thr->work_restart || info->first) {
+	if (thr->work_restart || thr->work_update || info->first) {
+		thr->work_update = false;
+		thr->work_restart = false;
 		if (unlikely(info->first))
 			info->first = false;
 
-		do {
-			cgsleep_ms(40);
-		} while (avalon2->queued < AVALON2_QUEUED_COUNT);
-
-		work = avalon2->works[AVALON2_QUEUED_COUNT - 1];
+		work = get_work(thr, thr->id);
 		pool = work->pool;
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
 
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 	}
-	quit(1, "Avalon2: STOP");
 
-	return 0xff;
+	if (avalon2_get_result(info->fd, &ar) == AVA2_GETS_TIMEOUT)
+		return 0;
+
+	return 0xffffffff;
 }
 
 static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
@@ -439,8 +430,8 @@ struct device_drv avalon2_drv = {
 	.drv_detect = avalon2_detect,
 	.reinit_device = avalon2_init,
 	.thread_prepare = avalon2_prepare,
-	.hash_work = hash_queued_work,
-	.queue_full = avalon2_fill,
+	.hash_work = hash_driver_work,
 	.scanwork = avalon2_scanhash,
+	.update_work = avalon2_update_work,
 	.thread_shutdown = avalon2_shutdown,
 };

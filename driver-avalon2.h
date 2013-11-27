@@ -31,8 +31,6 @@
 #define AVA2_P_COUNT		41
 #define AVA2_P_DATA_LEN		(41 - 9)
 
-#define AVA2_P_ERROR	0
-
 #define AVA2_P_DETECT	10
 #define AVA2_P_STATIC	11
 #define AVA2_P_JOB_ID	12
@@ -91,14 +89,14 @@ struct avalon2_info {
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
 #define AVA2_READ_SIZE AVA2_WRITE_SIZE
 
-#define AVA2_GETS_ERROR -1
 #define AVA2_GETS_OK 0
-#define AVA2_GETS_RESTART 1
-#define AVA2_GETS_TIMEOUT 2
+#define AVA2_GETS_TIMEOUT -1
+#define AVA2_GETS_RESTART -2
+#define AVA2_GETS_ERROR -3
 
-#define AVA2_SEND_ERROR -1
-#define AVA2_SEND_RESTART 1
 #define AVA2_SEND_OK 0
+#define AVA2_SEND_RESTART -1
+#define AVA2_SEND_ERROR -2
 
 #define avalon2_open(devpath, baud, purge)  serial_open(devpath, baud, AVA2_RESET_FAULT_DECISECONDS, purge)
 #define avalon2_close(fd) close(fd)
