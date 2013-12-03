@@ -79,6 +79,7 @@ struct avalon2_info {
 	int temp_sum;
 	int temp_old;
 
+	struct pool *pool;
 	int no_matching_work;
 	int matching_work[AVA2_DEFAULT_MINER_NUM];
 

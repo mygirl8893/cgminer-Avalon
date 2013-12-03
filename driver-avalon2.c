@@ -89,7 +89,7 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg, struct thr_in
 	return AVA2_SEND_OK;
 }
 
-static void avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
+static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 {
 	/* FIXME: what if new stratum arrive when writing */
 	struct avalon2_pkg pkg;
@@ -148,8 +148,6 @@ static void avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr
 		if (avalon2_send_pkg(fd, &pkg, thr) == AVA2_SEND_RESTART)
 			return AVA2_SEND_RESTART;
 	}
-	cgsleep_ms(2000);	/* Only for debug */
-
 
 	b = pool->swork.merkles;
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message MERKLES: %d", b);
@@ -207,11 +205,22 @@ static inline int avalon2_gets(int fd, uint8_t *buf)
 	}
 }
 
-static int decode_pkg(struct avalon2_ret *ar, uint8_t *pkg)
+static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
+	struct cgpu_info *avalon2;
+	struct avalon2_info *info;
+
+	if (thr) {
+		avalon2 = thr->cgpu;
+		info = avalon2->device_data;
+	}
+
+	struct work *work;
+
 	int i;
 	unsigned int expected_crc;
 	unsigned int actual_crc;
+	uint32_t nonce, nonce2;
 
 	int type = AVA2_GETS_ERROR;
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
@@ -232,7 +241,15 @@ static int decode_pkg(struct avalon2_ret *ar, uint8_t *pkg)
 		type = ar->type;
 		switch(type) {
 		case AVA2_P_NONCE:
-			/* TODO: submit result here */
+			memcpy(&nonce, ar->data + 16, 4);
+			memcpy(&nonce2, ar->data + 8, 4);
+
+			nonce2 = bswap_32(nonce2);
+			nonce = bswap_32(nonce);
+			nonce -= 0x180;
+
+			applog(LOG_DEBUG, "Avalon2: Found!: (%08x), (%08x)", nonce2, nonce);
+			submit_nonce2_nonce(thr, nonce2, nonce);
 			break;
 		case AVA2_P_HEARTBEAT:
 		case AVA2_P_ACK:
@@ -249,8 +266,19 @@ out:
 	return type;
 }
 
-static int avalon2_get_result(int fd, struct avalon2_ret *ar)
+static int avalon2_get_result(struct thr_info *thr, int fd_detect, struct avalon2_ret *ar)
 {
+	struct cgpu_info *avalon2;
+	struct avalon2_info *info;
+	int fd;
+
+	fd = fd_detect;
+	if (thr) {
+		avalon2 = thr->cgpu;
+		info = avalon2->device_data;
+		fd = info->fd;
+	}
+
 	uint8_t result[AVA2_READ_SIZE];
 	int ret;
 
@@ -265,7 +293,7 @@ static int avalon2_get_result(int fd, struct avalon2_ret *ar)
 		hexdump((uint8_t *)result, AVA2_READ_SIZE);
 	}
 
-	return decode_pkg(ar, result);
+	return decode_pkg(thr, ar, result);
 }
 
 static bool avalon2_detect_one(const char *devpath)
@@ -289,8 +317,8 @@ static bool avalon2_detect_one(const char *devpath)
 	/* Send out detect pkg */
 	avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 	avalon2_send_pkg(fd, &detect_pkg, NULL);
-	ack = avalon2_get_result(fd, &ret_pkg);
-	ackdetect = avalon2_get_result(fd, &ret_pkg);
+	ack = avalon2_get_result(NULL, fd, &ret_pkg);
+	ackdetect = avalon2_get_result(NULL, fd, &ret_pkg);
 	applog(LOG_DEBUG, "Avalon2 Detect: %d %d", ack, ackdetect);
 	if (ack != AVA2_P_ACK || ackdetect != AVA2_P_ACKDETECT)
 		return false;
@@ -397,10 +425,13 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
 
+		info->pool = pool;
+		applog(LOG_DEBUG, "Avalon2: info->pool %p", pool);
+
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 	}
 
-	if (avalon2_get_result(info->fd, &ar) == AVA2_GETS_TIMEOUT)
+	if (avalon2_get_result(thr, info->fd, &ar) == AVA2_GETS_TIMEOUT)
 		return 0;
 
 	return 0xffffffff;
