@@ -220,7 +220,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	int i;
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2;
+	uint32_t nonce, nonce2, miner;
 
 	int type = AVA2_GETS_ERROR;
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
@@ -241,9 +241,11 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 		type = ar->type;
 		switch(type) {
 		case AVA2_P_NONCE:
-			memcpy(&nonce, ar->data + 16, 4);
+			memcpy(&miner, ar->data, 4);
 			memcpy(&nonce2, ar->data + 8, 4);
+			memcpy(&nonce, ar->data + 16, 4);
 
+			info->matching_work[bswap_32(miner)]++;
 			nonce2 = bswap_32(nonce2);
 			nonce = bswap_32(nonce);
 			nonce -= 0x180;
@@ -402,10 +404,6 @@ static void avalon2_update_work(struct cgpu_info *avalon2)
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
 {
-	unsigned char merkle_root[32], merkle_sha[64];
-	uint32_t *data32, *swap32;
-	int i;
-
 	struct avalon2_ret ar;
 
 	struct work *work;
@@ -440,6 +438,15 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
+	struct avalon2_info *info = cgpu->device_data;
+
+	int i;
+	for (i = 0; i < 16; i++) {
+		char mcw[24];
+
+		sprintf(mcw, "match_work_count%d", i + 1);
+		root = api_add_int(root, mcw, &(info->matching_work[i]), false);
+	}
 
 	return root;
 }
