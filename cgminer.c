@@ -1605,6 +1605,12 @@ static void calc_midstate(struct work *work)
 	sha256_ctx ctx;
 
 	flip64(data32, work->data);
+
+	char *data64 = bin2hex(work->data, 64);
+	applog(LOG_DEBUG, "Generated work midstate input %s", data64);
+	free(data64);
+
+
 	sha256_init(&ctx);
 	sha256_update(&ctx, data, 64);
 	memcpy(work->midstate, ctx.h, 32);
@@ -5828,6 +5834,20 @@ void set_target(unsigned char *dest_target, double diff)
 	memcpy(dest_target, target, 32);
 }
 
+#ifdef USE_AVALON2
+void submit_nonce2_nonce(struct thr_info *thr, uint32_t nonce2, uint32_t nonce)
+{
+	struct cgpu_info *avalon2 = thr->cgpu;
+	struct avalon2_info *info = avalon2->device_data;
+	struct pool *pool = info->pool;
+	struct work *work = make_work();
+
+	pool->nonce2 = nonce2;
+	gen_stratum_work(pool, work);
+	submit_nonce(thr, work, nonce);
+}
+#endif
+
 /* Generates stratum based work based on the most recent notify information
  * from the pool. This will keep generating work while a pool is down so we use
  * other means to detect when the pool has died in stratum_thread */
@@ -5847,13 +5867,29 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Downgrade to a read lock to read off the pool variables */
 	cg_dwlock(&pool->data_lock);
 
+	char *data64;
+
 	/* Generate merkle root */
+	        data64 = bin2hex(pool->coinbase, pool->swork.cb_len);
+		applog(LOG_DEBUG, "Generated work coinbase %s", data64);
+		free(data64);
+
 	gen_hash(pool->coinbase, merkle_root, pool->swork.cb_len);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
 		memcpy(merkle_sha + 32, pool->swork.merkle_bin[i], 32);
+
+	        data64 = bin2hex(merkle_sha, 64);
+		applog(LOG_DEBUG, "Generated work mmerkle_sha before %s", data64);
+		free(data64);
+
+
 		gen_hash(merkle_sha, merkle_root, 64);
 		memcpy(merkle_sha, merkle_root, 32);
+
+		data64 = bin2hex(merkle_sha, 32);
+		applog(LOG_DEBUG, "Generated work mmerkle_sha after %s", data64);
+		free(data64);
 	}
 	data32 = (uint32_t *)merkle_sha;
 	swap32 = (uint32_t *)merkle_root;
@@ -5886,6 +5922,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	}
 
 	calc_midstate(work);
+	char *mid = bin2hex(work->midstate, 32);
+	applog(LOG_DEBUG, "Generated work midstate %s", mid);
+	free(mid);
+
 	set_target(work->target, work->sdiff);
 
 	local_work++;
@@ -6530,13 +6570,17 @@ void hash_driver_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
+#ifndef USE_AVALON2
 		mythr->work_update = false;
+#endif
 
 		hashes = drv->scanwork(mythr);
 
+#ifndef USE_AVALON2
 		/* Reset the bool here in case the driver looks for it
 		 * synchronously in the scanwork loop. */
 		mythr->work_restart = false;
+#endif
 
 		if (unlikely(hashes == -1 )) {
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
