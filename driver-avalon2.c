@@ -251,7 +251,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			nonce -= 0x180;
 
 			applog(LOG_DEBUG, "Avalon2: Found!: (%08x), (%08x)", nonce2, nonce);
-			submit_nonce2_nonce(thr, nonce2, nonce);
+			submit_nonce2_nonce(thr, nonce2 + 1, nonce);
+//			submit_nonce2_nonce(thr, nonce2, nonce);
 			break;
 		case AVA2_P_HEARTBEAT:
 		case AVA2_P_ACK:
