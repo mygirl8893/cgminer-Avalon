@@ -18,7 +18,7 @@
 #define AVA2_RESET_FAULT_DECISECONDS 10
 #define AVA2_MINER_THREADS	1
 #define AVA2_IO_SPEED	115200
-#define AVA2_DEFAULT_MINER_NUM	16
+#define AVA2_DEFAULT_MINER_NUM	10
 #define AVA2_DEFAULT_FAN_PWM 0xff;
 
 /* Avalon2 protocol package type */
