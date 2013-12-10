@@ -37,6 +37,7 @@
 #define AVA2_P_COINBASE	13
 #define AVA2_P_MERKLES	14
 #define AVA2_P_HEADER	15
+#define AVA2_P_ASKNONCE 16
 
 #define AVA2_P_ACK		21
 #define AVA2_P_NAK		22
@@ -82,6 +83,7 @@ struct avalon2_info {
 	struct pool *pool;
 	int no_matching_work;
 	int matching_work[AVA2_DEFAULT_MINER_NUM];
+	int hw_errors;
 
 	pthread_mutex_t qlock;
 	bool first;
@@ -96,8 +98,7 @@ struct avalon2_info {
 #define AVA2_GETS_ERROR -3
 
 #define AVA2_SEND_OK 0
-#define AVA2_SEND_RESTART -1
-#define AVA2_SEND_ERROR -2
+#define AVA2_SEND_ERROR -1
 
 #define avalon2_open(devpath, baud, purge)  serial_open(devpath, baud, AVA2_RESET_FAULT_DECISECONDS, purge)
 #define avalon2_close(fd) close(fd)

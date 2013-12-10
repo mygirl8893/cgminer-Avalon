@@ -5878,18 +5878,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
 		memcpy(merkle_sha + 32, pool->swork.merkle_bin[i], 32);
-
-	        data64 = bin2hex(merkle_sha, 64);
-		applog(LOG_DEBUG, "Generated work mmerkle_sha before %s", data64);
-		free(data64);
-
-
 		gen_hash(merkle_sha, merkle_root, 64);
 		memcpy(merkle_sha, merkle_root, 32);
-
-		data64 = bin2hex(merkle_sha, 32);
-		applog(LOG_DEBUG, "Generated work mmerkle_sha after %s", data64);
-		free(data64);
 	}
 	data32 = (uint32_t *)merkle_sha;
 	swap32 = (uint32_t *)merkle_root;
