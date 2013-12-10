@@ -243,13 +243,13 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
-	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s",
-	       pool->swork.job_id);
-	memset(pkg.data, 0, AVA2_P_DATA_LEN);
-	strcpy(pkg.data, pool->swork.job_id);
-	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
-	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
-		;
+	/* applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s", */
+	/*        pool->swork.job_id); */
+	/* memset(pkg.data, 0, AVA2_P_DATA_LEN); */
+	/* strcpy(pkg.data, pool->swork.job_id); */
+	/* avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1); */
+	/* while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK) */
+	/* 	; */
 
 	a = pool->swork.cb_len / AVA2_P_DATA_LEN;
 	b = pool->swork.cb_len % AVA2_P_DATA_LEN;
@@ -337,6 +337,7 @@ static bool avalon2_detect_one(const char *devpath)
 		applog(LOG_ERR, "Avalon2 Detect: Failed to open %s", devpath);
 		return false;
 	}
+	tcflush(fd, TCIOFLUSH);
 	/* Send out detect pkg */
 	avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 	avalon2_send_pkg(fd, &detect_pkg, NULL);
@@ -446,8 +447,6 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
 
 		info->pool = pool;
-
-		tcflush(info->fd, TCIOFLUSH);
 
 		cg_wlock(&pool->data_lock);
 		avalon2_stratum_pkgs(info->fd, pool, thr);
