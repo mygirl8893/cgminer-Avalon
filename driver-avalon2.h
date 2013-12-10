@@ -87,6 +87,7 @@ struct avalon2_info {
 
 	pthread_mutex_t qlock;
 	bool first;
+	bool new_stratum;
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))

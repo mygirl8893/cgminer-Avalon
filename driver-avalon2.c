@@ -117,8 +117,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			nonce = bswap_32(nonce);
 			nonce -= 0x180;
 
-			applog(LOG_DEBUG, "Avalon2: Found!: (%08x), (%08x)", nonce2, nonce);
-			submit_nonce2_nonce(thr, nonce2, nonce);
+			applog(LOG_DEBUG, "Avalon2: Found! (%08x), (%08x)", nonce2, nonce);
+			if (thr && !info->new_stratum)
+				submit_nonce2_nonce(thr, nonce2, nonce);
 			break;
 		case AVA2_P_HEARTBEAT:
 		case AVA2_P_ACK:
@@ -312,7 +313,7 @@ static int avalon2_get_result(struct thr_info *thr, int fd_detect, struct avalon
 		return ret;
 
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon2: get(ret = %d):", ret);
+		applog(LOG_DEBUG, "Avalon2: Get(ret = %d):", ret);
 		hexdump((uint8_t *)result, AVA2_READ_SIZE);
 	}
 
@@ -447,11 +448,13 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
 
 		info->pool = pool;
+		info->new_stratum = true;
 
 		cg_wlock(&pool->data_lock);
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 		cg_wunlock(&pool->data_lock);
 		info->hw_errors = 0;
+		info->new_stratum = false;
 	}
 
 	if (avalon2_get_result(thr, info->fd, &ar) < 0) {
