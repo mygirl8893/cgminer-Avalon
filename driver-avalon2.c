@@ -199,7 +199,8 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg, struct thr_in
 
 	ret = decode_pkg(thr, &ar, result);
 	if (ret != AVA2_P_ACK) {
-		applog(LOG_DEBUG, "Avalon2: Pkg(%d)!", ret);
+		applog(LOG_DEBUG, "Avalon2: PKG(%d)!", ret);
+		hexdump((uint8_t *)result, AVA2_READ_SIZE);
 		return AVA2_SEND_ERROR;
 	}
 
