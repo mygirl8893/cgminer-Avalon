@@ -108,7 +108,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 
 			miner = bswap_32(miner);
-			if (miner >= AVA2_DEFAULT_MINER_NUM) {
+			if (miner >= AVA2_DEFAULT_MINERS) {
 				applog(LOG_DEBUG, "Avalon2: Wrong miner id %d", miner);
 				info->no_matching_work++;
 			} else
@@ -138,10 +138,15 @@ out:
 
 static inline int avalon2_gets(int fd, uint8_t *buf)
 {
+	int i;
 	int read_amount = AVA2_READ_SIZE;
+	uint8_t buf_tmp[AVA2_READ_SIZE];
+	uint8_t buf_copy[2 * AVA2_READ_SIZE];
+	uint8_t *buf_back = buf;
 	ssize_t ret = 0;
 
 	while (true) {
+
 		struct timeval timeout;
 		fd_set rd;
 
@@ -161,8 +166,24 @@ static inline int avalon2_gets(int fd, uint8_t *buf)
 				applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets", errno);
 				return AVA2_GETS_ERROR;
 			}
-			if (likely(ret >= read_amount))
+			if (likely(ret >= read_amount)) {
+				for (i = 1; i < read_amount; i++) {
+					if (buf_back[i - 1] == AVA2_H1 && buf_back[i] == AVA2_H2)
+						break;
+				}
+				i -= 1;
+				if (i) {
+					ret = read(fd, buf_tmp, i);
+					if (unlikely(ret != i)) {
+						applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets", errno);
+						return AVA2_GETS_ERROR;
+					}
+					memcpy(buf_copy, buf_back + i, AVA2_READ_SIZE - i);
+					memcpy(buf_copy + AVA2_READ_SIZE - i, buf_tmp, i);
+					memcpy(buf_back, buf_copy, AVA2_READ_SIZE);
+				}
 				return AVA2_GETS_OK;
+			}
 			buf += ret;
 			read_amount -= ret;
 			continue;
@@ -422,6 +443,27 @@ static bool avalon2_prepare(struct thr_info *thr)
 static void avalon2_update_work(struct cgpu_info *avalon2)
 {
 	struct avalon2_info *info = avalon2->device_data;
+}
+
+static int polling(struct thr_info *thr, int fd)
+{
+	int i;
+
+	struct avalon2_pkg polling_pkg;
+	struct avalon2_ret ar;
+
+	struct cgpu_info *avalon2 = thr->cgpu;
+	struct avalon2_info *info = avalon2->device_data;
+
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if (info->modulars[i]) {
+			avalon2_init_pkg(&polling_pkg, AVA2_P_POLLING, 1, 1);
+			avalon2_send_pkg(fd, &polling_pkg, thr);
+			avalon2_get_result(thr, fd, &ar);
+		}
+	}
+
+	return 0;
 }
 
 static int64_t avalon2_scanhash(struct thr_info *thr)

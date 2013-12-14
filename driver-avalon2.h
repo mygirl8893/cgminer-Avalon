@@ -15,11 +15,12 @@
 
 #ifdef USE_AVALON2
 
-#define AVA2_RESET_FAULT_DECISECONDS 10
+#define AVA2_RESET_FAULT_DECISECONDS	10
 #define AVA2_MINER_THREADS	1
-#define AVA2_IO_SPEED	115200
-#define AVA2_DEFAULT_MINER_NUM	10
-#define AVA2_DEFAULT_FAN_PWM 0xff;
+#define AVA2_IO_SPEED		115200
+#define AVA2_DEFAULT_MINERS	10
+#define AVA2_DEFAULT_FAN_PWM	0xff
+#define AVA2_DEFAULT_MODULARS	3
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -37,7 +38,7 @@
 #define AVA2_P_COINBASE	13
 #define AVA2_P_MERKLES	14
 #define AVA2_P_HEADER	15
-#define AVA2_P_ASKNONCE 16
+#define AVA2_P_POLLING  16
 
 #define AVA2_P_ACK		21
 #define AVA2_P_NAK		22
@@ -82,12 +83,13 @@ struct avalon2_info {
 
 	struct pool *pool;
 	int no_matching_work;
-	int matching_work[AVA2_DEFAULT_MINER_NUM];
+	int matching_work[AVA2_DEFAULT_MINERS];
 	int hw_errors;
 
 	pthread_mutex_t qlock;
 	bool first;
 	bool new_stratum;
+	int modulars[AVA2_DEFAULT_MODULARS];
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
