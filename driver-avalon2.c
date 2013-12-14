@@ -107,14 +107,14 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&nonce, ar->data + 16, 4);
 
 
-			miner = bswap_32(miner);
+			miner = be32toh(miner);
 			if (miner >= AVA2_DEFAULT_MINERS) {
 				applog(LOG_DEBUG, "Avalon2: Wrong miner id %d", miner);
 				info->no_matching_work++;
 			} else
 				info->matching_work[miner]++;
 			nonce2 = bswap_32(nonce2);
-			nonce = bswap_32(nonce);
+			nonce = be32toh(nonce);
 			nonce -= 0x180;
 
 			applog(LOG_DEBUG, "Avalon2: Found! (%08x), (%08x)", nonce2, nonce);
@@ -243,22 +243,22 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	       pool->merkle_offset,
 	       pool->swork.merkles);
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
-	tmp = bswap_32(pool->swork.cb_len);
+	tmp = be32toh(pool->swork.cb_len);
 	memcpy(pkg.data, &tmp, 4);
 
-	tmp = bswap_32(pool->nonce2_offset);
+	tmp = be32toh(pool->nonce2_offset);
 	memcpy(pkg.data + 4, &tmp, 4);
 
-	tmp = bswap_32(pool->n2size);
+	tmp = be32toh(pool->n2size);
 	memcpy(pkg.data + 8, &tmp, 4);
 
-	tmp = bswap_32(pool->merkle_offset);
+	tmp = be32toh(pool->merkle_offset);
 	memcpy(pkg.data + 12, &tmp, 4);
 
-	tmp = bswap_32(pool->swork.merkles);
+	tmp = be32toh(pool->swork.merkles);
 	memcpy(pkg.data + 16, &tmp, 4);
 
-	tmp = bswap_32((int)pool->swork.diff);
+	tmp = be32toh((int)pool->swork.diff);
 	memcpy(pkg.data + 20, &tmp, 4);
 
 	avalon2_init_pkg(&pkg, AVA2_P_STATIC, 1, 1);
