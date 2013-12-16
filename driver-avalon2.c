@@ -115,6 +115,16 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 		case AVA2_P_ACKDETECT:
 		case AVA2_P_NAK:
 			break;
+		case AVA2_P_STATUS:
+			memcpy(&(info->temp0), ar->data, 4);
+			memcpy(&(info->temp1), ar->data + 4, 4);
+			memcpy(&(info->fan0), ar->data + 8, 4);
+			memcpy(&(info->fan1), ar->data + 12, 4);
+			info->temp0 = be32toh(info->temp0);
+			info->temp1 = be32toh(info->temp1);
+			info->fan0 = be32toh(info->fan0);
+			info->fan1 = be32toh(info->fan1);
+			break;
 		default:
 			type = AVA2_GETS_ERROR;
 			break;
@@ -451,6 +461,7 @@ static int polling(struct thr_info *thr, int fd)
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
 {
+	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
 
 	struct pool *pool;
@@ -479,6 +490,10 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		cg_wunlock(&pool->data_lock);
 		info->hw_errors = 0;
 		info->new_stratum = false;
+
+		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
+		avalon2_send_pkg(info->fd, &send_pkg, thr);
+		avalon2_get_result(thr, info->fd, &ar);
 	}
 
 	if (avalon2_get_result(thr, info->fd, &ar) < 0) {
@@ -502,7 +517,11 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	}
 	root = api_add_int(root, "No matching work", &(info->no_matching_work), false);
 
+	root = api_add_int(root, "Temperature 0", &(info->temp0), false);
+	root = api_add_int(root, "Temperature 1", &(info->temp1), false);
 
+	root = api_add_int(root, "Fan 0", &(info->fan0), false);
+	root = api_add_int(root, "Fan 1", &(info->fan1), false);
 	return root;
 }
 
