@@ -42,8 +42,6 @@
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
-static int option_offset = -1;
-
 static int avalon2_init_pkg(struct avalon2_pkg *pkg, uint8_t type, uint8_t idx, uint8_t cnt)
 {
 	unsigned short crc;
@@ -59,13 +57,10 @@ static int avalon2_init_pkg(struct avalon2_pkg *pkg, uint8_t type, uint8_t idx, 
 
 	pkg->crc[0] = (crc & 0xff00) >> 8;
 	pkg->crc[1] = crc & 0x00ff;
-
-	pkg->tail[0] = AVA2_T1;
-	pkg->tail[1] = AVA2_T2;
-
 	return 0;
 }
 
+extern void submit_nonce2_nonce(struct thr_info *thr, uint32_t nonce2, uint32_t nonce);
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
 	struct cgpu_info *avalon2;
@@ -76,9 +71,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 		info = avalon2->device_data;
 	}
 
-	struct work *work;
-
-	int i;
 	unsigned int expected_crc;
 	unsigned int actual_crc;
 	uint32_t nonce, nonce2, miner;
@@ -87,9 +79,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
 	if (ar->head[0] == AVA2_H1 &&
-	    ar->head[1] == AVA2_H2 &&
-	    ar->tail[0] == AVA2_T1 &&
-	    ar->tail[1] == AVA2_T2) {
+	    ar->head[1] == AVA2_H2) {
 
 		expected_crc = crc16(ar->data, AVA2_P_DATA_LEN);
 		actual_crc = (ar->crc[0] & 0xff) |
@@ -121,7 +111,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			if (thr && !info->new_stratum)
 				submit_nonce2_nonce(thr, nonce2, nonce);
 			break;
-		case AVA2_P_HEARTBEAT:
 		case AVA2_P_ACK:
 		case AVA2_P_ACKDETECT:
 		case AVA2_P_NAK:
@@ -309,6 +298,7 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 			;
 
 	}
+	return 0;
 }
 
 static int avalon2_get_result(struct thr_info *thr, int fd_detect, struct avalon2_ret *ar)
@@ -345,8 +335,8 @@ static bool avalon2_detect_one(const char *devpath)
 {
 	struct avalon2_info *info;
 	int ackdetect;
-	int fd, ret;
-	int baud, miner_count, asic_count, frequency;
+	int fd;
+	int baud, frequency;
 
 	struct cgpu_info *avalon2;
 	struct avalon2_pkg detect_pkg;
@@ -385,8 +375,6 @@ static bool avalon2_detect_one(const char *devpath)
 	info = avalon2->device_data;
 
 	info->baud = baud;
-	info->miner_count = miner_count;
-	info->asic_count = asic_count;
 	info->frequency = frequency;
 	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
 
@@ -409,7 +397,7 @@ static inline void avalon2_detect()
 
 static void avalon2_init(struct cgpu_info *avalon2)
 {
-	int fd, ret;
+	int fd;
 	struct avalon2_info *info = avalon2->device_data;
 
 	fd = avalon2_open(avalon2->device_path, info->baud, true);
@@ -440,11 +428,6 @@ static bool avalon2_prepare(struct thr_info *thr)
 	return true;
 }
 
-static void avalon2_update_work(struct cgpu_info *avalon2)
-{
-	struct avalon2_info *info = avalon2->device_data;
-}
-
 static int polling(struct thr_info *thr, int fd)
 {
 	int i;
@@ -468,7 +451,6 @@ static int polling(struct thr_info *thr, int fd)
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
 {
-	struct avalon2_pkg pkg;
 	struct avalon2_ret ar;
 
 	struct pool *pool;
@@ -527,7 +509,6 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 static void avalon2_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
-	struct avalon_info *info = avalon->device_data;
 
 	free(avalon->works);
 	avalon->works = NULL;
@@ -543,6 +524,5 @@ struct device_drv avalon2_drv = {
 	.thread_prepare = avalon2_prepare,
 	.hash_work = hash_driver_work,
 	.scanwork = avalon2_scanhash,
-	.update_work = avalon2_update_work,
 	.thread_shutdown = avalon2_shutdown,
 };

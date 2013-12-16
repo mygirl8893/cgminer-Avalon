@@ -26,11 +26,11 @@
 #define AVA2_H1	'A'
 #define AVA2_H2	'V'
 
-#define AVA2_T1	'O'
-#define AVA2_T2	'N'
+#define AVA2_P_COINBASE_SIZE	(5 * 1024)
+#define AVA2_P_MERKLES_COUNT	20
 
-#define AVA2_P_COUNT		41
-#define AVA2_P_DATA_LEN		(41 - 9)
+#define AVA2_P_COUNT	39
+#define AVA2_P_DATA_LEN		(AVA2_P_COUNT - 7)
 
 #define AVA2_P_DETECT	10
 #define AVA2_P_STATIC	11
@@ -39,11 +39,14 @@
 #define AVA2_P_MERKLES	14
 #define AVA2_P_HEADER	15
 #define AVA2_P_POLLING  16
+#define AVA2_P_DIFF	17
+#define AVA2_P_REQUIRE	18
+#define AVA2_P_SET	19
 
 #define AVA2_P_ACK		21
 #define AVA2_P_NAK		22
 #define AVA2_P_NONCE		23
-#define AVA2_P_HEARTBEAT	24
+#define AVA2_P_STATUS		24
 #define AVA2_P_ACKDETECT	25
 
 #define AVALON2_QUEUED_COUNT	2
@@ -55,25 +58,20 @@ struct avalon2_pkg {
 	uint8_t cnt;
 	uint8_t data[32];
 	uint8_t crc[2];
-	uint8_t tail[2];
 };
 #define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
 	int fd;
 	int baud;
-	int miner_count;
-	int asic_count;
 	int frequency;
 
 	int fan0;
 	int fan1;
-	int fan2;
 	int fan_pwm;
 
 	int temp0;
 	int temp1;
-	int temp2;
 
 	int temp_max;
 	int temp_history_count;
