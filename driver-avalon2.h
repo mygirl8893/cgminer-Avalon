@@ -19,7 +19,7 @@
 #define AVA2_MINER_THREADS	1
 #define AVA2_IO_SPEED		115200
 #define AVA2_DEFAULT_MINERS	10
-#define AVA2_DEFAULT_FAN_PWM	0xff
+#define AVA2_DEFAULT_FAN_PWM	0
 #define AVA2_DEFAULT_MODULARS	3
 
 /* Avalon2 protocol package type */
@@ -48,8 +48,7 @@
 #define AVA2_P_NONCE		23
 #define AVA2_P_STATUS		24
 #define AVA2_P_ACKDETECT	25
-
-#define AVALON2_QUEUED_COUNT	2
+/* Avalon2 protocol package type */
 
 struct avalon2_pkg {
 	uint8_t head[2];

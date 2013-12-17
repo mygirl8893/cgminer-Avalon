@@ -353,7 +353,6 @@ static bool avalon2_detect_one(const char *devpath)
 	struct avalon2_info *info;
 	int ackdetect;
 	int fd;
-	int baud, frequency;
 
 	struct cgpu_info *avalon2;
 	struct avalon2_pkg detect_pkg;
@@ -392,10 +391,8 @@ static bool avalon2_detect_one(const char *devpath)
 
 	info = avalon2->device_data;
 
-	info->baud = baud;
-	info->set_frequency = frequency;
+	info->baud = AVA2_IO_SPEED;
 	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
-
 	info->temp_max = 0;
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
@@ -521,7 +518,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
 		     (double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
 
-	for (i = 0; i < 16; i++) {
+	for (i = 0; i < AVA2_DEFAULT_MINERS; i++) {
 		char mcw[24];
 
 		sprintf(mcw, "Match work count%d", i + 1);
