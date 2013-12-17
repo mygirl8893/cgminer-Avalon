@@ -5848,6 +5848,7 @@ void submit_nonce2_nonce(struct thr_info *thr, uint32_t nonce2, uint32_t nonce)
 
 	work->device_diff = MIN(drv->working_diff, work->work_difficulty);
 	submit_nonce(thr, work, nonce);
+	free_work(work);
 }
 #endif
 
