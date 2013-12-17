@@ -361,6 +361,7 @@ static bool avalon2_detect_one(const char *devpath)
 	}
 	tcflush(fd, TCIOFLUSH);
 	/* Send out detect pkg */
+	memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
 	avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 	avalon2_send_pkg(fd, &detect_pkg, NULL);
 	ackdetect = avalon2_get_result(NULL, fd, &ret_pkg);
