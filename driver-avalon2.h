@@ -64,7 +64,10 @@ struct avalon2_pkg {
 struct avalon2_info {
 	int fd;
 	int baud;
-	int frequency;
+	int set_frequency;
+	int get_frequency;
+	int set_voltage;
+	int get_voltage;
 
 	int fan0;
 	int fan1;

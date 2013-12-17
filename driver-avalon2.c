@@ -66,21 +66,22 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	struct cgpu_info *avalon2;
 	struct avalon2_info *info;
 
+	unsigned int expected_crc;
+	unsigned int actual_crc;
+	uint32_t nonce, nonce2, miner;
+	uint8_t jobid[4];
+
+	int type = AVA2_GETS_ERROR;
+
 	if (thr) {
 		avalon2 = thr->cgpu;
 		info = avalon2->device_data;
 	}
 
-	unsigned int expected_crc;
-	unsigned int actual_crc;
-	uint32_t nonce, nonce2, miner;
-
-	int type = AVA2_GETS_ERROR;
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
 	if (ar->head[0] == AVA2_H1 &&
 	    ar->head[1] == AVA2_H2) {
-
 		expected_crc = crc16(ar->data, AVA2_P_DATA_LEN);
 		actual_crc = (ar->crc[0] & 0xff) |
 			((ar->crc[1] & 0xff) << 8);
@@ -95,7 +96,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&miner, ar->data, 4);
 			memcpy(&nonce2, ar->data + 8, 4);
 			memcpy(&nonce, ar->data + 16, 4);
-
+			memcpy(jobid, ar->data + 20, 4);
 
 			miner = be32toh(miner);
 			if (miner >= AVA2_DEFAULT_MINERS) {
@@ -120,10 +121,14 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&(info->temp1), ar->data + 4, 4);
 			memcpy(&(info->fan0), ar->data + 8, 4);
 			memcpy(&(info->fan1), ar->data + 12, 4);
+			memcpy(&(info->get_frequency), ar->data + 16, 4);
+			memcpy(&(info->get_voltage), ar->data + 20, 4);
 			info->temp0 = be32toh(info->temp0);
 			info->temp1 = be32toh(info->temp1);
 			info->fan0 = be32toh(info->fan0);
 			info->fan1 = be32toh(info->fan1);
+			info->get_frequency = be32toh(info->get_frequency);
+			info->get_voltage = be32toh(info->get_voltage);
 			break;
 		default:
 			type = AVA2_GETS_ERROR;
@@ -264,13 +269,15 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
-	/* applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s", */
-	/*        pool->swork.job_id); */
-	/* memset(pkg.data, 0, AVA2_P_DATA_LEN); */
-	/* strcpy(pkg.data, pool->swork.job_id); */
-	/* avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1); */
-	/* while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK) */
-	/* 	; */
+	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s",
+	       pool->swork.job_id);
+	memset(pkg.data, 0, AVA2_P_DATA_LEN);
+	for (i = 0; i < 4; i++) {
+		pkg.data[i] = *(pool->swork.job_id + strlen(pool->swork.job_id) - 4 + i);
+	}
+	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
+	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
+		;
 
 	a = pool->swork.cb_len / AVA2_P_DATA_LEN;
 	b = pool->swork.cb_len % AVA2_P_DATA_LEN;
@@ -386,7 +393,7 @@ static bool avalon2_detect_one(const char *devpath)
 	info = avalon2->device_data;
 
 	info->baud = baud;
-	info->frequency = frequency;
+	info->set_frequency = frequency;
 	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
 
 	info->temp_max = 0;
@@ -523,6 +530,9 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 
 	root = api_add_int(root, "Fan 0", &(info->fan0), false);
 	root = api_add_int(root, "Fan 1", &(info->fan1), false);
+
+	root = api_add_int(root, "Frequency", &(info->get_frequency), false);
+	root = api_add_int(root, "Voltage", &(info->get_voltage), false);
 	return root;
 }
 
