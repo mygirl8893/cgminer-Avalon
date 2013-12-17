@@ -80,8 +80,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
-	if (ar->head[0] == AVA2_H1 &&
-	    ar->head[1] == AVA2_H2) {
+	if (ar->head[0] == AVA2_H1 && ar->head[1] == AVA2_H2) {
 		expected_crc = crc16(ar->data, AVA2_P_DATA_LEN);
 		actual_crc = (ar->crc[0] & 0xff) |
 			((ar->crc[1] & 0xff) << 8);
@@ -112,10 +111,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			if (thr && !info->new_stratum)
 				submit_nonce2_nonce(thr, nonce2, nonce);
 			break;
-		case AVA2_P_ACK:
-		case AVA2_P_ACKDETECT:
-		case AVA2_P_NAK:
-			break;
 		case AVA2_P_STATUS:
 			memcpy(&(info->temp0), ar->data, 4);
 			memcpy(&(info->temp1), ar->data + 4, 4);
@@ -129,6 +124,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			info->fan1 = be32toh(info->fan1);
 			info->get_frequency = be32toh(info->get_frequency);
 			info->get_voltage = be32toh(info->get_voltage);
+			break;
+		case AVA2_P_ACK:
+		case AVA2_P_ACKDETECT:
+		case AVA2_P_NAK:
 			break;
 		default:
 			type = AVA2_GETS_ERROR;
@@ -496,9 +495,10 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		cg_wlock(&pool->data_lock);
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 		cg_wunlock(&pool->data_lock);
-		info->hw_errors = 0;
+
 		info->new_stratum = false;
 
+		/* Read the device status back */
 		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
 		avalon2_send_pkg(info->fd, &send_pkg, thr);
 		avalon2_get_result(thr, info->fd, &ar);
