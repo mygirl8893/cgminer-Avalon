@@ -100,14 +100,15 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			miner = be32toh(miner);
 			if (miner >= AVA2_DEFAULT_MINERS) {
 				applog(LOG_DEBUG, "Avalon2: Wrong miner id %d", miner);
-				info->no_matching_work++;
+				info->wrong_miner_id++;
 			} else
 				info->matching_work[miner]++;
 			nonce2 = bswap_32(nonce2);
 			nonce = be32toh(nonce);
 			nonce -= 0x180;
 
-			applog(LOG_DEBUG, "Avalon2: Found! (%08x), (%08x)", nonce2, nonce);
+			applog(LOG_DEBUG, "Avalon2: Found! [%c%c%c%c] (%08x) (%08x)",
+			       jobid[0], jobid[1], jobid[2], jobid[3], nonce2, nonce);
 			if (thr && !info->new_stratum)
 				submit_nonce2_nonce(thr, nonce2, nonce);
 			break;
@@ -524,7 +525,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		sprintf(mcw, "Match work count%d", i + 1);
 		root = api_add_int(root, mcw, &(info->matching_work[i]), false);
 	}
-	root = api_add_int(root, "No matching work", &(info->no_matching_work), false);
+	root = api_add_int(root, "No matching work", &(info->wrong_miner_id), false);
 
 	root = api_add_int(root, "Temperature 0", &(info->temp0), false);
 	root = api_add_int(root, "Temperature 1", &(info->temp1), false);
