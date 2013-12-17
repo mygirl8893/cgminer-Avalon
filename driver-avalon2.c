@@ -502,6 +502,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
 		avalon2_send_pkg(info->fd, &send_pkg, thr);
 		avalon2_get_result(thr, info->fd, &ar);
+		avalon2->temp = info->temp0;
 	}
 
 	if (avalon2_get_result(thr, info->fd, &ar) < 0) {
