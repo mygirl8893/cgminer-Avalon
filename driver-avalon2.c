@@ -517,8 +517,10 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon2_info *info = cgpu->device_data;
-
 	int i;
+	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
+		     (double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
+
 	for (i = 0; i < 16; i++) {
 		char mcw[24];
 
@@ -526,6 +528,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		root = api_add_int(root, mcw, &(info->matching_work[i]), false);
 	}
 	root = api_add_int(root, "No matching work", &(info->wrong_miner_id), false);
+	root = api_add_percent(root, "Device Hardware%", &hwp, true);
 
 	root = api_add_int(root, "Temperature 0", &(info->temp0), false);
 	root = api_add_int(root, "Temperature 1", &(info->temp1), false);
