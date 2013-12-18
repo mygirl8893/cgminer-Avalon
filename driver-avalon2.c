@@ -60,22 +60,34 @@ static int avalon2_init_pkg(struct avalon2_pkg *pkg, uint8_t type, uint8_t idx, 
 	return 0;
 }
 
+static int job_idcmp(uint8_t *job_id, uint8_t *pool_job_id)
+{
+	int i = 0;
+	for (i = 0; i < 4; i++) {
+		if (job_id[i] != *(pool_job_id + strlen(pool_job_id) - 4 + i))
+			return 1;
+	}
+	return 0;
+}
+
 extern void submit_nonce2_nonce(struct thr_info *thr, uint32_t nonce2, uint32_t nonce);
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
 	struct cgpu_info *avalon2;
 	struct avalon2_info *info;
+	struct pool *pool;
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
 	uint32_t nonce, nonce2, miner;
-	uint8_t jobid[4];
+	uint8_t job_id[5];
 
 	int type = AVA2_GETS_ERROR;
 
 	if (thr) {
 		avalon2 = thr->cgpu;
 		info = avalon2->device_data;
+		pool = info->pool;
 	}
 
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
@@ -95,7 +107,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&miner, ar->data, 4);
 			memcpy(&nonce2, ar->data + 8, 4);
 			memcpy(&nonce, ar->data + 16, 4);
-			memcpy(jobid, ar->data + 20, 4);
+			memset(job_id, 0, 5);
+			memcpy(job_id, ar->data + 20, 4);
 
 			miner = be32toh(miner);
 			if (miner >= AVA2_DEFAULT_MINERS) {
@@ -107,8 +120,12 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			nonce = be32toh(nonce);
 			nonce -= 0x180;
 
-			applog(LOG_DEBUG, "Avalon2: Found! [%c%c%c%c] (%08x) (%08x)",
-			       jobid[0], jobid[1], jobid[2], jobid[3], nonce2, nonce);
+			applog(LOG_DEBUG, "Avalon2: Found! [%s] (%08x) (%08x)",
+			       job_id, nonce2, nonce);
+
+			if (job_idcmp(job_id, pool->swork.job_id))
+				break;
+
 			if (thr && !info->new_stratum)
 				submit_nonce2_nonce(thr, nonce2, nonce);
 			break;
@@ -497,6 +514,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		info->new_stratum = false;
 
 		/* Read the device status back */
+		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
 		avalon2_send_pkg(info->fd, &send_pkg, thr);
 		avalon2_get_result(thr, info->fd, &ar);
