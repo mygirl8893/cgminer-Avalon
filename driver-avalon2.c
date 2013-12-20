@@ -148,6 +148,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			info->fan1 = be32toh(info->fan1);
 			info->get_frequency = be32toh(info->get_frequency);
 			info->get_voltage = be32toh(info->get_voltage);
+
+			avalon2->temp = info->temp0;
 			break;
 		case AVA2_P_ACK:
 		case AVA2_P_ACKDETECT:
@@ -419,6 +421,8 @@ static bool avalon2_detect_one(const char *devpath)
 
 	info->baud = AVA2_IO_SPEED;
 	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
+	info->set_voltage = AVA2_DEFAULT_VOLTAGE;
+	info->set_frequency = AVA2_DEFAULT_FREQUENCY;
 	info->temp_max = 0;
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
@@ -500,6 +504,8 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
+	uint32_t tmp;
+
 	if (thr->work_restart || thr->work_update ||
 	    info->first) {
 		applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d, first: %d",
@@ -520,12 +526,25 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		cg_wunlock(&pool->data_lock);
 		info->new_stratum = false;
 
+		/* Set the Fan, Voltage and Frequency */
+		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
+
+		tmp = be32toh(info->fan_pwm);
+		memcpy(send_pkg.data, &tmp, 4);
+
+		tmp = be32toh(info->set_voltage);
+		memcpy(send_pkg.data + 4, &tmp, 4);
+
+		tmp = be32toh(info->set_frequency);
+		memcpy(send_pkg.data + 8, &tmp, 4);
+
+		avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
+		avalon2_send_pkg(info->fd, &send_pkg, thr);
+
 		/* Read the device status back */
 		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
 		avalon2_send_pkg(info->fd, &send_pkg, thr);
-		avalon2_get_result(thr, info->fd, &ar);
-		avalon2->temp = info->temp0;
 	}
 
 	if (avalon2_get_result(thr, info->fd, &ar) < 0) {
