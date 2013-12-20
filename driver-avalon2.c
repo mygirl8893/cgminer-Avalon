@@ -87,7 +87,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	if (thr) {
 		avalon2 = thr->cgpu;
 		info = avalon2->device_data;
-		pool = info->pool;
+		pool = pools[info->pool_no];
 	}
 
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
@@ -504,7 +504,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
 
-		info->pool = pool;
+		info->pool_no = pool->pool_no;
 		info->new_stratum = true;
 
 		cg_wlock(&pool->data_lock);

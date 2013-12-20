@@ -63,6 +63,7 @@ struct avalon2_pkg {
 struct avalon2_info {
 	int fd;
 	int baud;
+
 	int set_frequency;
 	int get_frequency;
 	int set_voltage;
@@ -74,20 +75,19 @@ struct avalon2_info {
 
 	int temp0;
 	int temp1;
-
 	int temp_max;
 	int temp_history_count;
 	int temp_history_index;
 	int temp_sum;
 	int temp_old;
 
-	struct pool *pool;
+	bool first;
+	bool new_stratum;
+
+	int pool_no;
 	int wrong_miner_id;
 	int matching_work[AVA2_DEFAULT_MINERS];
 
-	pthread_mutex_t qlock;
-	bool first;
-	bool new_stratum;
 	int modulars[AVA2_DEFAULT_MODULARS];
 };
 
