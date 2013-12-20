@@ -70,7 +70,7 @@ static int job_idcmp(uint8_t *job_id, uint8_t *pool_job_id)
 	return 0;
 }
 
-extern void submit_nonce2_nonce(struct thr_info *thr, uint32_t nonce2, uint32_t nonce);
+extern void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce);
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
 	struct cgpu_info *avalon2;
@@ -79,7 +79,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, miner;
+	uint32_t nonce, nonce2, miner, pool_no;
 	uint8_t job_id[5];
 
 	int type = AVA2_GETS_ERROR;
@@ -87,7 +87,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	if (thr) {
 		avalon2 = thr->cgpu;
 		info = avalon2->device_data;
-		pool = pools[info->pool_no];
 	}
 
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
@@ -104,15 +103,18 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 		switch(type) {
 		case AVA2_P_NONCE:
-			memcpy(&miner, ar->data, 4);
+			memcpy(&miner, ar->data + 0, 4);
+			memcpy(&pool_no, ar->data + 4, 4);
 			memcpy(&nonce2, ar->data + 8, 4);
+			/* Calc time    ar->data + 12 */
 			memcpy(&nonce, ar->data + 16, 4);
 			memset(job_id, 0, 5);
 			memcpy(job_id, ar->data + 20, 4);
 
 			miner = be32toh(miner);
-			if (miner >= AVA2_DEFAULT_MINERS) {
-				applog(LOG_DEBUG, "Avalon2: Wrong miner id %d", miner);
+			pool_no = be32toh(pool_no);
+			if (miner >= AVA2_DEFAULT_MINERS || pool_no >= total_pools) {
+				applog(LOG_DEBUG, "Avalon2: Wrong miner id/pool no %d,%d", miner, pool_no);
 				info->wrong_miner_id++;
 			} else
 				info->matching_work[miner]++;
@@ -120,14 +122,18 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			nonce = be32toh(nonce);
 			nonce -= 0x180;
 
-			applog(LOG_DEBUG, "Avalon2: Found! [%s] (%08x) (%08x)",
-			       job_id, nonce2, nonce);
-
+			applog(LOG_DEBUG, "Avalon2: Found! [%s] %d:(%08x) (%08x)",
+			       job_id, pool_no, nonce2, nonce);
+			/* FIXME:
+			 * We need remember the pre_pool. then submit the stale work */
+			pool = pools[pool_no];
 			if (job_idcmp(job_id, pool->swork.job_id))
 				break;
 
+			/* FIXME:
+			 * Include pool no */
 			if (thr && !info->new_stratum)
-				submit_nonce2_nonce(thr, nonce2, nonce);
+				submit_nonce2_nonce(thr, pool_no, nonce2, nonce);
 			break;
 		case AVA2_P_STATUS:
 			memcpy(&(info->temp0), ar->data, 4);
@@ -281,6 +287,9 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 
 	tmp = be32toh((int)pool->swork.diff);
 	memcpy(pkg.data + 20, &tmp, 4);
+
+	tmp = be32toh((int)pool->pool_no);
+	memcpy(pkg.data + 24, &tmp, 4);
 
 	avalon2_init_pkg(&pkg, AVA2_P_STATIC, 1, 1);
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
@@ -506,11 +515,9 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 
 		info->pool_no = pool->pool_no;
 		info->new_stratum = true;
-
 		cg_wlock(&pool->data_lock);
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 		cg_wunlock(&pool->data_lock);
-
 		info->new_stratum = false;
 
 		/* Read the device status back */

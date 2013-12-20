@@ -5835,12 +5835,12 @@ void set_target(unsigned char *dest_target, double diff)
 }
 
 #ifdef USE_AVALON2
-void submit_nonce2_nonce(struct thr_info *thr, uint32_t nonce2, uint32_t nonce)
+void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct device_drv *drv = cgpu->drv;
-	struct avalon2_info *info = cgpu->device_data;
-	struct pool *pool = pools[info->pool_no];
+
+	struct pool *pool = pools[pool_no];
 	struct work *work = make_work();
 
 	pool->nonce2 = nonce2;
