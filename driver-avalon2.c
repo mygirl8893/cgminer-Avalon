@@ -550,7 +550,8 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		memcpy(send_pkg.data + 8, &tmp, 4);
 
 		avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
-		avalon2_send_pkg(info->fd, &send_pkg, thr);
+		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
+			;
 	}
 
 	/* TODO: Polling the target */
