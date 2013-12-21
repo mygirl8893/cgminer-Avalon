@@ -96,6 +96,7 @@ struct avalon2_info {
 	int matching_work[AVA2_DEFAULT_MINERS];
 
 	int modulars[AVA2_DEFAULT_MODULARS];
+	char mm_version[16];
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))

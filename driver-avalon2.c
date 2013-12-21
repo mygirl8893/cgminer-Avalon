@@ -151,8 +151,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 			avalon2->temp = info->temp0;
 			break;
-		case AVA2_P_ACK:
 		case AVA2_P_ACKDETECT:
+			break;
+		case AVA2_P_ACK:
+			break;
 		case AVA2_P_NAK:
 			break;
 		default:
@@ -419,6 +421,9 @@ static bool avalon2_detect_one(const char *devpath)
 
 	info = avalon2->device_data;
 
+	memcpy(info->mm_version, ret_pkg.data, 15);
+	info->mm_version[15] = '\0';
+
 	info->baud = AVA2_IO_SPEED;
 	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
 	info->set_voltage = AVA2_DEFAULT_VOLTAGE;
@@ -563,6 +568,8 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	int i;
 	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
 		     (double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
+
+	root = api_add_string(root, "MM Version", info->mm_version, false);
 
 	for (i = 0; i < AVA2_DEFAULT_MINERS; i++) {
 		char mcw[24];
