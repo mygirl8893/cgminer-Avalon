@@ -177,7 +177,6 @@ static inline int avalon2_gets(int fd, uint8_t *buf)
 	ssize_t ret = 0;
 
 	while (true) {
-
 		struct timeval timeout;
 		fd_set rd;
 
@@ -192,6 +191,7 @@ static inline int avalon2_gets(int fd, uint8_t *buf)
 			return AVA2_GETS_ERROR;
 		}
 		if (ret) {
+			memset(buf, 0, read_amount);
 			ret = read(fd, buf, read_amount);
 			if (unlikely(ret < 0)) {
 				applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets", errno);
@@ -513,6 +513,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 
 	if (thr->work_restart || thr->work_update ||
 	    info->first) {
+		info->new_stratum = true;
 		applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d, first: %d",
 		       thr->work_restart, thr->work_update, info->first);
 		thr->work_update = false;
@@ -526,16 +527,15 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 
 		info->diff = ((int)pool->swork.diff) - 1;
 		info->pool_no = pool->pool_no;
-		info->new_stratum = true;
 		cg_wlock(&pool->data_lock);
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 		cg_wunlock(&pool->data_lock);
-		info->new_stratum = false;
 
 		/* Read the device status back */
 		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
-		avalon2_send_pkg(info->fd, &send_pkg, thr);
+		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
+			;
 		avalon2_get_result(thr, info->fd, &ar);
 
 		/* Set the Fan, Voltage and Frequency */
@@ -553,6 +553,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
 		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 			;
+		info->new_stratum = false;
 	}
 
 	/* TODO: Polling the target */
