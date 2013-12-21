@@ -536,6 +536,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
 		avalon2_send_pkg(info->fd, &send_pkg, thr);
+		avalon2_get_result(thr, info->fd, &ar);
 
 		/* Set the Fan, Voltage and Frequency */
 		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
