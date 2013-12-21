@@ -519,12 +519,18 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
 
+		info->diff = ((int)pool->swork.diff) - 1;
 		info->pool_no = pool->pool_no;
 		info->new_stratum = true;
 		cg_wlock(&pool->data_lock);
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 		cg_wunlock(&pool->data_lock);
 		info->new_stratum = false;
+
+		/* Read the device status back */
+		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
+		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
+		avalon2_send_pkg(info->fd, &send_pkg, thr);
 
 		/* Set the Fan, Voltage and Frequency */
 		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
@@ -539,16 +545,10 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		memcpy(send_pkg.data + 8, &tmp, 4);
 
 		avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
-		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
-			;
-
-		/* Read the device status back */
-		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
-		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
-		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
-			;
+		avalon2_send_pkg(info->fd, &send_pkg, thr);
 	}
 
+	/* TODO: Polling the target */
 	if (avalon2_get_result(thr, info->fd, &ar) < 0) {
 		return 0;
 	}

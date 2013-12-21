@@ -90,6 +90,8 @@ struct avalon2_info {
 	bool new_stratum;
 
 	int pool_no;
+	int diff;
+
 	int wrong_miner_id;
 	int matching_work[AVA2_DEFAULT_MINERS];
 
