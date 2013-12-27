@@ -25,7 +25,7 @@
 
 #define AVA2_DEFAULT_FAN_PWM	80
 #define AVA2_DEFAULT_VOLTAGE	0x8a00
-#define AVA2_DEFAULT_FREQUENCY	1400
+#define AVA2_DEFAULT_FREQUENCY	1500
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
