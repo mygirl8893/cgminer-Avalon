@@ -1199,6 +1199,17 @@ static struct opt_table opt_config_table[] = {
 		     set_bitburner_fury_options, NULL, NULL,
 		     "Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq"),
 #endif
+#ifdef USE_AVALON2
+	OPT_WITH_ARG("--avalon2-freq",
+		     set_avalon2_freq, NULL, NULL,
+		     "Set frequency range for Avalon2, single value or range"),
+	OPT_WITH_ARG("--avalon2-fan",
+		     set_avalon2_fan, NULL, NULL,
+		     "Set Avalon2 target fan speed"),
+	OPT_WITH_ARG("--avalon2-voltage",
+		     set_avalon2_voltage, NULL, NULL,
+		     "Set Avalon2 core voltage, in millivolts"),
+#endif
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
 		     set_klondike_options, NULL, NULL,

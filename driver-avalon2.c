@@ -42,6 +42,77 @@
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
+int opt_avalon2_freq = AVA2_DEFAULT_FREQUENCY;
+int opt_avalon2_freq_min = AVA2_DEFAULT_FREQUENCY_MIN;
+int opt_avalon2_freq_max = AVA2_DEFAULT_FREQUENCY_MAX;
+
+int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_MIN;
+int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
+
+int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE_MIN;
+int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
+
+char *set_avalon2_fan(char *arg)
+{
+	int val1, val2, ret;
+
+	ret = sscanf(arg, "%d-%d", &val1, &val2);
+	if (ret < 1)
+		return "No values passed to avalon2-fan";
+	if (ret == 1)
+		val2 = val1;
+
+	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100 || val2 < val1)
+		return "Invalid value passed to avalon2-fan";
+
+	opt_avalon2_fan_min = AVA2_PWM_MAX - val1 * AVA2_PWM_MAX / 100;
+	opt_avalon2_fan_max = AVA2_PWM_MAX - val2 * AVA2_PWM_MAX / 100;
+
+	return NULL;
+}
+
+char *set_avalon2_freq(char *arg)
+{
+	int val1, val2, ret;
+
+	ret = sscanf(arg, "%d-%d", &val1, &val2);
+	if (ret < 1)
+		return "No values passed to avalon2-freq";
+	if (ret == 1)
+		val2 = val1;
+
+	if (val1 < AVA2_DEFAULT_FREQUENCY_MIN || val1 > AVA2_DEFAULT_FREQUENCY_MAX ||
+	    val2 < AVA2_DEFAULT_FREQUENCY_MIN || val2 > AVA2_DEFAULT_FREQUENCY_MAX ||
+	    val2 < val1)
+		return "Invalid value passed to avalon2-freq";
+
+	opt_avalon2_freq_min = val1;
+	opt_avalon2_freq_max = val2;
+
+	return NULL;
+}
+
+char *set_avalon2_voltage(char *arg)
+{
+	int val1, val2, ret;
+
+	ret = sscanf(arg, "%d-%d", &val1, &val2);
+	if (ret < 1)
+		return "No values passed to avalon2-voltage";
+	if (ret == 1)
+		val2 = val1;
+
+	if (val1 < AVA2_DEFAULT_VOLTAGE_MIN || val1 > AVA2_DEFAULT_VOLTAGE_MAX ||
+	    val2 < AVA2_DEFAULT_VOLTAGE_MIN || val2 > AVA2_DEFAULT_VOLTAGE_MAX ||
+	    val2 < val1)
+		return "Invalid value passed to avalon2-voltage";
+
+	opt_avalon2_voltage_min = val1;
+	opt_avalon2_voltage_max = val2;
+
+	return NULL;
+}
+
 static int avalon2_init_pkg(struct avalon2_pkg *pkg, uint8_t type, uint8_t idx, uint8_t cnt)
 {
 	unsigned short crc;
@@ -537,6 +608,11 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 			;
 		avalon2_get_result(thr, info->fd, &ar);
+
+		/* Configuer the parameter from outside */
+		info->fan_pwm = opt_avalon2_fan_min;
+		info->set_voltage = opt_avalon2_voltage_min;
+		info->set_frequency = opt_avalon2_freq_min;
 
 		/* Set the Fan, Voltage and Frequency */
 		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);

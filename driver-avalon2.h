@@ -23,9 +23,18 @@
 #define AVA2_DEFAULT_MINERS	10
 #define AVA2_DEFAULT_MODULARS	3
 
-#define AVA2_DEFAULT_FAN_PWM	80
-#define AVA2_DEFAULT_VOLTAGE	0x8a00
-#define AVA2_DEFAULT_FREQUENCY	1500
+#define AVA2_PWM_MAX	0x3FF
+#define AVA2_DEFAULT_FAN_PWM	80 /* (max)0 ~ (min)0x3FF */
+#define AVA2_DEFAULT_FAN_MIN	0
+#define AVA2_DEFAULT_FAN_MAX	100
+
+#define AVA2_DEFAULT_VOLTAGE	0x8a00 /* 1.0v */
+#define AVA2_DEFAULT_VOLTAGE_MIN	0x8200 /* FIXME: ? */
+#define AVA2_DEFAULT_VOLTAGE_MAX	0x8a00 /* 1.1v */
+
+#define AVA2_DEFAULT_FREQUENCY	1500 /* In MH/s */
+#define AVA2_DEFAULT_FREQUENCY_MIN	1000
+#define AVA2_DEFAULT_FREQUENCY_MAX	2000
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -112,6 +121,10 @@ struct avalon2_info {
 
 #define avalon2_open(devpath, baud, purge)  serial_open(devpath, baud, AVA2_RESET_FAULT_DECISECONDS, purge)
 #define avalon2_close(fd) close(fd)
+
+extern char *set_avalon2_fan(char *arg);
+extern char *set_avalon2_freq(char *arg);
+extern char *set_avalon2_voltage(char *arg);
 
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */
