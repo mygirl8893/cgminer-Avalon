@@ -42,14 +42,13 @@
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
-int opt_avalon2_freq = AVA2_DEFAULT_FREQUENCY;
-int opt_avalon2_freq_min = AVA2_DEFAULT_FREQUENCY_MIN;
+int opt_avalon2_freq_min = AVA2_DEFAULT_FREQUENCY;
 int opt_avalon2_freq_max = AVA2_DEFAULT_FREQUENCY_MAX;
 
-int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_MIN;
+int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_PWM;
 int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
 
-int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE_MIN;
+int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE;
 int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
 
 char *set_avalon2_fan(char *arg)
@@ -315,6 +314,8 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg, struct thr_in
 		return AVA2_SEND_ERROR;
 	}
 
+	cgsleep_ms(10);
+#if 0
 	ret = avalon2_gets(fd, result);
 	if (ret != AVA2_GETS_OK) {
 		applog(LOG_DEBUG, "Avalon2: Get(%d)!", ret);
@@ -327,6 +328,7 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg, struct thr_in
 		hexdump((uint8_t *)result, AVA2_READ_SIZE);
 		return AVA2_SEND_ERROR;
 	}
+#endif
 
 	return AVA2_SEND_OK;
 }
@@ -497,7 +499,7 @@ static bool avalon2_detect_one(const char *devpath)
 
 	info->baud = AVA2_IO_SPEED;
 	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
-	info->set_voltage = AVA2_DEFAULT_VOLTAGE;
+	info->set_voltage = AVA2_DEFAULT_VOLTAGE_MIN;
 	info->set_frequency = AVA2_DEFAULT_FREQUENCY;
 	info->temp_max = 0;
 	info->temp_history_index = 0;
@@ -595,6 +597,8 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		pool = current_pool();
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
+		if (pool->swork.cb_len > AVA2_P_COINBASE_SIZE)
+			quit(1, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
 
 		info->diff = ((int)pool->swork.diff) - 1;
 		info->pool_no = pool->pool_no;
