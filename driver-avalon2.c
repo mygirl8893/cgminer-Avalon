@@ -314,7 +314,7 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg, struct thr_in
 		return AVA2_SEND_ERROR;
 	}
 
-	cgsleep_ms(10);
+	cgsleep_ms(20);
 #if 0
 	ret = avalon2_gets(fd, result);
 	if (ret != AVA2_GETS_OK) {
