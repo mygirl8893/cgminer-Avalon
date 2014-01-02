@@ -599,6 +599,8 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
 		if (pool->swork.cb_len > AVA2_P_COINBASE_SIZE)
 			quit(1, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
+		if (pool->swork.merkles > AVA2_P_MERKLES_COUNT)
+			quit(1, "Avalon2: Miner Manager merkles have to less then %d", AVA2_P_MERKLES_COUNT);
 
 		info->diff = ((int)pool->swork.diff) - 1;
 		info->pool_no = pool->pool_no;
