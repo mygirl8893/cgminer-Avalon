@@ -338,6 +338,7 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	/* FIXME: what if new stratum arrive when writing */
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
+	unsigned char target[32];
 
 	/* Send out the first stratum message STATIC */
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %d, %d, %d, %d, %d",
@@ -371,6 +372,19 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	avalon2_init_pkg(&pkg, AVA2_P_STATIC, 1, 1);
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
+
+	set_target(target, pool->swork.diff);
+	memcpy(pkg.data, target, 32);
+	if (opt_debug) {
+		char *target_str;
+		target_str = bin2hex(target, 32);
+		applog(LOG_DEBUG, "Avalon2: Pool stratum target: %s", target_str);
+		free(target_str);
+	}
+	avalon2_init_pkg(&pkg, AVA2_P_TARGET, 1, 1);
+	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
+		;
+
 
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s",
 	       pool->swork.job_id);
@@ -604,6 +618,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 
 		info->diff = ((int)pool->swork.diff) - 1;
 		info->pool_no = pool->pool_no;
+
 		cg_wlock(&pool->data_lock);
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 		cg_wunlock(&pool->data_lock);
