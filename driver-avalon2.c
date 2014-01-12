@@ -149,7 +149,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, miner, pool_no;
+	uint32_t nonce, nonce2, miner, pool_no, modular_id;
 	uint8_t job_id[5];
 
 	int type = AVA2_GETS_ERROR;
@@ -181,17 +181,22 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memset(job_id, 0, 5);
 			memcpy(job_id, ar->data + 20, 4);
 			memcpy(&(info->local_work), ar->data + 24, 4);
+			memcpy(&modular_id, ar->data + 28, 4);
 
 			info->local_work = be32toh(info->local_work);
 			miner = be32toh(miner);
 			pool_no = be32toh(pool_no);
-			if (miner < 0 || miner >= AVA2_DEFAULT_MINERS ||
-			    pool_no < 0 || pool_no >= total_pools) {
-				applog(LOG_DEBUG, "Avalon2: Wrong miner id/pool no %d,%d", miner, pool_no);
+			if (miner < 0 ||
+			    miner >= AVA2_DEFAULT_MINERS ||
+			    pool_no < 0 ||
+			    pool_no >= total_pools ||
+			    modular_id < 0 ||
+			    modular_id >= AVA2_DEFAULT_MINERS) {
+				applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
 				info->wrong_miner_id++;
 				break;
 			} else
-				info->matching_work[miner]++;
+				info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner]++;
 			nonce2 = bswap_32(nonce2);
 			nonce = be32toh(nonce);
 			nonce -= 0x180;
@@ -676,7 +681,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 
 	root = api_add_string(root, "MM Version", info->mm_version, false);
 
-	for (i = 0; i < AVA2_DEFAULT_MINERS; i++) {
+	for (i = 0; i < AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS; i++) {
 		char mcw[24];
 
 		sprintf(mcw, "Match work count%d", i + 1);

@@ -102,7 +102,7 @@ struct avalon2_info {
 	int diff;
 
 	int wrong_miner_id;
-	int matching_work[AVA2_DEFAULT_MINERS];
+	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
 	int local_work;
 
 	int modulars[AVA2_DEFAULT_MODULARS];
