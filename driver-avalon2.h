@@ -53,10 +53,9 @@
 #define AVA2_P_MERKLES	14
 #define AVA2_P_HEADER	15
 #define AVA2_P_POLLING  16
-#define AVA2_P_DIFF	17
+#define AVA2_P_TARGET	17
 #define AVA2_P_REQUIRE	18
 #define AVA2_P_SET	19
-#define AVA2_P_TARGET	20
 
 #define AVA2_P_ACK		21
 #define AVA2_P_NAK		22
@@ -104,6 +103,7 @@ struct avalon2_info {
 
 	int wrong_miner_id;
 	int matching_work[AVA2_DEFAULT_MINERS];
+	int local_work;
 
 	int modulars[AVA2_DEFAULT_MODULARS];
 	char mm_version[16];

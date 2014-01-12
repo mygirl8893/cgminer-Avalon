@@ -180,7 +180,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&nonce, ar->data + 16, 4);
 			memset(job_id, 0, 5);
 			memcpy(job_id, ar->data + 20, 4);
+			memcpy(&(info->local_work), ar->data + 24, 4);
 
+			info->local_work = be32toh(info->local_work);
 			miner = be32toh(miner);
 			pool_no = be32toh(pool_no);
 			if (miner < 0 || miner >= AVA2_DEFAULT_MINERS ||
@@ -212,12 +214,14 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&(info->fan1), ar->data + 12, 4);
 			memcpy(&(info->get_frequency), ar->data + 16, 4);
 			memcpy(&(info->get_voltage), ar->data + 20, 4);
+			memcpy(&(info->local_work), ar->data + 24, 4);
 			info->temp0 = be32toh(info->temp0);
 			info->temp1 = be32toh(info->temp1);
 			info->fan0 = be32toh(info->fan0);
 			info->fan1 = be32toh(info->fan1);
 			info->get_frequency = be32toh(info->get_frequency);
 			info->get_voltage = be32toh(info->get_voltage);
+			info->local_work = be32toh(info->local_work);
 
 			avalon2->temp = info->temp0;
 			break;
@@ -519,6 +523,7 @@ static bool avalon2_detect_one(const char *devpath)
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
+	info->modulars[0] = 1;	/* Enable one modular */
 
 	info->fd = -1;
 	/* Set asic to idle mode after detect */
@@ -569,7 +574,7 @@ static int polling(struct thr_info *thr, int fd)
 {
 	int i;
 
-	struct avalon2_pkg polling_pkg;
+	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
 
 	struct cgpu_info *avalon2 = thr->cgpu;
@@ -577,9 +582,11 @@ static int polling(struct thr_info *thr, int fd)
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i]) {
-			avalon2_init_pkg(&polling_pkg, AVA2_P_POLLING, 1, 1);
-			avalon2_send_pkg(fd, &polling_pkg, thr);
-			avalon2_get_result(thr, fd, &ar);
+			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
+			avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
+			while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
+				;
+			avalon2_get_result(thr, info->fd, &ar);
 		}
 	}
 
@@ -623,13 +630,6 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 		cg_wunlock(&pool->data_lock);
 
-		/* Read the device status back */
-		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
-		avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
-		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
-			;
-		avalon2_get_result(thr, info->fd, &ar);
-
 		/* Configuer the parameter from outside */
 		info->fan_pwm = opt_avalon2_fan_min;
 		info->set_voltage = opt_avalon2_voltage_min;
@@ -653,12 +653,12 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		info->new_stratum = false;
 	}
 
-	/* TODO: Polling the target */
-	if (avalon2_get_result(thr, info->fd, &ar) < 0) {
-		return 0;
-	}
+	polling(thr, info->fd);
 
-	return 0xffffffff;
+	if (info->local_work < 0)
+		return 0;
+
+	return info->local_work * 0xffffffff;
 }
 
 static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
