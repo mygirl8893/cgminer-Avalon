@@ -79,16 +79,16 @@ struct avalon2_info {
 	int baud;
 
 	int set_frequency;
-	int get_frequency;
 	int set_voltage;
-	int get_voltage;
 
-	int fan0;
-	int fan1;
+	int get_voltage[AVA2_DEFAULT_MODULARS];
+	int get_frequency[AVA2_DEFAULT_MODULARS];
+
 	int fan_pwm;
 
-	int temp0;
-	int temp1;
+	int fan[2 * AVA2_DEFAULT_MODULARS];
+	int temp[2 * AVA2_DEFAULT_MODULARS];
+
 	int temp_max;
 	int temp_history_count;
 	int temp_history_index;
@@ -101,7 +101,7 @@ struct avalon2_info {
 	int pool_no;
 	int diff;
 
-	int wrong_miner_id;
+	int broken_result[AVA2_DEFAULT_MODULARS];
 	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
 	int local_work;
 

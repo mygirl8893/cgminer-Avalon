@@ -180,12 +180,16 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&nonce, ar->data + 16, 4);
 			memset(job_id, 0, 5);
 			memcpy(job_id, ar->data + 20, 4);
-			memcpy(&(info->local_work), ar->data + 24, 4);
+			memcpy(&info->local_work, ar->data + 24, 4);
 			memcpy(&modular_id, ar->data + 28, 4);
 
 			info->local_work = be32toh(info->local_work);
 			miner = be32toh(miner);
 			pool_no = be32toh(pool_no);
+			modular_id = be32toh(modular_id);
+			if (modular_id == 3)
+				modular_id = 0;
+
 			if (miner < 0 ||
 			    miner >= AVA2_DEFAULT_MINERS ||
 			    pool_no < 0 ||
@@ -193,7 +197,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			    modular_id < 0 ||
 			    modular_id >= AVA2_DEFAULT_MINERS) {
 				applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
-				info->wrong_miner_id++;
+				info->broken_result[modular_id]++;
 				break;
 			} else
 				info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner]++;
@@ -213,22 +217,27 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				submit_nonce2_nonce(thr, pool_no, nonce2, nonce);
 			break;
 		case AVA2_P_STATUS:
-			memcpy(&(info->temp0), ar->data, 4);
-			memcpy(&(info->temp1), ar->data + 4, 4);
-			memcpy(&(info->fan0), ar->data + 8, 4);
-			memcpy(&(info->fan1), ar->data + 12, 4);
-			memcpy(&(info->get_frequency), ar->data + 16, 4);
-			memcpy(&(info->get_voltage), ar->data + 20, 4);
-			memcpy(&(info->local_work), ar->data + 24, 4);
-			info->temp0 = be32toh(info->temp0);
-			info->temp1 = be32toh(info->temp1);
-			info->fan0 = be32toh(info->fan0);
-			info->fan1 = be32toh(info->fan1);
-			info->get_frequency = be32toh(info->get_frequency);
-			info->get_voltage = be32toh(info->get_voltage);
+			memcpy(&modular_id, ar->data + 28, 4);
+			modular_id = be32toh(modular_id);
+			if (modular_id == 3)
+				modular_id = 0;
+
+			memcpy(&(info->temp[0 + modular_id * 2]), ar->data, 4);
+			memcpy(&(info->temp[1 + modular_id * 2]), ar->data + 4, 4);
+			memcpy(&(info->fan[0 + modular_id * 2]), ar->data + 8, 4);
+			memcpy(&(info->fan[1 + modular_id * 2]), ar->data + 12, 4);
+			memcpy(&(info->get_frequency[modular_id]), ar->data + 16, 4);
+			memcpy(&(info->get_voltage[modular_id]), ar->data + 20, 4);
+			memcpy(&info->local_work, ar->data + 24, 4);
+			info->temp[0 + modular_id * 2] = be32toh(info->temp[0 + modular_id * 2]);
+			info->temp[1 + modular_id * 2] = be32toh(info->temp[1 + modular_id * 2]);
+			info->fan[0 + modular_id * 2] = be32toh(info->fan[0 + modular_id * 2]);
+			info->fan[1 + modular_id * 2] = be32toh(info->fan[1 + modular_id * 2]);
+			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
+			info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
 			info->local_work = be32toh(info->local_work);
 
-			avalon2->temp = info->temp0;
+			avalon2->temp = info->temp[0]; /* FIXME: */
 			break;
 		case AVA2_P_ACKDETECT:
 			break;
@@ -675,6 +684,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 
 	polling(thr, info->fd);
 
+	applog(LOG_DEBUG, "Avalon2: Local work: %d\n", info->local_work);
 	if (info->local_work < 0)
 		return 0;
 
@@ -686,28 +696,39 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	struct avalon2_info *info = cgpu->device_data;
 	int i;
+	char buf[24];
+
 	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
 		     (double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
 
 	root = api_add_string(root, "MM Version", info->mm_version, false);
-
-	for (i = 0; i < AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS; i++) {
-		char mcw[24];
-
-		sprintf(mcw, "Match work count%d", i + 1);
-		root = api_add_int(root, mcw, &(info->matching_work[i]), false);
-	}
-	root = api_add_int(root, "No matching work", &(info->wrong_miner_id), false);
 	root = api_add_percent(root, "Device Hardware%", &hwp, true);
 
-	root = api_add_int(root, "Temperature 0", &(info->temp0), false);
-	root = api_add_int(root, "Temperature 1", &(info->temp1), false);
+	for (i = 0; i < AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS; i++) {
+		sprintf(buf, "Match work count%02d", i + 1);
+		root = api_add_int(root, buf, &(info->matching_work[i]), false);
+	}
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		sprintf(buf, "Broken result%02d", i + 1);
+		root = api_add_int(root, buf, &(info->broken_result[i]), false);
+	}
+	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		sprintf(buf, "Temperature%d", i + 1);
+		root = api_add_int(root, buf, &(info->temp[i]), false);
+	}
+	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		sprintf(buf, "Fan%d", i + 1);
+		root = api_add_int(root, buf, &(info->fan[i]), false);
+	}
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		sprintf(buf, "Voltage%d", i + 1);
+		root = api_add_int(root, buf, &(info->get_voltage[i]), false);
+	}
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		sprintf(buf, "Frequency%d", i + 1);
+		root = api_add_int(root, buf, &(info->get_frequency[i]), false);
+	}
 
-	root = api_add_int(root, "Fan 0", &(info->fan0), false);
-	root = api_add_int(root, "Fan 1", &(info->fan1), false);
-
-	root = api_add_int(root, "Frequency", &(info->get_frequency), false);
-	root = api_add_int(root, "Voltage", &(info->get_voltage), false);
 	return root;
 }
 
