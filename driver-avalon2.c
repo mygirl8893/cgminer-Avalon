@@ -479,6 +479,7 @@ static bool avalon2_detect_one(const char *devpath)
 	struct avalon2_info *info;
 	int ackdetect;
 	int fd;
+	int tmp, i, modular[3];
 
 	struct cgpu_info *avalon2;
 	struct avalon2_pkg detect_pkg;
@@ -492,13 +493,22 @@ static bool avalon2_detect_one(const char *devpath)
 		return false;
 	}
 	tcflush(fd, TCIOFLUSH);
-	/* Send out detect pkg */
-	memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
-	avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
-	avalon2_send_pkg(fd, &detect_pkg, NULL);
-	ackdetect = avalon2_get_result(NULL, fd, &ret_pkg);
-	applog(LOG_DEBUG, "Avalon2 Detect: %d", ackdetect);
-	if (ackdetect != AVA2_P_ACKDETECT)
+
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		modular[i] = 1;
+		/* Send out detect pkg */
+		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
+		tmp = be32toh(i);
+		memcpy(detect_pkg.data, &tmp, 4);
+
+		avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
+		avalon2_send_pkg(fd, &detect_pkg, NULL);
+		ackdetect = avalon2_get_result(NULL, fd, &ret_pkg);
+		applog(LOG_DEBUG, "Avalon2 Detect M(%d): %d", i, ackdetect);
+		if (ackdetect != AVA2_P_ACKDETECT)
+			modular[i] = 0;
+	}
+	if (!modular[0] && !modular[1] && !modular[2])
 		return false;
 
 	/* We have a real Avalon! */
@@ -528,9 +538,9 @@ static bool avalon2_detect_one(const char *devpath)
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
-	info->modulars[0] = 1;
-	info->modulars[1] = 1;
-	info->modulars[2] = 1;	/* Enable modular */
+	info->modulars[0] = modular[0];
+	info->modulars[1] = modular[1];
+	info->modulars[2] = modular[2];	/* Enable modular */
 
 	info->fd = -1;
 	/* Set asic to idle mode after detect */
