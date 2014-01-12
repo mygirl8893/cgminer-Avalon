@@ -523,7 +523,9 @@ static bool avalon2_detect_one(const char *devpath)
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
-	info->modulars[0] = 1;	/* Enable one modular */
+	info->modulars[0] = 1;
+	info->modulars[1] = 1;
+	info->modulars[2] = 1;	/* Enable modular */
 
 	info->fd = -1;
 	/* Set asic to idle mode after detect */
@@ -572,7 +574,7 @@ static bool avalon2_prepare(struct thr_info *thr)
 
 static int polling(struct thr_info *thr, int fd)
 {
-	int i;
+	int i, tmp;
 
 	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
@@ -583,7 +585,10 @@ static int polling(struct thr_info *thr, int fd)
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i]) {
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
+			tmp = be32toh(i);
+			memcpy(send_pkg.data, &tmp, 4);
 			avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
+
 			while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 				;
 			avalon2_get_result(thr, info->fd, &ar);
