@@ -489,6 +489,7 @@ static bool avalon2_detect_one(const char *devpath)
 	int ackdetect;
 	int fd;
 	int tmp, i, modular[3];
+	char mm_version[AVA2_DEFAULT_MODULARS][16];
 
 	struct cgpu_info *avalon2;
 	struct avalon2_pkg detect_pkg;
@@ -504,7 +505,8 @@ static bool avalon2_detect_one(const char *devpath)
 	tcflush(fd, TCIOFLUSH);
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		modular[i] = 1;
+		modular[i] = 0;
+		strcpy(mm_version[i], "NONE");
 		/* Send out detect pkg */
 		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
 		tmp = be32toh(i);
@@ -513,9 +515,12 @@ static bool avalon2_detect_one(const char *devpath)
 		avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 		avalon2_send_pkg(fd, &detect_pkg, NULL);
 		ackdetect = avalon2_get_result(NULL, fd, &ret_pkg);
-		applog(LOG_DEBUG, "Avalon2 Detect M(%d): %d", i, ackdetect);
+		applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
 		if (ackdetect != AVA2_P_ACKDETECT)
-			modular[i] = 0;
+			continue;
+		modular[i] = 1;
+		memcpy(mm_version[i], ret_pkg.data, 15);
+		mm_version[i][15] = '\0';
 	}
 	if (!modular[0] && !modular[1] && !modular[2])
 		return false;
@@ -536,8 +541,9 @@ static bool avalon2_detect_one(const char *devpath)
 
 	info = avalon2->device_data;
 
-	memcpy(info->mm_version, ret_pkg.data, 15);
-	info->mm_version[15] = '\0';
+	strcpy(info->mm_version[0], mm_version[0]);
+	strcpy(info->mm_version[1], mm_version[1]);
+	strcpy(info->mm_version[2], mm_version[2]);
 
 	info->baud = AVA2_IO_SPEED;
 	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
@@ -700,10 +706,12 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 
 	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
 		     (double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
-
-	root = api_add_string(root, "MM Version", info->mm_version, false);
 	root = api_add_percent(root, "Device Hardware%", &hwp, true);
 
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		sprintf(buf, "ID%d MM Version", i + 1);
+		root = api_add_string(root, buf, &(info->mm_version[i]), false);
+	}
 	for (i = 0; i < AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS; i++) {
 		sprintf(buf, "Match work count%02d", i + 1);
 		root = api_add_int(root, buf, &(info->matching_work[i]), false);

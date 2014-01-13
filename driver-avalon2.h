@@ -106,7 +106,7 @@ struct avalon2_info {
 	int local_work;
 
 	int modulars[AVA2_DEFAULT_MODULARS];
-	char mm_version[16];
+	char mm_version[AVA2_DEFAULT_MODULARS][16];
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
