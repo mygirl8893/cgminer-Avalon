@@ -51,6 +51,19 @@ int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
 int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE;
 int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
 
+static inline uint8_t rev8(uint8_t d)
+{
+    int i;
+    uint8_t out = 0;
+
+    /* (from left to right) */
+    for (i = 0; i < 8; i++)
+        if (d & (1 << i))
+            out |= (1 << (7 - i));
+
+    return out;
+}
+
 char *set_avalon2_fan(char *arg)
 {
 	int val1, val2, ret;
@@ -130,7 +143,7 @@ static int avalon2_init_pkg(struct avalon2_pkg *pkg, uint8_t type, uint8_t idx, 
 	return 0;
 }
 
-static int job_idcmp(uint8_t *job_id, uint8_t *pool_job_id)
+static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 {
 	int i = 0;
 	for (i = 0; i < 4; i++) {
@@ -149,7 +162,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, miner, pool_no, modular_id;
+	uint32_t nonce, nonce2, miner, modular_id;
+	int pool_no;
 	uint8_t job_id[5];
 
 	int type = AVA2_GETS_ERROR;
@@ -190,12 +204,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			if (modular_id == 3)
 				modular_id = 0;
 
-			if (miner < 0 ||
-			    miner >= AVA2_DEFAULT_MINERS ||
-			    pool_no < 0 ||
+			if (miner >= AVA2_DEFAULT_MINERS ||
+			    modular_id >= AVA2_DEFAULT_MINERS || 
 			    pool_no >= total_pools ||
-			    modular_id < 0 ||
-			    modular_id >= AVA2_DEFAULT_MINERS) {
+			    pool_no < 0) {
 				applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
 				info->broken_result[modular_id]++;
 				break;
@@ -312,17 +324,16 @@ static inline int avalon2_gets(int fd, uint8_t *buf)
 	}
 }
 
-static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg, struct thr_info *thr)
+static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg,
+			    struct thr_info __maybe_unused *thr)
 {
 	int ret;
 	uint8_t buf[AVA2_WRITE_SIZE];
-	uint8_t result[AVA2_READ_SIZE];
 	size_t nr_len = AVA2_WRITE_SIZE;
-	struct avalon2_ret ar;
 
 	memcpy(buf, pkg, AVA2_WRITE_SIZE);
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon2: Sent(%d):", nr_len);
+		applog(LOG_DEBUG, "Avalon2: Sent(%ld):", nr_len);
 		hexdump((uint8_t *)buf, nr_len);
 	}
 
@@ -359,7 +370,7 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	unsigned char target[32];
 
 	/* Send out the first stratum message STATIC */
-	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %d, %d, %d, %d, %d",
+	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %ld, %d, %d, %d, %d",
 	       pool->swork.cb_len,
 	       pool->nonce2_offset,
 	       pool->n2size,
@@ -602,7 +613,7 @@ static bool avalon2_prepare(struct thr_info *thr)
 	return true;
 }
 
-static int polling(struct thr_info *thr, int fd)
+static int polling(struct thr_info *thr)
 {
 	int i, tmp;
 
@@ -631,10 +642,8 @@ static int polling(struct thr_info *thr, int fd)
 static int64_t avalon2_scanhash(struct thr_info *thr)
 {
 	struct avalon2_pkg send_pkg;
-	struct avalon2_ret ar;
 
 	struct pool *pool;
-
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
@@ -676,7 +685,9 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		tmp = be32toh(info->fan_pwm);
 		memcpy(send_pkg.data, &tmp, 4);
 
-		tmp = be32toh(info->set_voltage);
+		/* http://www.onsemi.com/pub_link/Collateral/ADP3208D.PDF */
+		tmp = rev8((0x78 - info->set_voltage / 125) << 1 | 1) << 8;
+		tmp = be32toh(tmp);
 		memcpy(send_pkg.data + 4, &tmp, 4);
 
 		tmp = be32toh(info->set_frequency);
@@ -688,7 +699,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		info->new_stratum = false;
 	}
 
-	polling(thr, info->fd);
+	polling(thr);
 
 	applog(LOG_DEBUG, "Avalon2: Local work: %d\n", info->local_work);
 	if (info->local_work < 0)
