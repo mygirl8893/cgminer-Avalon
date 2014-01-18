@@ -648,7 +648,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	struct avalon2_info *info = avalon2->device_data;
 
 	int64_t h;
-	uint32_t tmp;
+	uint32_t tmp, range, start;
 	int i;
 
 	if (thr->work_restart || thr->work_update ||
@@ -695,6 +695,17 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		tmp = be32toh(info->set_frequency);
 		memcpy(send_pkg.data + 8, &tmp, 4);
 
+		/* Configure the nonce2 offset and range */
+		range = 0xffffffff / total_devices;
+		start = range * avalon2->device_id;
+
+		tmp = be32toh(start);
+		memcpy(send_pkg.data + 12, &tmp, 4);
+
+		tmp = be32toh(range);
+		memcpy(send_pkg.data + 16, &tmp, 4);
+
+		/* Package the data */
 		avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
 		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 			;
