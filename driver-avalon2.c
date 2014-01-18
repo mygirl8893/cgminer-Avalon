@@ -165,6 +165,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	uint32_t nonce, nonce2, miner, modular_id;
 	int pool_no;
 	uint8_t job_id[5];
+	int tmp;
 
 	int type = AVA2_GETS_ERROR;
 
@@ -185,6 +186,11 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 		if (expected_crc != actual_crc)
 			goto out;
 
+		memcpy(&modular_id, ar->data + 28, 4);
+		modular_id = be32toh(modular_id);
+		if (modular_id == 3)
+			modular_id = 0;
+
 		switch(type) {
 		case AVA2_P_NONCE:
 			memcpy(&miner, ar->data + 0, 4);
@@ -194,22 +200,14 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&nonce, ar->data + 16, 4);
 			memset(job_id, 0, 5);
 			memcpy(job_id, ar->data + 20, 4);
-			memcpy(&info->local_work, ar->data + 24, 4);
-			memcpy(&modular_id, ar->data + 28, 4);
 
-			info->local_work = be32toh(info->local_work);
 			miner = be32toh(miner);
 			pool_no = be32toh(pool_no);
-			modular_id = be32toh(modular_id);
-			if (modular_id == 3)
-				modular_id = 0;
-
 			if (miner >= AVA2_DEFAULT_MINERS ||
 			    modular_id >= AVA2_DEFAULT_MINERS || 
 			    pool_no >= total_pools ||
 			    pool_no < 0) {
 				applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
-				info->broken_result[modular_id]++;
 				break;
 			} else
 				info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner]++;
@@ -229,25 +227,27 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				submit_nonce2_nonce(thr, pool_no, nonce2, nonce);
 			break;
 		case AVA2_P_STATUS:
-			memcpy(&modular_id, ar->data + 28, 4);
-			modular_id = be32toh(modular_id);
-			if (modular_id == 3)
-				modular_id = 0;
+			memcpy(&tmp, ar->data, 4);
+			tmp = be32toh(tmp);
+			info->temp[0 + modular_id * 2] = tmp >> 16;
+			info->temp[1 + modular_id * 2] = tmp & 0xffff;
 
-			memcpy(&(info->temp[0 + modular_id * 2]), ar->data, 4);
-			memcpy(&(info->temp[1 + modular_id * 2]), ar->data + 4, 4);
-			memcpy(&(info->fan[0 + modular_id * 2]), ar->data + 8, 4);
-			memcpy(&(info->fan[1 + modular_id * 2]), ar->data + 12, 4);
-			memcpy(&(info->get_frequency[modular_id]), ar->data + 16, 4);
-			memcpy(&(info->get_voltage[modular_id]), ar->data + 20, 4);
-			memcpy(&info->local_work, ar->data + 24, 4);
-			info->temp[0 + modular_id * 2] = be32toh(info->temp[0 + modular_id * 2]);
-			info->temp[1 + modular_id * 2] = be32toh(info->temp[1 + modular_id * 2]);
-			info->fan[0 + modular_id * 2] = be32toh(info->fan[0 + modular_id * 2]);
-			info->fan[1 + modular_id * 2] = be32toh(info->fan[1 + modular_id * 2]);
+			memcpy(&tmp, ar->data + 4, 4);
+			tmp = be32toh(tmp);
+			info->fan[0 + modular_id * 2] = tmp >> 16;
+			info->fan[1 + modular_id * 2] = tmp & 0xffff;
+
+			memcpy(&(info->get_frequency[modular_id]), ar->data + 8, 4);
+			memcpy(&(info->get_voltage[modular_id]), ar->data + 12, 4);
+			memcpy(&(info->local_work[modular_id]), ar->data + 16, 4);
+			memcpy(&(info->hw_work[modular_id]), ar->data + 20, 4);
 			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
 			info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
-			info->local_work = be32toh(info->local_work);
+			info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
+			info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
+
+			info->local_works[modular_id] += info->local_work[modular_id];
+			info->hw_works[modular_id] += info->hw_work[modular_id];
 
 			avalon2->temp = info->temp[0]; /* FIXME: */
 			break;
@@ -647,7 +647,9 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
+	int64_t h;
 	uint32_t tmp;
+	int i;
 
 	if (thr->work_restart || thr->work_update ||
 	    info->first) {
@@ -701,24 +703,20 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 
 	polling(thr);
 
-	applog(LOG_DEBUG, "Avalon2: Local work: %d\n", info->local_work);
-	if (info->local_work < 0)
-		return 0;
-
-	return info->local_work * 0xffffffff;
+	h = 0;
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		h += info->local_work[i];
+	}
+	return h * 0xffffffff;
 }
 
 static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon2_info *info = cgpu->device_data;
-	int i;
+	int i, a, b;
 	char buf[24];
-
-	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
-		     (double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
-	root = api_add_percent(root, "Device Hardware%", &hwp, true);
-
+	double hwp;
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		sprintf(buf, "ID%d MM Version", i + 1);
 		root = api_add_string(root, buf, &(info->mm_version[i]), false);
@@ -728,8 +726,20 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		root = api_add_int(root, buf, &(info->matching_work[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		sprintf(buf, "Broken result%02d", i + 1);
-		root = api_add_int(root, buf, &(info->broken_result[i]), false);
+		sprintf(buf, "Local works%d", i + 1);
+		root = api_add_int(root, buf, &(info->local_works[i]), false);
+	}
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		sprintf(buf, "Hardware error works%d", i + 1);
+		root = api_add_int(root, buf, &(info->hw_works[i]), false);
+	}
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		a = info->hw_works[i];
+		b = info->local_works[i];
+		hwp = b ? ((double)a / (double)b) : 0;
+
+		sprintf(buf, "Device hardware error%d%%", i + 1);
+		root = api_add_percent(root, buf, &hwp, true);
 	}
 	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
 		sprintf(buf, "Temperature%d", i + 1);

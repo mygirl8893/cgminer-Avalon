@@ -101,9 +101,11 @@ struct avalon2_info {
 	int pool_no;
 	int diff;
 
-	int broken_result[AVA2_DEFAULT_MODULARS];
+	int local_works[AVA2_DEFAULT_MODULARS];
+	int hw_works[AVA2_DEFAULT_MODULARS];
 	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
-	int local_work;
+	int local_work[AVA2_DEFAULT_MODULARS];
+	int hw_work[AVA2_DEFAULT_MODULARS];
 
 	int modulars[AVA2_DEFAULT_MODULARS];
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
