@@ -521,7 +521,7 @@ static bool avalon2_detect_one(const char *devpath)
 		/* Send out detect pkg */
 		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
 		tmp = be32toh(i);
-		memcpy(detect_pkg.data, &tmp, 4);
+		memcpy(detect_pkg.data + 28, &tmp, 4);
 
 		avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 		avalon2_send_pkg(fd, &detect_pkg, NULL);
@@ -627,7 +627,7 @@ static int polling(struct thr_info *thr)
 		if (info->modulars[i]) {
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 			tmp = be32toh(i);
-			memcpy(send_pkg.data, &tmp, 4);
+			memcpy(send_pkg.data + 28, &tmp, 4);
 			avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
 
 			while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
