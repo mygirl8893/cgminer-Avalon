@@ -6765,6 +6765,8 @@ void set_target(unsigned char *dest_target, double diff)
 #ifdef USE_AVALON2
 void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce)
 {
+	const int thr_id = thr->id;
+
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct device_drv *drv = cgpu->drv;
 
@@ -6773,6 +6775,13 @@ void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2
 
 	pool->nonce2 = nonce2;
 	gen_stratum_work(pool, work);
+
+	work->thr_id = thr_id;
+	work->work_block = work_block;
+	work->pool->works++;
+
+	work->mined = true;
+	work->device_diff = MIN(cgpu->drv->max_diff, work->work_difficulty);
 
 	submit_nonce(thr, work, nonce);
 	free_work(work);

@@ -97,6 +97,7 @@ struct avalon2_pkg {
 #define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
+	bool first;
 	int fd;
 	int baud;
 
@@ -111,15 +112,7 @@ struct avalon2_info {
 
 	int fan[2 * AVA2_DEFAULT_MODULARS];
 	int temp[2 * AVA2_DEFAULT_MODULARS];
-
 	int temp_max;
-	int temp_history_count;
-	int temp_history_index;
-	int temp_sum;
-	int temp_old;
-
-	bool first;
-	bool new_stratum;
 
 	int pool_no;
 	int diff;

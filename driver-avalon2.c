@@ -254,10 +254,13 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			/* FIXME:
 			 * We need remember the pre_pool. then submit the stale work */
 			pool = pools[pool_no];
-			if (job_idcmp(job_id, pool->swork.job_id))
+			if (job_idcmp(job_id, pool->swork.job_id)) {
+				applog(LOG_ERR, "Avalon2: Result job_id not match!(%s:%s)",
+				job_id, pool->swork.job_id);
 				break;
+			}
 
-			if (thr && !info->new_stratum)
+			if (thr)
 				submit_nonce2_nonce(thr, pool_no, nonce2, nonce);
 			break;
 		case AVA2_P_STATUS:
@@ -651,7 +654,6 @@ static bool avalon2_prepare(struct thr_info *thr)
 		avalon2_init(avalon2);
 
 	info->first = true;
-
 	return true;
 }
 
@@ -693,9 +695,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	uint32_t tmp, range, start;
 	int i;
 
-	if (thr->work_restart || thr->work_update ||
-	    info->first) {
-		info->new_stratum = true;
+	if (thr->work_restart || thr->work_update || info->first) {
 		applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d, first: %d",
 		       thr->work_restart, thr->work_update, info->first);
 		thr->work_update = false;
@@ -761,7 +761,6 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
 		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 			;
-		info->new_stratum = false;
 	}
 
 	polling(thr);
@@ -783,6 +782,8 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	int minerindex, minercount;
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(info->dev_type[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "ID%d MM Version", i + 1);
 		root = api_add_string(root, buf, &(info->mm_version[i]), false);
 	}
