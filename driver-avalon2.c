@@ -147,12 +147,21 @@ static int avalon2_init_pkg(struct avalon2_pkg *pkg, uint8_t type, uint8_t idx, 
 
 static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 {
-	int i = 0;
-	for (i = 0; i < 4; i++) {
-		if (job_id[i] != *(pool_job_id + strlen(pool_job_id) - 4 + i))
-			return 1;
-	}
-	return 0;
+	int job_id_len;
+	unsigned short crc, crc_expect;
+
+	job_id_len = strlen(pool_job_id);
+	crc_expect = crc16(pool_job_id, job_id_len);
+
+	crc = job_id[0] << 8 | job_id[1];
+
+	if (crc_expect == crc)
+		return 0;
+
+	applog(LOG_ERR, "Avalon2: Result job_id not match! [%04x:%04x (%s)]",
+	       crc, crc_expect, pool_job_id);
+
+	return 1;
 }
 
 static inline int get_temp_max(struct avalon2_info *info)
@@ -198,7 +207,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	unsigned int actual_crc;
 	uint32_t nonce, nonce2, miner, modular_id;
 	int pool_no;
-	uint8_t job_id[5];
+	uint8_t job_id[4];
 	int tmp;
 
 	int type = AVA2_GETS_ERROR;
@@ -232,7 +241,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&nonce2, ar->data + 8, 4);
 			/* Calc time    ar->data + 12 */
 			memcpy(&nonce, ar->data + 16, 4);
-			memset(job_id, 0, 5);
 			memcpy(job_id, ar->data + 20, 4);
 
 			miner = be32toh(miner);
@@ -249,16 +257,13 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			nonce = be32toh(nonce);
 			nonce -= 0x180;
 
-			applog(LOG_DEBUG, "Avalon2: Found! [%s] %d:(%08x) (%08x)",
-			       job_id, pool_no, nonce2, nonce);
+			applog(LOG_DEBUG, "Avalon2: Found! %d: (%08x) (%08x)",
+			       pool_no, nonce2, nonce);
 			/* FIXME:
 			 * We need remember the pre_pool. then submit the stale work */
 			pool = pools[pool_no];
-			if (job_idcmp(job_id, pool->swork.job_id)) {
-				applog(LOG_ERR, "Avalon2: Result job_id not match!(%s:%s)",
-				job_id, pool->swork.job_id);
+			if (job_idcmp(job_id, pool->swork.job_id))
 				break;
-			}
 
 			if (thr)
 				submit_nonce2_nonce(thr, pool_no, nonce2, nonce);
@@ -411,6 +416,7 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	int i, a, b, tmp;
 	unsigned char target[32];
 	int job_id_len;
+	unsigned short crc;
 
 	/* Send out the first stratum message STATIC */
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %d, %d, %d, %d, %d",
@@ -463,10 +469,9 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
 
 	job_id_len = strlen(pool->swork.job_id);
-	job_id_len = job_id_len >= 4 ? 4 : job_id_len;
-	for (i = 0; i < job_id_len; i++) {
-		pkg.data[i] = *(pool->swork.job_id + strlen(pool->swork.job_id) - 4 + i);
-	}
+	crc = crc16(pool->swork.job_id, job_id_len);
+	pkg.data[0] = (crc & 0xff00) >> 8;
+	pkg.data[1] = crc & 0x00ff;
 	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
