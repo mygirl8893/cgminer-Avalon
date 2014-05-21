@@ -150,6 +150,9 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 	int job_id_len;
 	unsigned short crc, crc_expect;
 
+	if (!pool_job_id)
+		return 1;
+
 	job_id_len = strlen(pool_job_id);
 	crc_expect = crc16(pool_job_id, job_id_len);
 
