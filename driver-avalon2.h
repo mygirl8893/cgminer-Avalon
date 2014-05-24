@@ -104,7 +104,6 @@ struct avalon2_info {
 	int baud;
 
 	int pool_no;
-	int diff;
 
 	int modulars[AVA2_DEFAULT_MODULARS];
 	char mm_version[AVA2_DEFAULT_MODULARS][16];

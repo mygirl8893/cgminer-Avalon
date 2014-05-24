@@ -42,6 +42,8 @@
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
+#define get_fan_pwm(v)	(AVA2_PWM_MAX - (v) * AVA2_PWM_MAX / 100)
+
 int opt_avalon2_freq_min = AVA2_DEFAULT_FREQUENCY;
 int opt_avalon2_freq_max = AVA2_DEFAULT_FREQUENCY_MAX;
 
@@ -79,8 +81,8 @@ char *set_avalon2_fan(char *arg)
 	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100 || val2 < val1)
 		return "Invalid value passed to avalon2-fan";
 
-	opt_avalon2_fan_min = AVA2_PWM_MAX - val1 * AVA2_PWM_MAX / 100;
-	opt_avalon2_fan_max = AVA2_PWM_MAX - val2 * AVA2_PWM_MAX / 100;
+	opt_avalon2_fan_min = get_fan_pwm(val1);
+	opt_avalon2_fan_max = get_fan_pwm(val2);
 
 	return NULL;
 }
@@ -177,12 +179,13 @@ static inline int get_temp_max(struct avalon2_info *info)
 	return info->temp_max;
 }
 
-static inline int get_currect_temp_max(struct avalon2_info *info)
+static inline int get_current_temp_max(struct avalon2_info *info)
 {
 	int i;
-	int t = 0;
-	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
-		if (t <= info->temp[i])
+	int t = info->temp[0];
+
+	for (i = 1; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		if (info->temp[i] > t)
 			t = info->temp[i];
 	}
 	return t;
@@ -197,6 +200,25 @@ static inline uint32_t encode_voltage(uint32_t v)
 static inline uint32_t decode_voltage(uint32_t v)
 {
 	return (0x78 - (rev8(v >> 8) >> 1)) * 125;
+}
+
+static void adjust_fan(struct avalon2_info *info)
+{
+	int t;
+
+	t = get_current_temp_max(info);
+
+	if (t < 60) {
+		info->fan_pwm = get_fan_pwm(40);
+		return;
+	}
+
+	if (t > 80) {
+		info->fan_pwm = get_fan_pwm(100);
+		return;
+	}
+
+	info->fan_pwm = get_fan_pwm(3 * t - 140);
 }
 
 extern void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce);
@@ -714,9 +736,6 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		       thr->work_restart, thr->work_update, info->first);
 		thr->work_update = false;
 		thr->work_restart = false;
-		if (unlikely(info->first))
-			info->first = false;
-
 		get_work(thr, thr->id); /* Make sure pool is ready */
 
 		pool = current_pool();
@@ -731,7 +750,6 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 			return 0;
 		}
 
-		info->diff = (int)pool->swork.diff - 1;
 		info->pool_no = pool->pool_no;
 
 		cgtime(&info->last_stratum);
@@ -741,7 +759,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		cg_runlock(&pool->data_lock);
 
 		/* Configuer the parameter from outside */
-		info->fan_pwm = opt_avalon2_fan_min;
+		adjust_fan(info);
 		info->set_voltage = opt_avalon2_voltage_min;
 		info->set_frequency = opt_avalon2_freq_min;
 
@@ -752,8 +770,8 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		memcpy(send_pkg.data, &tmp, 4);
 
 		applog(LOG_ERR, "Avalon2: Temp max: %d, Cut off temp: %d",
-		       get_currect_temp_max(info), opt_avalon2_overheat);
-		if (get_currect_temp_max(info) >= opt_avalon2_overheat)
+		       get_current_temp_max(info), opt_avalon2_overheat);
+		if (get_current_temp_max(info) >= opt_avalon2_overheat)
 			tmp = encode_voltage(0);
 		else
 			tmp = encode_voltage(info->set_voltage);
@@ -777,11 +795,14 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
 		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 			;
+
+		if (unlikely(info->first))
+			info->first = false;
 	}
 
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
 	cgtime(&current_stratum);
-	if (tdiff(&current_stratum), &(info->last_stratum) > (3.0 * 60.0))
+	if (tdiff(&current_stratum, &(info->last_stratum)) > (3.0 * 60.0))
 		return 0;
 
 	polling(thr);
