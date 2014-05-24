@@ -206,6 +206,11 @@ static void adjust_fan(struct avalon2_info *info)
 {
 	int t;
 
+	if (unlikely(info->first)) {
+		info->fan_pwm = opt_avalon2_fan_min;
+		return;
+	}
+
 	t = get_current_temp_max(info);
 
 	if (t < 60) {
