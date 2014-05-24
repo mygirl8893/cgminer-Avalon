@@ -55,6 +55,8 @@ int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
 
 int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
 
+static struct pool pool_stratum;
+
 static inline uint8_t rev8(uint8_t d)
 {
     int i;
@@ -226,12 +228,12 @@ static void adjust_fan(struct avalon2_info *info)
 	info->fan_pwm = get_fan_pwm(3 * t - 140);
 }
 
-extern void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce);
+extern void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool, uint32_t nonce2, uint32_t nonce);
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
 	struct cgpu_info *avalon2;
 	struct avalon2_info *info;
-	struct pool *pool;
+	struct pool *pool, *real_pool;
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
@@ -290,15 +292,19 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			applog(LOG_DEBUG, "Avalon2: Found! %d: (%08x) (%08x)",
 			       pool_no, nonce2, nonce);
 
-			pool = pools[pool_no];
+			real_pool = pool = pools[pool_no];
 			if (job_idcmp(job_id, pool->swork.job_id)) {
-				/* FIXME:
-				 * We need remember the pre_pool. then submit the stale work */
-				break;
+				if (!job_idcmp(job_id, pool_stratum.swork.job_id)) {
+					applog(LOG_DEBUG, "Avalon2: Match to previous stratum! (%s)", pool_stratum.swork.job_id);
+					pool = &pool_stratum;
+				} else {
+					applog(LOG_DEBUG, "Avalon2: Cannot match to any stratum!");
+					break;
+				}
 			}
 
 			if (thr)
-				submit_nonce2_nonce(thr, pool_no, nonce2, nonce);
+				submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce);
 			break;
 		case AVA2_P_STATUS:
 			memcpy(&tmp, ar->data, 4);
@@ -656,6 +662,8 @@ static bool avalon2_detect_one(const char *devpath)
 			info->dev_type[i] = AVA2_ID_AVA3;
 	}
 
+	pool_stratum.swork.job_id = NULL;
+	pool_stratum.merkles = 0;
 	return true;
 }
 
@@ -723,6 +731,49 @@ static int polling(struct thr_info *thr)
 	return 0;
 }
 
+static void copy_pool_stratum(struct pool *pool)
+{
+	int i;
+	int merkles = pool->merkles;
+	size_t coinbase_len = pool->coinbase_len;
+
+	free(pool_stratum.swork.job_id);
+	free(pool_stratum.nonce1);
+	free(pool_stratum.coinbase);
+
+	align_len(&coinbase_len);
+	pool_stratum.coinbase = calloc(coinbase_len, 1);
+	if (unlikely(!pool_stratum.coinbase))
+		quit(1, "Failed to calloc pool_stratum coinbase in avalon2");
+	memcpy(pool_stratum.coinbase, pool->coinbase, coinbase_len);
+
+
+	for (i = 0; i < pool_stratum.merkles; i++)
+		free(pool_stratum.swork.merkle_bin[i]);
+	if (merkles) {
+		pool_stratum.swork.merkle_bin = realloc(pool_stratum.swork.merkle_bin,
+						 sizeof(char *) * merkles + 1);
+		for (i = 0; i < merkles; i++) {
+			pool_stratum.swork.merkle_bin[i] = malloc(32);
+			if (unlikely(!pool_stratum.swork.merkle_bin[i]))
+				quit(1, "Failed to malloc pool_stratum swork merkle_bin");
+			memcpy(pool_stratum.swork.merkle_bin[i], pool->swork.merkle_bin[i], 32);
+		}
+	}
+
+	pool_stratum.sdiff = pool->sdiff;
+	pool_stratum.coinbase_len = pool->coinbase_len;
+	pool_stratum.nonce2_offset = pool->nonce2_offset;
+	pool_stratum.n2size = pool->n2size;
+	pool_stratum.merkles = pool->merkles;
+
+	pool_stratum.swork.job_id = strdup(pool->swork.job_id);
+	pool_stratum.nonce1 = strdup(pool->nonce1);
+
+	memcpy(pool_stratum.ntime, pool->ntime, sizeof(pool_stratum.ntime));
+	memcpy(pool_stratum.header_bin, pool->header_bin, sizeof(pool_stratum.header_bin));
+}
+
 static int64_t avalon2_scanhash(struct thr_info *thr)
 {
 	struct avalon2_pkg send_pkg;
@@ -755,11 +806,10 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 			return 0;
 		}
 
-		info->pool_no = pool->pool_no;
-
 		cgtime(&info->last_stratum);
-
 		cg_rlock(&pool->data_lock);
+		info->pool_no = pool->pool_no;
+		copy_pool_stratum(pool);
 		avalon2_stratum_pkgs(info->fd, pool, thr);
 		cg_runlock(&pool->data_lock);
 
