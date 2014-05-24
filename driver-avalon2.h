@@ -98,8 +98,17 @@ struct avalon2_pkg {
 
 struct avalon2_info {
 	bool first;
+	struct timeval last_stratum;
+
 	int fd;
 	int baud;
+
+	int pool_no;
+	int diff;
+
+	int modulars[AVA2_DEFAULT_MODULARS];
+	char mm_version[AVA2_DEFAULT_MODULARS][16];
+	int dev_type[AVA2_DEFAULT_MODULARS];
 
 	int set_frequency;
 	int set_voltage;
@@ -109,23 +118,17 @@ struct avalon2_info {
 	int power_good[AVA2_DEFAULT_MODULARS];
 
 	int fan_pwm;
+	int temp_max;
 
 	int fan[2 * AVA2_DEFAULT_MODULARS];
 	int temp[2 * AVA2_DEFAULT_MODULARS];
-	int temp_max;
-
-	int pool_no;
-	int diff;
 
 	int local_works[AVA2_DEFAULT_MODULARS];
 	int hw_works[AVA2_DEFAULT_MODULARS];
-	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
+
 	int local_work[AVA2_DEFAULT_MODULARS];
 	int hw_work[AVA2_DEFAULT_MODULARS];
-
-	int modulars[AVA2_DEFAULT_MODULARS];
-	char mm_version[AVA2_DEFAULT_MODULARS][16];
-	int dev_type[AVA2_DEFAULT_MODULARS];
+	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))

@@ -262,11 +262,13 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 			applog(LOG_DEBUG, "Avalon2: Found! %d: (%08x) (%08x)",
 			       pool_no, nonce2, nonce);
-			/* FIXME:
-			 * We need remember the pre_pool. then submit the stale work */
+
 			pool = pools[pool_no];
-			if (job_idcmp(job_id, pool->swork.job_id))
+			if (job_idcmp(job_id, pool->swork.job_id)) {
+				/* FIXME:
+				 * We need remember the pre_pool. then submit the stale work */
 				break;
+			}
 
 			if (thr)
 				submit_nonce2_nonce(thr, pool_no, nonce2, nonce);
@@ -688,6 +690,7 @@ static int polling(struct thr_info *thr)
 				;
 			avalon2_get_result(thr, info->fd, &ar);
 		}
+		cgsleep_ms(20);
 	}
 
 	return 0;
@@ -696,6 +699,7 @@ static int polling(struct thr_info *thr)
 static int64_t avalon2_scanhash(struct thr_info *thr)
 {
 	struct avalon2_pkg send_pkg;
+	struct timeval current_stratum;
 
 	struct pool *pool;
 	struct cgpu_info *avalon2 = thr->cgpu;
@@ -730,9 +734,11 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		info->diff = (int)pool->swork.diff - 1;
 		info->pool_no = pool->pool_no;
 
-		cg_wlock(&pool->data_lock);
+		cgtime(&info->last_stratum);
+
+		cg_rlock(&pool->data_lock);
 		avalon2_stratum_pkgs(info->fd, pool, thr);
-		cg_wunlock(&pool->data_lock);
+		cg_runlock(&pool->data_lock);
 
 		/* Configuer the parameter from outside */
 		info->fan_pwm = opt_avalon2_fan_min;
@@ -772,6 +778,11 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 			;
 	}
+
+	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
+	cgtime(&current_stratum);
+	if (tdiff(&current_stratum), &(info->last_stratum) > (3.0 * 60.0))
+		return 0;
 
 	polling(thr);
 
