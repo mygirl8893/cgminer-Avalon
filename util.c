@@ -1686,7 +1686,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	clean = json_is_true(json_array_get(val, 8));
 
 #ifdef USE_AVALON2
-	static struct timeval tv_last, tv_now;
+	static struct timeval tv_last;
+	struct timeval tv_now;
 
 	cgtime(&tv_now);
 	applog(LOG_DEBUG, "Stratum: Clean %d: (Now: %ld, Last: %ld) tdiff: %ld",
