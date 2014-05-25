@@ -236,10 +236,10 @@ static void adjust_fan(struct avalon2_info *info)
 	info->fan_pwm = get_fan_pwm(3 * t - 110);
 }
 
-static inline int mm_cmp_1204(struct avalon2_info *info, int modular)
+static inline int mm_cmp_1404(struct avalon2_info *info, int modular)
 {
-	char *mm_1204 = "1204";
-	return strncmp(info->mm_version[modular] + 2, mm_1204, 4) >= 0 ? 1 : 0;
+	char *mm_1404 = "1404";
+	return strncmp(info->mm_version[modular] + 2, mm_1404, 4) > 0 ? 0 : 1;
 }
 
 extern void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool, uint32_t nonce2, uint32_t nonce);
@@ -743,7 +743,7 @@ static int polling(struct thr_info *thr)
 
 			tmp = be32toh(i); /* ID */
 			memcpy(send_pkg.data + 28, &tmp, 4);
-			if (info->led_red[i] && mm_cmp_1204(info, i)) {
+			if (info->led_red[i] && mm_cmp_1404(info, i)) {
 				avalon2_init_pkg(&send_pkg, AVA2_P_TEST, 1, 1);
 				while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 					;
@@ -1023,8 +1023,8 @@ static char *avalon2_set_device(struct cgpu_info *avalon2, char *option, char *s
 
 		info = avalon2->device_data;
 		info->led_red[val] = !info->led_red[val];
-		if (!info->led_red[val] && mm_cmp_1204(info, val)) {
-			applog(LOG_ERR, "Avalon2: MM early then MM_XX1204, enable module:%d", val + 1);
+		if (!info->led_red[val] && mm_cmp_1404(info, val)) {
+			applog(LOG_ERR, "Avalon2: MM early then MM_XX1404, enable module:%d", val + 1);
 			info->enable[val] = 1;
 		}
 
