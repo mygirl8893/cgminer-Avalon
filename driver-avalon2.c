@@ -54,6 +54,7 @@ int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE;
 int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
 
 int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
+enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
 
 static struct pool pool_stratum;
 
@@ -86,6 +87,12 @@ char *set_avalon2_fan(char *arg)
 	opt_avalon2_fan_min = get_fan_pwm(val1);
 	opt_avalon2_fan_max = get_fan_pwm(val2);
 
+	return NULL;
+}
+
+char *set_avalon2_fixed_speed(enum avalon2_fan_fixed *f)
+{
+	*f = FAN_FIXED;
 	return NULL;
 }
 
@@ -208,13 +215,14 @@ static void adjust_fan(struct avalon2_info *info)
 {
 	int t;
 
-	if (unlikely(info->first < 2)) {
+	if (unlikely(info->first < 2) || opt_avalon2_fan_fixed == FAN_FIXED) {
 		info->fan_pwm = opt_avalon2_fan_min;
 		return;
 	}
 
 	t = get_current_temp_max(info);
 
+	/* TODO: Add options for temperature range and fan adjust function */
 	if (t < 50) {
 		info->fan_pwm = get_fan_pwm(40);
 		return;

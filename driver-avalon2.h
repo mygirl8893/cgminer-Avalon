@@ -86,6 +86,11 @@
 #define AVA2_ID_AVA3		3233
 #define AVA2_ID_AVAX		3200
 
+enum avalon2_fan_fixed {
+	FAN_FIXED,
+	FAN_AUTO,
+};
+
 struct avalon2_pkg {
 	uint8_t head[2];
 	uint8_t type;
@@ -147,7 +152,8 @@ struct avalon2_info {
 extern char *set_avalon2_fan(char *arg);
 extern char *set_avalon2_freq(char *arg);
 extern char *set_avalon2_voltage(char *arg);
+extern char *set_avalon2_fixed_speed(enum avalon2_fan_fixed *f);
+extern enum avalon2_fan_fixed opt_avalon2_fan_fixed;
 extern int opt_avalon2_overheat;
-
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */
