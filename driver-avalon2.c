@@ -165,7 +165,7 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 	if (crc_expect == crc)
 		return 0;
 
-	applog(LOG_ERR, "Avalon2: Result job_id not match! [%04x:%04x (%s)]",
+	applog(LOG_DEBUG, "Avalon2: job_id not match! [%04x:%04x (%s)]",
 	       crc, crc_expect, pool_job_id);
 
 	return 1;
@@ -215,17 +215,17 @@ static void adjust_fan(struct avalon2_info *info)
 
 	t = get_current_temp_max(info);
 
-	if (t < 60) {
+	if (t < 50) {
 		info->fan_pwm = get_fan_pwm(40);
 		return;
 	}
 
-	if (t > 80) {
+	if (t > 70) {
 		info->fan_pwm = get_fan_pwm(100);
 		return;
 	}
 
-	info->fan_pwm = get_fan_pwm(3 * t - 140);
+	info->fan_pwm = get_fan_pwm(3 * t - 110);
 }
 
 extern void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool, uint32_t nonce2, uint32_t nonce);
@@ -295,10 +295,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			real_pool = pool = pools[pool_no];
 			if (job_idcmp(job_id, pool->swork.job_id)) {
 				if (!job_idcmp(job_id, pool_stratum.swork.job_id)) {
-					applog(LOG_DEBUG, "Avalon2: Match to previous stratum! (%s)", pool_stratum.swork.job_id);
+					applog(LOG_ERR, "Avalon2: Match to previous stratum! (%s)", pool_stratum.swork.job_id);
 					pool = &pool_stratum;
 				} else {
-					applog(LOG_DEBUG, "Avalon2: Cannot match to any stratum!");
+					applog(LOG_ERR, "Avalon2: Cannot match to any stratum! (%s)", pool->swork.job_id);
 					break;
 				}
 			}
@@ -736,6 +736,9 @@ static void copy_pool_stratum(struct pool *pool)
 	int i;
 	int merkles = pool->merkles;
 	size_t coinbase_len = pool->coinbase_len;
+
+	if (!job_idcmp(pool->swork.job_id, pool_stratum.swork.job_id))
+		return;
 
 	free(pool_stratum.swork.job_id);
 	free(pool_stratum.nonce1);
