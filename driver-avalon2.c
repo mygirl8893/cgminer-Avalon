@@ -727,6 +727,7 @@ static int polling(struct thr_info *thr)
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i]) {
+			cgsleep_ms(20);
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 
 			tmp = be32toh(info->led_red[i]); /* RED LED */
@@ -734,13 +735,19 @@ static int polling(struct thr_info *thr)
 
 			tmp = be32toh(i); /* ID */
 			memcpy(send_pkg.data + 28, &tmp, 4);
-			avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
+			if (info->led_red[i] && 1 /* ID <= 1204 */) {
+				avalon2_init_pkg(&send_pkg, AVA2_P_TEST, 1, 1);
+				while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
+					;
+				info->modulars[i] = 0;
+				continue;
+			} else
+				avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
 
 			while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 				;
 			avalon2_get_result(thr, info->fd, &ar);
 		}
-		cgsleep_ms(20);
 	}
 
 	return 0;
@@ -1000,13 +1007,15 @@ static char *avalon2_set_device(struct cgpu_info *avalon2, char *option, char *s
 
 		val = atoi(setting);
 		if (val < 1 || val > AVA2_DEFAULT_MODULARS) {
-			sprintf(replybuf, "invalid module_id: %d, valid range 0-%d", val, AVA2_DEFAULT_MODULARS);
+			sprintf(replybuf, "invalid module_id: %d, valid range 1-%d", val, AVA2_DEFAULT_MODULARS);
 			return replybuf;
 		}
 
+		val -= 1;
+
 		info = avalon2->device_data;
 		info->led_red[val] = !info->led_red[val];
-		applog(LOG_ERR, "Avalon2: Module:%d, LED:%d", val, info->led_red[val]);
+		applog(LOG_ERR, "Avalon2: Module:%d, LED: %s", val + 1, info->led_red[val] ? "on" : "off");
 
 		return NULL;
 	}
