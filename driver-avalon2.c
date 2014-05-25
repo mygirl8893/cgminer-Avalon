@@ -208,7 +208,7 @@ static void adjust_fan(struct avalon2_info *info)
 {
 	int t;
 
-	if (unlikely(info->first)) {
+	if (unlikely(info->first < 2)) {
 		info->fan_pwm = opt_avalon2_fan_min;
 		return;
 	}
@@ -700,7 +700,7 @@ static bool avalon2_prepare(struct thr_info *thr)
 	if (info->fd == -1)
 		avalon2_init(avalon2);
 
-	info->first = true;
+	info->first = 0;
 	return true;
 }
 
@@ -790,7 +790,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	uint32_t tmp, range, start;
 	int i;
 
-	if (thr->work_restart || thr->work_update || info->first) {
+	if (thr->work_restart || thr->work_update || !info->first) {
 		applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d, first: %d",
 		       thr->work_restart, thr->work_update, info->first);
 		thr->work_update = false;
@@ -854,8 +854,8 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 			;
 
-		if (unlikely(info->first))
-			info->first = false;
+		if (unlikely(info->first < 2))
+			info->first++;
 	}
 
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */

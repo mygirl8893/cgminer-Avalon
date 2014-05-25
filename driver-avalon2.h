@@ -97,7 +97,7 @@ struct avalon2_pkg {
 #define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
-	bool first;
+	int first;
 	struct timeval last_stratum;
 
 	int fd;
