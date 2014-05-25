@@ -133,6 +133,8 @@ struct avalon2_info {
 	int local_work[AVA2_DEFAULT_MODULARS];
 	int hw_work[AVA2_DEFAULT_MODULARS];
 	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
+
+	int led_red[AVA2_DEFAULT_MODULARS];
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))

@@ -725,7 +725,11 @@ static int polling(struct thr_info *thr)
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i]) {
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
-			tmp = be32toh(i);
+
+			tmp = be32toh(info->led_red[i]); /* RED LED */
+			memcpy(send_pkg.data + 12, &tmp, 4);
+
+			tmp = be32toh(i); /* ID */
 			memcpy(send_pkg.data + 28, &tmp, 4);
 			avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
 
