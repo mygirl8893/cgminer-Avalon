@@ -982,6 +982,39 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+static char *avalon2_set_device(struct cgpu_info *avalon2, char *option, char *setting, char *replybuf)
+{
+	int val;
+	struct avalon2_info *info;
+
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "led: module_id");
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "led") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing module_id setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 1 || val > AVA2_DEFAULT_MODULARS) {
+			sprintf(replybuf, "invalid module_id: %d, valid range 0-%d", val, AVA2_DEFAULT_MODULARS);
+			return replybuf;
+		}
+
+		info = avalon2->device_data;
+		info->led_red[val] = !info->led_red[val];
+		applog(LOG_ERR, "Avalon2: Module:%d, LED:%d", val, info->led_red[val]);
+
+		return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
 static void avalon2_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
@@ -995,6 +1028,7 @@ struct device_drv avalon2_drv = {
 	.dname = "avalon2",
 	.name = "AV2",
 	.get_api_stats = avalon2_api_stats,
+	.set_device = avalon2_set_device,
 	.drv_detect = avalon2_detect,
 	.reinit_device = avalon2_init,
 	.thread_prepare = avalon2_prepare,
