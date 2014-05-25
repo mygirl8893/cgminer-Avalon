@@ -113,6 +113,7 @@ struct avalon2_info {
 	int modulars[AVA2_DEFAULT_MODULARS];
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
 	int dev_type[AVA2_DEFAULT_MODULARS];
+	bool enable[AVA2_DEFAULT_MODULARS];
 
 	int set_frequency;
 	int set_voltage;

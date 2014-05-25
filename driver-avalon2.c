@@ -236,6 +236,12 @@ static void adjust_fan(struct avalon2_info *info)
 	info->fan_pwm = get_fan_pwm(3 * t - 110);
 }
 
+static inline int mm_cmp_1204(struct avalon2_info *info, int modular)
+{
+	char *mm_1204 = "1204";
+	return strncmp(info->mm_version[modular] + 2, mm_1204, 4) >= 0 ? 1 : 0;
+}
+
 extern void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool, uint32_t nonce2, uint32_t nonce);
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
@@ -662,6 +668,7 @@ static bool avalon2_detect_one(const char *devpath)
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		strcpy(info->mm_version[i], mm_version[i]);
 		info->modulars[i] = modular[i];	/* Enable modular */
+		info->enable[i] = modular[i];
 		info->dev_type[i] = AVA2_ID_AVAX;
 
 		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2))
@@ -725,8 +732,9 @@ static int polling(struct thr_info *thr)
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
+	static int pre_led_red[AVA2_DEFAULT_MODULARS];
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if (info->modulars[i]) {
+		if (info->modulars[i] && info->enable[i]) {
 			cgsleep_ms(20);
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 
@@ -735,11 +743,11 @@ static int polling(struct thr_info *thr)
 
 			tmp = be32toh(i); /* ID */
 			memcpy(send_pkg.data + 28, &tmp, 4);
-			if (info->led_red[i] && 1 /* ID <= 1204 */) {
+			if (info->led_red[i] && mm_cmp_1204(info, i)) {
 				avalon2_init_pkg(&send_pkg, AVA2_P_TEST, 1, 1);
 				while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
 					;
-				info->modulars[i] = 0;
+				info->enable[i] = 0;
 				continue;
 			} else
 				avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
@@ -1015,10 +1023,15 @@ static char *avalon2_set_device(struct cgpu_info *avalon2, char *option, char *s
 
 		info = avalon2->device_data;
 		info->led_red[val] = !info->led_red[val];
-		applog(LOG_ERR, "Avalon2: Module:%d, LED: %s", val + 1, info->led_red[val] ? "on" : "off");
+		if (!info->led_red[val] && mm_cmp_1204(info, val)) {
+			applog(LOG_ERR, "Avalon2: MM early then MM_XX1204, enable module:%d", val + 1);
+			info->enable[val] = 1;
+		}
 
+		applog(LOG_ERR, "Avalon2: Module:%d, LED: %s", val + 1, info->led_red[val] ? "on" : "off");
 		return NULL;
 	}
+	/* TODO: Add other commands */
 
 	sprintf(replybuf, "Unknown option: %s", option);
 	return replybuf;
