@@ -311,7 +311,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				}
 			}
 
-			if (thr)
+			if (thr && info->first)
 				submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce);
 			break;
 		case AVA2_P_STATUS:
@@ -709,6 +709,9 @@ static bool avalon2_prepare(struct thr_info *thr)
 		avalon2_init(avalon2);
 
 	info->first = 0;
+
+	cglock_init(&(pool_stratum.data_lock));
+
 	return true;
 }
 
@@ -752,6 +755,7 @@ static void copy_pool_stratum(struct pool *pool)
 	if (!job_idcmp(pool->swork.job_id, pool_stratum.swork.job_id))
 		return;
 
+	cg_wlock(&(pool_stratum.data_lock));
 	free(pool_stratum.swork.job_id);
 	free(pool_stratum.nonce1);
 	free(pool_stratum.coinbase);
@@ -787,6 +791,7 @@ static void copy_pool_stratum(struct pool *pool)
 
 	memcpy(pool_stratum.ntime, pool->ntime, sizeof(pool_stratum.ntime));
 	memcpy(pool_stratum.header_bin, pool->header_bin, sizeof(pool_stratum.header_bin));
+	cg_wunlock(&(pool_stratum.data_lock));
 }
 
 static int64_t avalon2_scanhash(struct thr_info *thr)

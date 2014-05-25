@@ -6774,7 +6774,10 @@ void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *r
 	struct device_drv *drv = cgpu->drv;
 	struct work *work = make_work();
 
+	cg_wlock(&pool->data_lock);
 	pool->nonce2 = nonce2;
+	cg_wunlock(&pool->data_lock);
+
 	gen_stratum_work(pool, work);
 	work->pool = real_pool;
 
