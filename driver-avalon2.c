@@ -892,7 +892,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
 	cgtime(&current_stratum);
-	if (tdiff(&current_stratum, &(info->last_stratum)) > (3.0 * 60.0))
+	if (tdiff(&current_stratum, &(info->last_stratum)) > (double)(3.0 * 60.0))
 		return 0;
 
 	polling(thr);
