@@ -1690,21 +1690,21 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	struct timeval tv_now;
 
 	cgtime(&tv_now);
-	applog(LOG_DEBUG, "Stratum: Clean %d: (Now: %ld, Last: %ld) tdiff: %ld",
-	       clean,
+	applog(LOG_DEBUG, "Stratum pool %p: Clean %d: (Now: %ld, Last: %ld) tdiff: %ld",
+	       pool, clean,
 	       (long)tv_now.tv_sec, (long)tv_last.tv_sec,
 	       (long)tdiff(&tv_now, &tv_last));
-
-	if (pool == current_pool() && clean == false) {
-		if ((long)tdiff(&tv_now, &tv_last) < (long)30) {
+	if (pool == current_pool()) {
+		if ((double)tdiff(&tv_now, &tv_last) < (double)30 &&
+		    clean == false) {
 			applog(LOG_ERR, "Ignore job_id: %s", job_id);
 			ret = true;
 			goto out;
 		}
-	}
 
-	tv_last.tv_sec = tv_now.tv_sec;
-	tv_last.tv_usec = tv_now.tv_usec;
+		tv_last.tv_sec = tv_now.tv_sec;
+		tv_last.tv_usec = tv_now.tv_usec;
+	}
 #endif
 	if (!job_id || !prev_hash || !coinbase1 || !coinbase2 || !bbversion || !nbit || !ntime) {
 		/* Annoying but we must not leak memory */
