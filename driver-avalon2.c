@@ -604,7 +604,7 @@ static bool avalon2_detect_one(const char *devpath)
 	struct avalon2_info *info;
 	int ackdetect;
 	int fd;
-	int tmp, i, modular[AVA2_DEFAULT_MODULARS];
+	int tmp, i, j, modular[AVA2_DEFAULT_MODULARS];
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
 
 	struct cgpu_info *avalon2;
@@ -620,23 +620,27 @@ static bool avalon2_detect_one(const char *devpath)
 	}
 	tcflush(fd, TCIOFLUSH);
 
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++)
 		modular[i] = 0;
-		strcpy(mm_version[i], AVA2_MM_VERNULL);
-		/* Send out detect pkg */
-		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
-		tmp = be32toh(i);
-		memcpy(detect_pkg.data + 28, &tmp, 4);
 
-		avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
-		avalon2_send_pkg(fd, &detect_pkg, NULL);
-		ackdetect = avalon2_get_result(NULL, fd, &ret_pkg);
-		applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
-		if (ackdetect != AVA2_P_ACKDETECT)
-			continue;
-		modular[i] = 1;
-		memcpy(mm_version[i], ret_pkg.data, 15);
-		mm_version[i][15] = '\0';
+	for (j = 0; j < 2; j++) {
+		for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+			strcpy(mm_version[i], AVA2_MM_VERNULL);
+			/* Send out detect pkg */
+			memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
+			tmp = be32toh(i);
+			memcpy(detect_pkg.data + 28, &tmp, 4);
+
+			avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
+			avalon2_send_pkg(fd, &detect_pkg, NULL);
+			ackdetect = avalon2_get_result(NULL, fd, &ret_pkg);
+			applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
+			if (ackdetect != AVA2_P_ACKDETECT && modular[i] == 0)
+				continue;
+			modular[i] = 1;
+			memcpy(mm_version[i], ret_pkg.data, 15);
+			mm_version[i][15] = '\0';
+		}
 	}
 	avalon2_close(fd);
 	if (!modular[0] && !modular[1] && !modular[2] && !modular[3])
