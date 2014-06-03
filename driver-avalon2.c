@@ -903,7 +903,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 
 	h = 0;
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		h += info->enable[i] ? (info->local_work[i] - info->hw_works[i]) : 0;
+		h += info->enable[i] ? (info->local_work[i] - info->hw_work[i]) : 0;
 	}
 	return h * 0xffffffff;
 }
