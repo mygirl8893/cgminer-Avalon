@@ -1,6 +1,5 @@
 /*
  * Copyright 2011 Kano
- * Copyright 2013 Luke Dashjr
  * Copyright 2014 Mikeqin
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -131,12 +130,12 @@
 	static WSADATA WSA_Data;
 
 	#define SOCKETINIT	do {  \
-		int wsa; \
-				if ( (wsa = WSAStartup(0x0202, &WSA_Data)) ) { \
-					printf("Socket startup failed: %d\n", wsa); \
-					return 1; \
-		}  \
-	} while (0)
+				    int wsa; \
+				    if (wsa = WSAStartup(0x0202, &WSA_Data)) { \
+					    printf("Socket startup failed: %d\n", wsa); \
+					    return 1; \
+					}  \
+				} while (0)
 
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
@@ -197,7 +196,7 @@ void display(char *buf)
 int callapi(char *command, char *host, short int port)
 {
 	size_t bufsz = RECVSIZE;
-	char *buf = malloc(bufsz+1);
+	char *buf = malloc(bufsz + 1);
 	struct hostent *ip;
 	struct sockaddr_in serv;
 	SOCKETTYPE sock;
@@ -208,8 +207,7 @@ int callapi(char *command, char *host, short int port)
 	SOCKETINIT;
 
 	ip = gethostbyname(host);
-	if (!ip)
-	{
+	if (!ip) {
 		printf("Failed to resolve host %s\n", host);
 		return 1;
 	}
@@ -238,10 +236,8 @@ int callapi(char *command, char *host, short int port)
 	else {
 		p = 0;
 		buf[0] = '\0';
-		while (true)
-		{
-			if (bufsz < RECVSIZE + p)
-			{
+		while (1) {
+			if (bufsz < RECVSIZE + p) {
 				bufsz *= 2;
 				buf = realloc(buf, bufsz);
 				assert(buf);
@@ -270,6 +266,9 @@ int callapi(char *command, char *host, short int port)
 		if (!ONLY)
 			display(buf);
 	}
+
+	if (buf)
+	    free(buf);
 
 	CLOSESOCKET(sock);
 
