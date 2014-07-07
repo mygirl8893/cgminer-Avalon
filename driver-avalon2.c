@@ -997,6 +997,12 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, "Power good %02x", i + 1);
 		root = api_add_int(root, buf, &(info->power_good[i]), false);
 	}
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(info->dev_type[i] == AVA2_ID_AVAX)
+			continue;
+		sprintf(buf, "Led %02x", i + 1);
+		root = api_add_int(root, buf, &(info->led_red[i]), false);
+	}
 
 	return root;
 }
