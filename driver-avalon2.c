@@ -54,6 +54,8 @@ int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE;
 int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
 
 int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
+int opt_avalon2_polling_delay = AVALON2_DEFAULT_POLLING_DELAY;
+
 enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
 
 static struct pool pool_stratum;
@@ -739,7 +741,7 @@ static int polling(struct thr_info *thr)
 	static int pre_led_red[AVA2_DEFAULT_MODULARS];
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
-			cgsleep_ms(20);
+			cgsleep_ms(opt_avalon2_polling_delay);
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 
 			tmp = be32toh(info->led_red[i]); /* RED LED */
