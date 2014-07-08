@@ -200,6 +200,7 @@ int opt_api_mcast_port = 4028;
 bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool;
+bool opt_stratum_ignore = 30;	/* Default: 30 seconds */
 static bool no_work;
 #ifdef USE_ICARUS
 char *opt_icarus_options = NULL;
@@ -1251,6 +1252,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--fix-protocol",
 			opt_set_bool, &opt_fix_protocol,
 			"Do not redirect to a different getwork protocol (eg. stratum)"),
+	OPT_WITH_ARG("--stratum-ignore",
+		     set_int_1_to_65535, opt_show_intval, &opt_stratum_ignore,
+		     "Set stratum message ignore time"),
 #ifdef USE_HASHFAST
 	OPT_WITHOUT_ARG("--hfa-dfu-boot",
 			opt_set_bool, &opt_hfa_dfu_boot,

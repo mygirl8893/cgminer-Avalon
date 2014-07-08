@@ -839,7 +839,8 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
 		if (pool->coinbase_len > AVA2_P_COINBASE_SIZE) {
-			applog(LOG_ERR, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
+			applog(LOG_ERR, "Avalon2: Miner Manager pool coinbase length(%d) have to less then %d",
+			       pool->coinbase_len, AVA2_P_COINBASE_SIZE);
 			return 0;
 		}
 		if (pool->merkles > AVA2_P_MERKLES_COUNT) {
