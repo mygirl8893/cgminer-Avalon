@@ -984,6 +984,7 @@ extern int opt_api_port;
 extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
+extern bool opt_stratum_ignore;
 extern time_t last_getwork;
 extern bool opt_restart;
 #ifdef USE_ICARUS

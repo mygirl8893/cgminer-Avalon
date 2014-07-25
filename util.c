@@ -1695,7 +1695,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	       (long)tv_now.tv_sec, (long)tv_last.tv_sec,
 	       (long)tdiff(&tv_now, &tv_last));
 	if (pool == current_pool()) {
-		if ((double)tdiff(&tv_now, &tv_last) < (double)30 &&
+		if ((double)tdiff(&tv_now, &tv_last) < (double)opt_stratum_ignore &&
 		    clean == false) {
 			applog(LOG_ERR, "Ignore job_id: %s", job_id);
 			ret = true;

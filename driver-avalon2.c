@@ -54,6 +54,8 @@ int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE;
 int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
 
 int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
+int opt_avalon2_polling_delay = AVALON2_DEFAULT_POLLING_DELAY;
+
 enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
 
 static struct pool pool_stratum;
@@ -739,7 +741,7 @@ static int polling(struct thr_info *thr)
 	static int pre_led_red[AVA2_DEFAULT_MODULARS];
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
-			cgsleep_ms(20);
+			cgsleep_ms(opt_avalon2_polling_delay);
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 
 			tmp = be32toh(info->led_red[i]); /* RED LED */
@@ -837,7 +839,8 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
 		if (pool->coinbase_len > AVA2_P_COINBASE_SIZE) {
-			applog(LOG_ERR, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
+			applog(LOG_ERR, "Avalon2: Miner Manager pool coinbase length(%d) have to less then %d",
+			       pool->coinbase_len, AVA2_P_COINBASE_SIZE);
 			return 0;
 		}
 		if (pool->merkles > AVA2_P_MERKLES_COUNT) {
@@ -996,6 +999,12 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 			continue;
 		sprintf(buf, "Power good %02x", i + 1);
 		root = api_add_int(root, buf, &(info->power_good[i]), false);
+	}
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(info->dev_type[i] == AVA2_ID_AVAX)
+			continue;
+		sprintf(buf, "Led %02x", i + 1);
+		root = api_add_int(root, buf, &(info->led_red[i]), false);
 	}
 
 	return root;
