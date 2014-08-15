@@ -50,6 +50,7 @@ int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_MIN;
 int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
 static int avalon2_fan_min = get_fan_pwm(AVA2_DEFAULT_FAN_MIN);
 static int avalon2_fan_max = get_fan_pwm(AVA2_DEFAULT_FAN_MAX);
+static struct avalon2_iic_info avalon2_iic;
 
 int opt_avalon2_voltage_min;
 int opt_avalon2_voltage_max;
@@ -404,6 +405,143 @@ out:
 	return type;
 }
 
+/*
+ #  iic packet format: length[1]+transId[1]+sesId[1]+req[1]+data[60]
+ #  length: 4+len(data)
+ #  transId: 0
+ #  sesId: 0
+ #  req:
+ #        0:RESET
+ #        1:INIT
+ #        2:DEINIT
+ #        3:WRITE
+ #        4:READ
+ #        5:XFER
+ #  data: the actual payload
+ #        clockRate[4] + reserved[4] + payload[52] when init
+ #        xparam[4] + payload[56] when write
+ #            xparam: txSz[1]+rxSz[1]+options[1]+slaveAddr[1]
+ #        payload[60] when read
+ */
+static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_info, uint8_t *buf, int len)
+{
+	memset(iic_pkg, 0, AVA2_IIC_P_SIZE);
+
+	/* TODO: xfer len must be any value, not AVA2_P_COUNT+1 */
+	switch (iic_info->iic_op) {
+	case AVA2_IIC_INIT:
+		iic_pkg[0] = 8;
+		iic_pkg[3] = AVA2_IIC_INIT;
+		iic_pkg[4] = iic_info->iic_param.speed & 0xff;
+		iic_pkg[5] = (iic_info->iic_param.speed >> 8) & 0xff;
+		iic_pkg[6] = (iic_info->iic_param.speed >> 16) & 0xff;
+		iic_pkg[7] = iic_info->iic_param.speed >> 24;
+		break;
+
+	case AVA2_IIC_WRITE:
+		iic_pkg[0] = 8 + AVA2_P_COUNT + 1;
+		iic_pkg[3] = AVA2_IIC_XFER;
+		iic_pkg[4] = AVA2_P_COUNT + 1;
+		iic_pkg[7] = iic_info->iic_param.slave_addr;
+		memcpy(iic_pkg + 8, buf, len);
+		break;
+
+	case AVA2_IIC_READ:
+		iic_pkg[0] = 8;
+		iic_pkg[3] = AVA2_IIC_XFER;
+		iic_pkg[5] = AVA2_P_COUNT + 1;
+		iic_pkg[7] = iic_info->iic_param.slave_addr;
+		break;
+
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+static int avalon2_iic_read(struct cgpu_info *avalon2, uint8_t *buf, int *read)
+{
+	int err, amount;
+	uint8_t buf_t[AVA2_IIC_P_SIZE];
+	int nr_len = AVA2_IIC_P_SIZE;
+	struct avalon2_iic_info iic_info;
+
+	if (unlikely(avalon2->usbinfo.nodev))
+		return AVA2_GETS_ERROR;
+
+	iic_info.iic_op = AVA2_IIC_READ;
+	iic_info.iic_param.slave_addr = 0;
+
+	while (1) {
+		avalon2_iic_init_pkg(buf_t, &iic_info, NULL, 0);
+		err = usb_write(avalon2, (char *)buf_t, nr_len, &amount, C_AVA2_WRITE);
+		if (err || amount != nr_len) {
+			applog(LOG_DEBUG, "Avalon2: iic read w(%d)!", amount);
+		}
+		err = usb_read(avalon2, (char *)buf_t, nr_len, read, C_AVA2_READ);
+		*read = buf_t[0] - 4;
+		if (*read) {
+			err = 0;
+			*read -= 1;
+		}
+
+		if (*read >= 0)
+			break;
+	}
+	memcpy(buf, buf_t + 4, *read);
+
+	return err;
+}
+
+static int avalon2_iic_write(struct cgpu_info *avalon2, uint8_t *buf, int len, int *write)
+{
+	int err, amount, ret;
+	uint8_t buf_t[AVA2_IIC_P_SIZE];
+	int nr_len = AVA2_IIC_P_SIZE;
+	struct avalon2_iic_info iic_info;
+
+	if (unlikely(avalon2->usbinfo.nodev))
+		return AVA2_SEND_ERROR;
+
+	iic_info.iic_op = AVA2_IIC_WRITE;
+	iic_info.iic_param.slave_addr = 0;
+
+	avalon2_iic_init_pkg(buf_t, &iic_info, buf, len);
+	err = usb_write(avalon2, (char *)buf_t, nr_len, &amount, C_AVA2_WRITE);
+	if (err || amount != nr_len) {
+		applog(LOG_DEBUG, "Avalon2: iic write w(%d)!", amount);
+	}
+	avalon2_iic_read(avalon2, buf_t, &ret);
+	*write = len;
+
+	return err;
+}
+
+static int avalon2_iic_init(struct cgpu_info *avalon2)
+{
+	int err, amount, ret;
+	uint8_t buf_t[AVA2_IIC_P_SIZE];
+	int nr_len = AVA2_IIC_P_SIZE;
+	struct avalon2_iic_info iic_info;
+
+	if (unlikely(avalon2->usbinfo.nodev))
+		return 1;
+
+	iic_info.iic_op = AVA2_IIC_INIT;
+	iic_info.iic_param.speed = AVA2_IIC_SPEED_DEFAUL;
+
+	avalon2_iic_init_pkg(buf_t, &iic_info, NULL, 0);
+	err = usb_write(avalon2, (char *)buf_t, nr_len, &amount, C_AVA2_WRITE);
+	if (err || amount != nr_len) {
+		applog(LOG_DEBUG, "Avalon2: iic init w(%d)!", amount);
+		return 1;
+	}
+	avalon2_iic_read(avalon2, buf_t, &ret);
+
+	return 0;
+}
+
 static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 {
 	int i;
@@ -418,7 +556,7 @@ static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 
 		do {
 			memset(buf, 0, read_amount);
-			err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
+			err = avalon2_iic_read(avalon2, buf, &ret);
 			if (unlikely(err && err != LIBUSB_ERROR_TIMEOUT)) {
 				applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets got %d", err, ret);
 				return AVA2_GETS_ERROR;
@@ -430,7 +568,7 @@ static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 				}
 				i -= 1;
 				if (i) {
-					err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
+					err = avalon2_iic_read(avalon2, buf, &ret);
 					if (unlikely(err < 0 || ret != read_amount)) {
 						applog(LOG_ERR, "Avalon2: Error %d on 2nd read in avalon_gets got %d", err, ret);
 						return AVA2_GETS_ERROR;
@@ -459,7 +597,7 @@ static int avalon2_send_pkg(struct cgpu_info *avalon2, const struct avalon2_pkg 
 		return AVA2_SEND_ERROR;
 
 	memcpy(buf, pkg, AVA2_WRITE_SIZE);
-	err = usb_write(avalon2, (char *)buf, nr_len, &amount, C_AVA2_WRITE);
+	err = avalon2_iic_write(avalon2, buf, nr_len, &amount);
 	if (err || amount != nr_len) {
 		applog(LOG_DEBUG, "Avalon2: Send(%d)!", amount);
 		return AVA2_SEND_ERROR;
@@ -671,7 +809,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		avalon2 = usb_free_cgpu(avalon2);
 		return NULL;
 	}
-	avalon2_initialise(avalon2);
+	avalon2_iic_init(avalon2);
 
 	for (j = 0; j < 2; j++) {
 		for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
@@ -683,7 +821,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 
 			avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 			avalon2_send_pkg(avalon2, &detect_pkg);
-			err = usb_read(avalon2, (char *)&ret_pkg, AVA2_READ_SIZE, &amount, C_AVA2_READ);
+			err = avalon2_iic_read(avalon2, (char *)&ret_pkg, &amount);
 			if (err < 0 || amount != AVA2_READ_SIZE) {
 				applog(LOG_DEBUG, "%s %d: Avalon2 failed usb_read with err %d amount %d",
 				       avalon2->drv->name, avalon2->device_id, err, amount);
