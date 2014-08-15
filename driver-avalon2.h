@@ -88,6 +88,13 @@
 #define AVA2_ID_AVA3		3233
 #define AVA2_ID_AVAX		3200
 
+#define AVA2_IIC_RESET		0
+#define AVA2_IIC_INIT		1
+#define AVA2_IIC_DEINIT		2
+#define AVA2_IIC_WRITE		3
+#define AVA2_IIC_READ		4
+#define AVA2_IIC_XFER		5
+
 enum avalon2_fan_fixed {
 	FAN_FIXED,
 	FAN_AUTO,
@@ -137,8 +144,18 @@ struct avalon2_info {
 	int led_red[AVA2_DEFAULT_MODULARS];
 };
 
+struct avalon2_iic_info {
+	uint8_t iic_op;
+	union {
+		uint32_t speed;
+		uint8_t slave_addr;
+	} iic_param;
+};
+
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
 #define AVA2_READ_SIZE AVA2_WRITE_SIZE
+#define AVA2_IIC_P_SIZE	64
+#define AVA2_IIC_SPEED_DEFAUL	1000000
 
 #define AVA2_GETS_OK 0
 #define AVA2_GETS_TIMEOUT -1
