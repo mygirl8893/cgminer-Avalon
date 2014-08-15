@@ -460,6 +460,24 @@ static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_i
 	return 0;
 }
 
+static int avalon2_iic_xfer(struct cgpu_info *avalon2, uint8_t *wbuf, int wlen, int *write, uint8_t *rbuf, int *read)
+{
+	int err;
+
+	err = usb_write(avalon2, (char *)wbuf, wlen, write, C_AVA2_WRITE);
+	if (err || *write != wlen) {
+		applog(LOG_DEBUG, "Avalon2: iic xfer w(%d)!", *write);
+	}
+	err = usb_read(avalon2, (char *)rbuf, AVA2_IIC_P_SIZE, read, C_AVA2_READ);
+	*read = rbuf[0] - 4;
+
+	if (*read) {
+		*read -= 1;
+	}
+
+	return err;
+}
+
 static int avalon2_iic_read(struct cgpu_info *avalon2, uint8_t *buf, int *read)
 {
 	int err, amount;
@@ -475,19 +493,10 @@ static int avalon2_iic_read(struct cgpu_info *avalon2, uint8_t *buf, int *read)
 
 	while (1) {
 		avalon2_iic_init_pkg(buf_t, &iic_info, NULL, 0);
-		err = usb_write(avalon2, (char *)buf_t, nr_len, &amount, C_AVA2_WRITE);
-		if (err || amount != nr_len) {
-			applog(LOG_DEBUG, "Avalon2: iic read w(%d)!", amount);
-		}
-		err = usb_read(avalon2, (char *)buf_t, nr_len, read, C_AVA2_READ);
-		*read = buf_t[0] - 4;
-		if (*read) {
-			err = 0;
-			*read -= 1;
-		}
-
-		if (*read >= 0)
+		err = avalon2_iic_xfer(avalon2, buf_t, nr_len, &amount, buf_t, read);
+		if (*read >= 0) {
 			break;
+		}
 	}
 	memcpy(buf, buf_t + 4, *read);
 
@@ -508,11 +517,7 @@ static int avalon2_iic_write(struct cgpu_info *avalon2, uint8_t *buf, int len, i
 	iic_info.iic_param.slave_addr = 0;
 
 	avalon2_iic_init_pkg(buf_t, &iic_info, buf, len);
-	err = usb_write(avalon2, (char *)buf_t, nr_len, &amount, C_AVA2_WRITE);
-	if (err || amount != nr_len) {
-		applog(LOG_DEBUG, "Avalon2: iic write w(%d)!", amount);
-	}
-	avalon2_iic_read(avalon2, buf_t, &ret);
+	err = avalon2_iic_xfer(avalon2, buf_t, nr_len, &amount, buf_t, &ret);
 	*write = len;
 
 	return err;
@@ -532,12 +537,7 @@ static int avalon2_iic_init(struct cgpu_info *avalon2)
 	iic_info.iic_param.speed = AVA2_IIC_SPEED_DEFAUL;
 
 	avalon2_iic_init_pkg(buf_t, &iic_info, NULL, 0);
-	err = usb_write(avalon2, (char *)buf_t, nr_len, &amount, C_AVA2_WRITE);
-	if (err || amount != nr_len) {
-		applog(LOG_DEBUG, "Avalon2: iic init w(%d)!", amount);
-		return 1;
-	}
-	avalon2_iic_read(avalon2, buf_t, &ret);
+	err = avalon2_iic_xfer(avalon2, buf_t, nr_len, &amount, buf_t, &ret);
 
 	return 0;
 }
