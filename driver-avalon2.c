@@ -738,6 +738,11 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 			info->set_voltage = AVA2_AVA3_VOLTAGE;
 			info->set_frequency = AVA2_AVA3_FREQUENCY;
 		}
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW35_PREFIXSTR, 2)) {
+			info->dev_type[i] = AVA2_ID_AVA3;
+			info->set_voltage = AVA2_AVA3_VOLTAGE;
+			info->set_frequency = AVA2_AVA3_FREQUENCY;
+		}
 	}
 
 	if (!opt_avalon2_voltage_min)
