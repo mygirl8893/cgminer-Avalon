@@ -80,6 +80,7 @@
 /* Avalon2/3 firmware prefix */
 #define AVA2_FW2_PREFIXSTR	"20"
 #define AVA2_FW3_PREFIXSTR	"33"
+#define AVA2_FW35_PREFIXSTR	"35"
 
 #define AVA2_MM_VERNULL		"NONE"
 
