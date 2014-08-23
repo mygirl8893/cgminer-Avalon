@@ -471,9 +471,12 @@ static int avalon2_iic_xfer(struct cgpu_info *avalon2, uint8_t *wbuf, int wlen, 
 	err = usb_read(avalon2, (char *)rbuf, AVA2_IIC_P_SIZE, read, C_AVA2_READ);
 	*read = rbuf[0] - 4;
 
-	if (*read) {
-		*read -= 1;
-	}
+	/* keep MM 39 bytes */
+	if (*read)
+	    *read -= 1;
+
+	if (*read >= 0)
+	    err = 0;
 
 	return err;
 }
