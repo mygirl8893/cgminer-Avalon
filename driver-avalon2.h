@@ -88,12 +88,12 @@
 #define AVA2_ID_AVA3		3233
 #define AVA2_ID_AVAX		3200
 
-#define AVA2_IIC_RESET		0
-#define AVA2_IIC_INIT		1
-#define AVA2_IIC_DEINIT		2
-#define AVA2_IIC_WRITE		3
-#define AVA2_IIC_READ		4
-#define AVA2_IIC_XFER		5
+#define AVA2_IIC_RESET		0xa0
+#define AVA2_IIC_INIT		0xa1
+#define AVA2_IIC_DEINIT		0xa2
+#define AVA2_IIC_WRITE		0xa3
+#define AVA2_IIC_READ		0xa4
+#define AVA2_IIC_XFER		0xa5
 
 enum avalon2_fan_fixed {
 	FAN_FIXED,
