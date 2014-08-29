@@ -753,44 +753,6 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	}
 }
 
-static void avalon2_initialise(struct cgpu_info *avalon2)
-{
-	uint32_t ava2_data[2] = { PL2303_VALUE_LINE0, PL2303_VALUE_LINE1 };
-	int interface;
-
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	interface = usb_interface(avalon2);
-	// Set Data Control
-	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, 8,
-		     interface, C_VENDOR);
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, 9,
-		     interface, C_VENDOR);
-
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	// Set Line Control
-	usb_transfer_data(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_LINE, PL2303_VALUE_LINE,
-			  interface, ava2_data, PL2303_VALUE_LINE_SIZE, C_SETLINE);
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	// Vendor
-	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, PL2303_VALUE_VENDOR,
-		     interface, C_VENDOR);
-
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	// Set More Line Control ?
-	usb_transfer(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, 3, interface, C_SETLINE);
-}
-
 static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct avalon2_info *info;
@@ -1213,14 +1175,6 @@ static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		    temp, info->fan_pct, volts);
 }
 
-static void avalon2_shutdown(struct thr_info *thr)
-{
-	struct cgpu_info *avalon2 = thr->cgpu;
-	int interface = usb_interface(avalon2);
-
-	usb_transfer(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, 0, interface, C_SETLINE);
-}
-
 struct device_drv avalon2_drv = {
 	.drv_id = DRIVER_avalon2,
 	.dname = "avalon2",
@@ -1233,5 +1187,4 @@ struct device_drv avalon2_drv = {
 	.flush_work = avalon2_update,
 	.update_work = avalon2_update,
 	.scanwork = avalon2_scanhash,
-	.thread_shutdown = avalon2_shutdown,
 };
