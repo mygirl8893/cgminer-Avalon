@@ -3585,6 +3585,7 @@ void usb_cleanup(void)
 			case DRIVER_modminer:
 			case DRIVER_icarus:
 			case DRIVER_avalon:
+			case DRIVER_avalon2:
 			case DRIVER_klondike:
 			case DRIVER_hashfast:
 				DEVWLOCK(cgpu, pstate);
