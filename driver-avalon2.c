@@ -442,7 +442,8 @@ static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_i
 		iic_pkg[3] = AVA2_IIC_XFER;
 		iic_pkg[4] = len + 1;
 		iic_pkg[7] = iic_info->iic_param.slave_addr;
-		memcpy(iic_pkg + 8, buf, len);		break;
+		memcpy(iic_pkg + 8, buf, len);
+		break;
 
 	case AVA2_IIC_READ:
 		iic_pkg[0] = 8;
