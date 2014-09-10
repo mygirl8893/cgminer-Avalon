@@ -179,6 +179,7 @@ struct avalon2_discover_info {
 #define AVA2_GETS_TIMEOUT -1
 #define AVA2_GETS_RESTART -2
 #define AVA2_GETS_ERROR -3
+#define AVA2_GETS_EXTRA_DATA -4
 
 #define AVA2_SEND_OK 0
 #define AVA2_SEND_ERROR -1
