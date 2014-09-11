@@ -526,9 +526,9 @@ static int avalon2_iic_write(struct cgpu_info *avalon2, uint8_t *buf, int len)
 	avalon2_iic_init_pkg(wbuf, &iic_info, buf, len);
 	err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wlen, rbuf, 0, &rlen);
 	if (err)
-		quit(1, "Avalon USB Converter failed to xfer");
+		applog(LOG_ERR, "Avalon USB Converter failed to xfer");
 
-	return wlen - 8 - 1;	/* Remove the IIC header:8 and MM padding:1 */
+	return err ? 0 : wlen - 8 - 1;	/* Remove the IIC header:8 and MM padding:1 */
 }
 
 static int avalon2_iic_init(struct cgpu_info *avalon2)
