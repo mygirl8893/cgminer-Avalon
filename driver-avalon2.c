@@ -466,7 +466,7 @@ static int avalon2_iic_xfer(struct cgpu_info *avalon2,
 
 	err = usb_write(avalon2, (char *)wbuf, wlen, write, C_AVA2_WRITE);
 	if (err || *write != wlen)
-		applog(LOG_DEBUG, "Avalon2: AUC xfer %d, w(%d-%d)!", wlen, *write);
+		applog(LOG_DEBUG, "Avalon2: AUC xfer %d, w(%d-%d)!", err, wlen, *write);
 
 	rlen += 4; 		/* Add 4 bytes IIC header */
 	err = usb_read(avalon2, (char *)rbuf, rlen, read, C_AVA2_READ);
@@ -504,7 +504,7 @@ static int avalon2_iic_read(struct cgpu_info *avalon2, uint8_t *buf, int buf_len
 
 	rcount -= 1;		/* Convert 40 bytes MM message back to 39 bytes */
 	if (rcount != buf_len) {
-		applog(LOG_DEBUG, "Avalon2: rcount:%d, buf_len: %d", rcount, buf_len);
+		applog(LOG_DEBUG, "Avalon2: IIC read error, r(%d-%d)", buf_len, rcount);
 		return AVA2_GETS_EXTRA_DATA;
 	}
 
@@ -527,10 +527,12 @@ static int avalon2_iic_write(struct cgpu_info *avalon2, uint8_t *buf, int len)
 	iic_info.iic_param.slave_addr = 0;
 	avalon2_iic_init_pkg(wbuf, &iic_info, buf, len);
 	err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wlen, rbuf, 0, &rlen);
-	if (err)
-		applog(LOG_ERR, "Avalon USB Converter failed to xfer");
+	if (err) {
+		applog(LOG_ERR, "Avalon2: IIC write error %d", err);
+		return 0;
+	}
 
-	return err ? 0 : wlen - 8 - 1;	/* Remove the 4 bytes IIC header, 4 bytes xfer header and MM padding:1 */
+	return wlen - 8 - 1;	/* Remove the 4 bytes IIC header, 4 bytes xfer header and MM padding:1 */
 }
 
 static int avalon2_iic_init(struct cgpu_info *avalon2)
@@ -550,10 +552,12 @@ static int avalon2_iic_init(struct cgpu_info *avalon2)
 	rlen = 12;		/* Version length: 12 (AUC-20140909) */
 	memset(rbuf, 0, AVA2_IIC_P_SIZE);
 	err = avalon2_iic_xfer(avalon2, wbuf, AVA2_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
-	if (err)
-		quit(1, "Failed to init Avalon USB Converter");
+	if (err) {
+		applog(LOG_ERR, "Avalon2: Failed to init Avalon USB2IIC Converter");
+		return 1;
+	}
 
-	applog(LOG_DEBUG, "Avalon2: USB Converter versioin: %s", rbuf + 4);
+	applog(LOG_DEBUG, "Avalon2: USB2IIC Converter versioin: %s", rbuf + 4);
 	return 0;
 }
 
@@ -763,8 +767,6 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 
 	for (j = 0; j < 2; j++) {
 		for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-			applog(LOG_ERR, "Module: %d", i);
-
 			strcpy(mm_version[i], AVA2_MM_VERNULL);
 			/* Send out detect pkg */
 			memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
