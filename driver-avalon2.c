@@ -605,7 +605,7 @@ static int avalon2_send_pkg(struct cgpu_info *avalon2, const struct avalon2_pkg 
 	if (unlikely(avalon2->usbinfo.nodev))
 		return AVA2_SEND_ERROR;
 
-	amount = avalon2_iic_write(avalon2, pkg, AVA2_WRITE_SIZE);
+	amount = avalon2_iic_write(avalon2, (uint8_t *)pkg, AVA2_WRITE_SIZE);
 	if (amount != AVA2_WRITE_SIZE) {
 		applog(LOG_DEBUG, "Avalon2: Send(%d-%d)!", AVA2_WRITE_SIZE, amount);
 		return AVA2_SEND_ERROR;
@@ -861,7 +861,6 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 	if (!opt_avalon2_freq_min)
 		opt_avalon2_freq_min = opt_avalon2_freq_max = info->set_frequency;
 
-
 	return avalon2;
 }
 
@@ -901,11 +900,12 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 			    avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 			    avalon2_send_pkg(avalon2, &detect_pkg);
 			    memset(&ret_pkg, 0, sizeof(ret_pkg));
+			    cgsleep_ms(2000);
 			    err = avalon2_iic_read(avalon2, i, (char *)&ret_pkg, AVA2_READ_SIZE);
 			    if (err != AVA2_READ_SIZE) {
+				    applog(LOG_DEBUG, "Avalon2 checkdevs id:%d lost!", i);
 				    info->modulars[i] = 0;
 				    info->enable[i] = 0;
-				    memset(info->mm_dna[i], 0, AVA2_DNA_LEN);
 				    info->dev_cnt--;
 				    if (info->dev_cnt < 0) {
 					    applog(LOG_DEBUG, "Avalon2 checkdevs dev_cnt < 0!");
@@ -922,6 +922,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	avalon2_init_pkg(&send_pkg, AVA2_P_DISCOVER, 1, 1);
 	avalon2_send_pkg(avalon2, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
+	cgsleep_ms(1000);
 	err = avalon2_iic_read(avalon2, AVA2_DEVID_DEFAULT, (char*)&ret_pkg, AVA2_READ_SIZE);
 	if (err != AVA2_READ_SIZE) {
 	    return;
@@ -1004,6 +1005,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	avalon2_init_pkg(&send_pkg, AVA2_P_SETDEVID, 1, 1);
 	avalon2_send_pkgs(avalon2, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
+	cgsleep_ms(1000);
 	err = avalon2_iic_read(avalon2, i, (char*)&ret_pkg, AVA2_READ_SIZE);
 	if (err != AVA2_READ_SIZE ||
 	    ret_pkg.type != AVA2_P_ACKSETDEVID ||
@@ -1015,7 +1017,6 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	    info->dev_cnt--;
 	    return;
 	}
-
 	applog(LOG_DEBUG, "Avalon2 got new modular, id = %d\n", i);
 }
 
