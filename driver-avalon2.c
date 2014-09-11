@@ -510,7 +510,7 @@ static int avalon2_iic_read(struct cgpu_info *avalon2, uint8_t slave_addr, uint8
 	return rcount;
 }
 
-static int avalon2_iic_write(struct cgpu_info *avalon2, uint8_t *buf, int len)
+static int avalon2_iic_write(struct cgpu_info *avalon2, uint8_t slave_addr, uint8_t *buf, int len)
 {
 	struct avalon2_iic_info iic_info;
 
@@ -521,8 +521,13 @@ static int avalon2_iic_write(struct cgpu_info *avalon2, uint8_t *buf, int len)
 	if (unlikely(avalon2->usbinfo.nodev))
 		return AVA2_SEND_ERROR;
 
+	/* slave address start from 1 */
 	iic_info.iic_op = AVA2_IIC_WRITE;
-	iic_info.iic_param.slave_addr = 0;
+	if (slave_addr == AVA2_DEVID_BROADCAST)
+	    iic_info.iic_param.slave_addr = 0;
+	else
+	    iic_info.iic_param.slave_addr = slave_addr + 1;
+
 	avalon2_iic_init_pkg(wbuf, &iic_info, buf, len);
 	err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wlen, rbuf, 0, &rlen);
 	if (err)
@@ -598,14 +603,14 @@ static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t slave_addr, ui
 	}
 }
 
-static int avalon2_send_pkg(struct cgpu_info *avalon2, const struct avalon2_pkg *pkg)
+static int avalon2_send_pkg(struct cgpu_info *avalon2, uint8_t slave_addr, const struct avalon2_pkg *pkg)
 {
 	int amount;
 
 	if (unlikely(avalon2->usbinfo.nodev))
 		return AVA2_SEND_ERROR;
 
-	amount = avalon2_iic_write(avalon2, (uint8_t *)pkg, AVA2_WRITE_SIZE);
+	amount = avalon2_iic_write(avalon2, slave_addr, (uint8_t *)pkg, AVA2_WRITE_SIZE);
 	if (amount != AVA2_WRITE_SIZE) {
 		applog(LOG_DEBUG, "Avalon2: Send(%d-%d)!", AVA2_WRITE_SIZE, amount);
 		return AVA2_SEND_ERROR;
@@ -614,14 +619,14 @@ static int avalon2_send_pkg(struct cgpu_info *avalon2, const struct avalon2_pkg 
 	return AVA2_SEND_OK;
 }
 
-static int avalon2_send_pkgs(struct cgpu_info *avalon2, const struct avalon2_pkg *pkg)
+static int avalon2_send_pkgs(struct cgpu_info *avalon2, uint8_t slave_addr, const struct avalon2_pkg *pkg)
 {
 	int ret;
 
 	do {
 		if (unlikely(avalon2->usbinfo.nodev))
 			return -1;
-		ret = avalon2_send_pkg(avalon2, pkg);
+		ret = avalon2_send_pkg(avalon2, slave_addr, pkg);
 	} while (ret != AVA2_SEND_OK);
 
 	return 0;
@@ -667,7 +672,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	memcpy(pkg.data + 24, &tmp, 4);
 
 	avalon2_init_pkg(&pkg, AVA2_P_STATIC, 1, 1);
-	if (avalon2_send_pkgs(avalon2, &pkg))
+	if (avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 		return;
 
 	set_target(target, pool->sdiff);
@@ -679,7 +684,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 		free(target_str);
 	}
 	avalon2_init_pkg(&pkg, AVA2_P_TARGET, 1, 1);
-	if (avalon2_send_pkgs(avalon2, &pkg))
+	if (avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 		return;
 
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s",
@@ -691,7 +696,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	pkg.data[0] = (crc & 0xff00) >> 8;
 	pkg.data[1] = crc & 0x00ff;
 	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
-	if (avalon2_send_pkgs(avalon2, &pkg))
+	if (avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 		return;
 
 	if (pool->coinbase_len > AVA2_P_COINBASE_SIZE) {
@@ -705,20 +710,20 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 		b = coinbase_len_posthash % AVA2_P_DATA_LEN;
 		memcpy(pkg.data, coinbase_prehash, 32);
 		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, 1, a + (b ? 1 : 0));
-		if (avalon2_send_pkg(avalon2, &pkg))
+		if (avalon2_send_pkg(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 			return;
 		applog(LOG_DEBUG, "Avalon2: Pool stratum message modified COINBASE: %d %d", a, b);
 		for (i = 1; i < a; i++) {
 			memcpy(pkg.data, pool->coinbase + coinbase_len_prehash + i * 32 - 32, 32);
 			avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, a + (b ? 1 : 0));
-			if (avalon2_send_pkg(avalon2, &pkg))
+			if (avalon2_send_pkg(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 				return;
 		}
 		if (b) {
 			memset(pkg.data, 0, AVA2_P_DATA_LEN);
 			memcpy(pkg.data, pool->coinbase + coinbase_len_prehash + i * 32 - 32, b);
 			avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, i + 1);
-			if (avalon2_send_pkg(avalon2, &pkg))
+			if (avalon2_send_pkg(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 				return;
 		}
 	} else {
@@ -728,14 +733,14 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 		for (i = 0; i < a; i++) {
 			memcpy(pkg.data, pool->coinbase + i * 32, 32);
 			avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, a + (b ? 1 : 0));
-			if (avalon2_send_pkg(avalon2, &pkg))
+			if (avalon2_send_pkg(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 				return;
 		}
 		if (b) {
 			memset(pkg.data, 0, AVA2_P_DATA_LEN);
 			memcpy(pkg.data, pool->coinbase + i * 32, b);
 			avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, i + 1);
-			if (avalon2_send_pkg(avalon2, &pkg))
+			if (avalon2_send_pkg(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 				return;
 		}
 	}
@@ -747,7 +752,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 		memset(pkg.data, 0, AVA2_P_DATA_LEN);
 		memcpy(pkg.data, pool->swork.merkle_bin[i], 32);
 		avalon2_init_pkg(&pkg, AVA2_P_MERKLES, i + 1, b);
-		if (avalon2_send_pkgs(avalon2, &pkg))
+		if (avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 			return;
 	}
 
@@ -756,7 +761,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 		memset(pkg.data, 0, AVA2_P_HEADER);
 		memcpy(pkg.data, pool->header_bin + i * 32, 32);
 		avalon2_init_pkg(&pkg, AVA2_P_HEADER, i + 1, 4);
-		if (avalon2_send_pkgs(avalon2, &pkg))
+		if (avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &pkg))
 			return;
 	}
 }
@@ -790,7 +795,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 			memcpy(detect_pkg.data + 28, &tmp, 4);
 
 			avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
-			avalon2_send_pkg(avalon2, &detect_pkg);
+			avalon2_send_pkg(avalon2, i, &detect_pkg);
 			err = avalon2_iic_read(avalon2, i, (char *)&ret_pkg, AVA2_READ_SIZE);
 			if (err != AVA2_READ_SIZE) {
 				memset(mm_dna[i], 0, AVA2_DNA_LEN);
@@ -898,7 +903,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 			    memcpy(detect_pkg.data + 28, &tmp, 4);
 
 			    avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
-			    avalon2_send_pkg(avalon2, &detect_pkg);
+			    avalon2_send_pkg(avalon2, i, &detect_pkg);
 			    memset(&ret_pkg, 0, sizeof(ret_pkg));
 			    cgsleep_ms(2000);
 			    err = avalon2_iic_read(avalon2, i, (char *)&ret_pkg, AVA2_READ_SIZE);
@@ -920,7 +925,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 
 	/* Discover */
 	avalon2_init_pkg(&send_pkg, AVA2_P_DISCOVER, 1, 1);
-	avalon2_send_pkg(avalon2, &send_pkg);
+	avalon2_send_pkg(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
 	cgsleep_ms(1000);
 	err = avalon2_iic_read(avalon2, AVA2_DEVID_DEFAULT, (char*)&ret_pkg, AVA2_READ_SIZE);
@@ -1003,7 +1008,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	tmp = be32toh(i);
 	memcpy(send_pkg.data + 28, &tmp, 4);
 	avalon2_init_pkg(&send_pkg, AVA2_P_SETDEVID, 1, 1);
-	avalon2_send_pkgs(avalon2, &send_pkg);
+	avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
 	cgsleep_ms(1000);
 	err = avalon2_iic_read(avalon2, i, (char*)&ret_pkg, AVA2_READ_SIZE);
@@ -1046,13 +1051,13 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 			memcpy(send_pkg.data + 28, &tmp, 4);
 			if (info->led_red[i] && mm_cmp_1404(info, i)) {
 				avalon2_init_pkg(&send_pkg, AVA2_P_TEST, 1, 1);
-				avalon2_send_pkgs(avalon2, &send_pkg);
+				avalon2_send_pkgs(avalon2, i, &send_pkg);
 				info->enable[i] = 0;
 				continue;
 			} else
 				avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
 
-			avalon2_send_pkgs(avalon2, &send_pkg);
+			avalon2_send_pkgs(avalon2, i, &send_pkg);
 			ret = avalon2_gets(avalon2, i, result);
 			if (ret == AVA2_GETS_OK)
 				decode_pkg(thr, &ar, result);
@@ -1192,7 +1197,7 @@ static void avalon2_update(struct cgpu_info *avalon2)
 
 	/* Package the data */
 	avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
-	avalon2_send_pkgs(avalon2, &send_pkg);
+	avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
 
 	avalon2_checkdevs(avalon2);
 }

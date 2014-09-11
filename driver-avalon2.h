@@ -104,6 +104,7 @@
 
 #define AVA2_DNA_LEN		8
 #define AVA2_DEVID_DEFAULT	0x7f
+#define AVA2_DEVID_BROADCAST	0x80
 
 enum avalon2_fan_fixed {
 	FAN_FIXED,
