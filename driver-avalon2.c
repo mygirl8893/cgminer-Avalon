@@ -773,7 +773,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 			strcpy(mm_version[i], AVA2_MM_VERNULL);
 			/* Send out detect pkg */
 			memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
-			tmp = be32toh(i);
+			tmp = be32toh(i + 1);
 			memcpy(detect_pkg.data + 28, &tmp, 4);
 
 			avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
@@ -880,7 +880,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	    for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		    if (info->modulars[i] && info->enable[i]) {
 			    memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
-			    tmp = be32toh(i);
+			    tmp = be32toh(i + 1);
 			    memcpy(detect_pkg.data + 28, &tmp, 4);
 
 			    avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
@@ -986,7 +986,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	}
 
 	memcpy(send_pkg.data, info->mm_dna[i], AVA2_DNA_LEN);
-	tmp = be32toh(i+1);/* slaveaddr == devid, start from 1 */
+	tmp = be32toh(i + 1);/* slaveaddr == devid, start from 1 */
 	memcpy(send_pkg.data + 28, &tmp, 4);
 	avalon2_init_pkg(&send_pkg, AVA2_P_SETDEVID, 1, 1);
 	avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
@@ -1028,7 +1028,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 			tmp = be32toh(info->led_red[i]); /* RED LED */
 			memcpy(send_pkg.data + 12, &tmp, 4);
 
-			tmp = be32toh(i); /* ID */
+			tmp = be32toh(i + 1); /* ID */
 			memcpy(send_pkg.data + 28, &tmp, 4);
 			if (info->led_red[i] && mm_cmp_1404(info, i)) {
 				avalon2_init_pkg(&send_pkg, AVA2_P_TEST, 1, 1);
