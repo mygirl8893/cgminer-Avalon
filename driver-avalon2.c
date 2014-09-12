@@ -494,12 +494,7 @@ static int avalon2_iic_read(struct cgpu_info *avalon2, uint8_t slave_addr, uint8
 	cgsleep_ms(10);
 
 	iic_info.iic_op = AVA2_IIC_READ;
-	if (slave_addr == AVA2_DEVID_BROADCAST)
-		iic_info.iic_param.slave_addr = 0;
-	if (slave_addr == AVA2_DEVID_DEFAULT)
-		iic_info.iic_param.slave_addr = AVA2_DEVID_DEFAULT;
-	else
-		iic_info.iic_param.slave_addr = slave_addr + 1;
+	iic_info.iic_param.slave_addr = slave_addr;
 
 	avalon2_iic_init_pkg(wbuf, &iic_info, NULL, buf_len);
 
@@ -531,12 +526,7 @@ static int avalon2_iic_write(struct cgpu_info *avalon2, uint8_t slave_addr, uint
 
 	/* slave address start from 1 */
 	iic_info.iic_op = AVA2_IIC_WRITE;
-	if (slave_addr == AVA2_DEVID_BROADCAST)
-		iic_info.iic_param.slave_addr = 0;
-	if (slave_addr == AVA2_DEVID_DEFAULT)
-		iic_info.iic_param.slave_addr = AVA2_DEVID_DEFAULT;
-	else
-		iic_info.iic_param.slave_addr = slave_addr + 1;
+	iic_info.iic_param.slave_addr = slave_addr;
 
 	avalon2_iic_init_pkg(wbuf, &iic_info, buf, len);
 	err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wlen, rbuf, 0, &rlen);
@@ -787,8 +777,8 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 			memcpy(detect_pkg.data + 28, &tmp, 4);
 
 			avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
-			avalon2_send_pkg(avalon2, i, &detect_pkg);
-			err = avalon2_iic_read(avalon2, i, (char *)&ret_pkg, AVA2_READ_SIZE);
+			avalon2_send_pkg(avalon2, i + 1, &detect_pkg);
+			err = avalon2_iic_read(avalon2, i + 1, (char *)&ret_pkg, AVA2_READ_SIZE);
 			if (err != AVA2_READ_SIZE) {
 				memset(mm_dna[i], 0, AVA2_DNA_LEN);
 				modular[i] = 0;
@@ -885,7 +875,6 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	struct avalon2_discover_info discover_info;
 	int i, j, tmp, err, amount;
 
-	applog(LOG_DEBUG, "Avalon2 check devs start!");
 	/* Check exist devs */
 	if (info->dev_cnt) {
 	    for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
@@ -895,10 +884,10 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 			    memcpy(detect_pkg.data + 28, &tmp, 4);
 
 			    avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
-			    avalon2_send_pkg(avalon2, i, &detect_pkg);
+			    avalon2_send_pkg(avalon2, i + 1, &detect_pkg);
 			    memset(&ret_pkg, 0, sizeof(ret_pkg));
 			    cgsleep_ms(2000);
-			    err = avalon2_iic_read(avalon2, i, (char *)&ret_pkg, AVA2_READ_SIZE);
+			    err = avalon2_iic_read(avalon2, i + 1, (char *)&ret_pkg, AVA2_READ_SIZE);
 			    if (err != AVA2_READ_SIZE) {
 				    applog(LOG_DEBUG, "Avalon2 checkdevs id:%d lost!", i);
 				    info->modulars[i] = 0;
@@ -997,13 +986,13 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	}
 
 	memcpy(send_pkg.data, info->mm_dna[i], AVA2_DNA_LEN);
-	tmp = be32toh(i);
+	tmp = be32toh(i+1);/* slaveaddr == devid, start from 1 */
 	memcpy(send_pkg.data + 28, &tmp, 4);
 	avalon2_init_pkg(&send_pkg, AVA2_P_SETDEVID, 1, 1);
 	avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
 	cgsleep_ms(1000);
-	err = avalon2_iic_read(avalon2, i, (char*)&ret_pkg, AVA2_READ_SIZE);
+	err = avalon2_iic_read(avalon2, i + 1, (char*)&ret_pkg, AVA2_READ_SIZE);
 	if (err != AVA2_READ_SIZE ||
 	    ret_pkg.type != AVA2_P_ACKSETDEVID ||
 	    0 != memcmp(ret_pkg.data, discover_info.mm_dna, AVA2_DNA_LEN)) {
@@ -1043,14 +1032,14 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 			memcpy(send_pkg.data + 28, &tmp, 4);
 			if (info->led_red[i] && mm_cmp_1404(info, i)) {
 				avalon2_init_pkg(&send_pkg, AVA2_P_TEST, 1, 1);
-				avalon2_send_pkgs(avalon2, i, &send_pkg);
+				avalon2_send_pkgs(avalon2, i + 1, &send_pkg);
 				info->enable[i] = 0;
 				continue;
 			} else
 				avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
 
-			avalon2_send_pkgs(avalon2, i, &send_pkg);
-			ret = avalon2_gets(avalon2, i, result);
+			avalon2_send_pkgs(avalon2, i + 1, &send_pkg);
+			ret = avalon2_gets(avalon2, i + 1, result);
 			if (ret == AVA2_GETS_OK)
 				decode_pkg(thr, &ar, result);
 		}
