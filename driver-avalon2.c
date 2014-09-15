@@ -61,6 +61,7 @@ int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
 int opt_avalon2_polling_delay = AVALON2_DEFAULT_POLLING_DELAY;
 
 enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
+static int avalon2_checkdevs(struct cgpu_info *avalon2);
 
 #define UNPACK32(x, str)			\
 {						\
@@ -396,7 +397,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			applog(LOG_DEBUG, "Avalon2: AVA2_P_NAK");
 			break;
 		default:
-			applog(LOG_DEBUG, "Avalon2: Unknown response");
+			applog(LOG_DEBUG, "Avalon2: Unknown response type:%d\n", type);
 			type = AVA2_GETS_ERROR;
 			break;
 		}
@@ -848,6 +849,9 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 	if (!opt_avalon2_freq_min)
 		opt_avalon2_freq_min = opt_avalon2_freq_max = info->set_frequency;
 
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++)
+		avalon2_checkdevs(avalon2);
+
 	return avalon2;
 }
 
@@ -886,7 +890,6 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 			    avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 			    avalon2_send_pkg(avalon2, i + 1, &detect_pkg);
 			    memset(&ret_pkg, 0, sizeof(ret_pkg));
-			    cgsleep_ms(2000);
 			    err = avalon2_iic_read(avalon2, i + 1, (char *)&ret_pkg, AVA2_READ_SIZE);
 			    if (err != AVA2_READ_SIZE) {
 				    applog(LOG_DEBUG, "Avalon2 checkdevs id:%d lost!", i);
@@ -898,17 +901,16 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 					    info->dev_cnt = 0;
 				    }
 			    }
-
 			    /* TODO: check ret_pkg.data with info->mm_dna */
 		    }
 	    }
 	}
 
 	/* Discover */
+	memset(&send_pkg, 0, sizeof(send_pkg));
 	avalon2_init_pkg(&send_pkg, AVA2_P_DISCOVER, 1, 1);
 	avalon2_send_pkg(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
-	cgsleep_ms(1000);
 	err = avalon2_iic_read(avalon2, AVA2_DEVID_BROADCAST, (char*)&ret_pkg, AVA2_READ_SIZE);
 	if (err != AVA2_READ_SIZE) {
 	    return;
@@ -918,8 +920,8 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	    return;
 
 	memset(&discover_info, 0, sizeof(discover_info));
-	memcpy(discover_info.mm_dna, ret_pkg.data, AVA2_DNA_LEN);
-	memcpy(discover_info.mm_version, ret_pkg.data + AVA2_DNA_LEN, 15);
+	memcpy(discover_info.mm_version, ret_pkg.data, 15);
+	memcpy(discover_info.mm_dna, ret_pkg.data + 15, AVA2_DNA_LEN);
 	memcpy(&discover_info.modular_id, ret_pkg.data + 28, 4);
 	discover_info.modular_id = be32toh(discover_info.modular_id);
 
@@ -985,20 +987,22 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 		info->set_frequency = AVA2_AVA3_FREQUENCY;
 	}
 
-	memcpy(send_pkg.data, info->mm_dna[i], AVA2_DNA_LEN);
+	memset(&send_pkg, 0, sizeof(send_pkg));
+	memcpy(send_pkg.data, info->mm_version[i], 15);
+	memcpy(send_pkg.data + 15, info->mm_dna[i], AVA2_DNA_LEN);
 	tmp = be32toh(i + 1);/* slaveaddr == devid, start from 1 */
 	memcpy(send_pkg.data + 28, &tmp, 4);
 	avalon2_init_pkg(&send_pkg, AVA2_P_SETDEVID, 1, 1);
 	avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
-	cgsleep_ms(1000);
 	err = avalon2_iic_read(avalon2, i + 1, (char*)&ret_pkg, AVA2_READ_SIZE);
 	if (err != AVA2_READ_SIZE ||
 	    ret_pkg.type != AVA2_P_ACKSETDEVID ||
-	    0 != memcmp(ret_pkg.data, discover_info.mm_dna, AVA2_DNA_LEN)) {
+	    0 != memcmp(ret_pkg.data + 15, discover_info.mm_dna, AVA2_DNA_LEN)) {
 	    applog(LOG_DEBUG, "Avalon2 SETDEVID failed!");
 	    info->modulars[i] = 0;
 	    info->enable[i] = 0;
+	    memset(info->mm_version[i], 0, 15);
 	    memset(info->mm_dna[i], 0, AVA2_DNA_LEN);
 	    info->dev_cnt--;
 	    return;
@@ -1011,11 +1015,6 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 	struct avalon2_pkg send_pkg, discover_pkg;
 	struct avalon2_ret ar;
 	int i, tmp, err, amount;
-
-	if (info->dev_cnt == 0) {
-		avalon2_checkdevs(avalon2);
-		return 0;
-	}
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
