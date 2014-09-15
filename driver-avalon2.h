@@ -77,11 +77,11 @@
 #define AVA2_P_TEST_RET		26
 
 /* Only for addressing */
-#define AVA2_P_DISCOVER		0xa0
-#define AVA2_P_SETDEVID		0xa1
+#define AVA2_P_DISCOVER		30
+#define AVA2_P_SETDEVID		31
 
-#define AVA2_P_ACKDISCOVER	0xb0
-#define AVA2_P_ACKSETDEVID	0xb1
+#define AVA2_P_ACKDISCOVER	40
+#define AVA2_P_ACKSETDEVID	41
 /* Avalon2 protocol package type */
 
 /* Avalon2/3 firmware prefix */
@@ -103,8 +103,7 @@
 #define AVA2_IIC_XFER		0xa5
 
 #define AVA2_DNA_LEN		8
-#define AVA2_DEVID_DEFAULT	0x7f
-#define AVA2_DEVID_BROADCAST	0x80
+#define AVA2_DEVID_BROADCAST		0
 
 enum avalon2_fan_fixed {
 	FAN_FIXED,

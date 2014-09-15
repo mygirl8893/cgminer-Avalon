@@ -909,7 +909,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	avalon2_send_pkg(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
 	cgsleep_ms(1000);
-	err = avalon2_iic_read(avalon2, AVA2_DEVID_DEFAULT, (char*)&ret_pkg, AVA2_READ_SIZE);
+	err = avalon2_iic_read(avalon2, AVA2_DEVID_BROADCAST, (char*)&ret_pkg, AVA2_READ_SIZE);
 	if (err != AVA2_READ_SIZE) {
 	    return;
 	}
@@ -923,7 +923,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	memcpy(&discover_info.modular_id, ret_pkg.data + 28, 4);
 	discover_info.modular_id = be32toh(discover_info.modular_id);
 
-	if (discover_info.modular_id != AVA2_DEVID_DEFAULT) {
+	if (discover_info.modular_id != AVA2_DEVID_BROADCAST) {
 		if (discover_info.modular_id > AVA2_DEFAULT_MODULARS) {
 		    applog(LOG_DEBUG, "Avalon2 modular_id %d too big!", discover_info.modular_id);
 		    return;
@@ -936,7 +936,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 		return;
 	}
 
-	/* Got a new modular, modular_id == AVA2_DEVID_DEFAULT */
+	/* Got a new modular, modular_id == AVA2_DEVID_BROADCAST */
 	for (j = 0; j < AVA2_DEFAULT_MODULARS; j++) {
 	    if (0 == memcmp(info->mm_dna[j], discover_info.mm_dna, AVA2_DNA_LEN))
 		    break;
