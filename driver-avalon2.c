@@ -1178,8 +1178,6 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	/* Package the data */
 	avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
 	avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
-
-	avalon2_checkdevs(avalon2);
 }
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
