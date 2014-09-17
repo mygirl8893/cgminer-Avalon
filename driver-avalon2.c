@@ -52,7 +52,6 @@ int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_MIN;
 int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
 static int avalon2_fan_min = get_fan_pwm(AVA2_DEFAULT_FAN_MIN);
 static int avalon2_fan_max = get_fan_pwm(AVA2_DEFAULT_FAN_MAX);
-static struct avalon2_iic_info avalon2_iic;
 
 int opt_avalon2_voltage_min;
 int opt_avalon2_voltage_max;
@@ -61,7 +60,7 @@ int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
 int opt_avalon2_polling_delay = AVALON2_DEFAULT_POLLING_DELAY;
 
 enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
-static int avalon2_checkdevs(struct cgpu_info *avalon2);
+static void avalon2_checkdevs(struct cgpu_info *avalon2);
 
 #define UNPACK32(x, str)			\
 {						\
@@ -567,7 +566,6 @@ static int avalon2_iic_init(struct cgpu_info *avalon2)
 
 static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t slave_addr, uint8_t *buf)
 {
-	int i;
 	int read_amount = AVA2_READ_SIZE;
 	int ret = 0;
 
@@ -595,7 +593,7 @@ static int avalon2_send_pkg(struct cgpu_info *avalon2, uint8_t slave_addr, const
 
 	amount = avalon2_iic_write(avalon2, slave_addr, (uint8_t *)pkg, AVA2_WRITE_SIZE);
 	if (amount != AVA2_WRITE_SIZE) {
-		applog(LOG_DEBUG, "Avalon2: Send(%d-%d)!", AVA2_WRITE_SIZE, amount);
+		applog(LOG_DEBUG, "Avalon2: Send(%d-%d)!", (int)AVA2_WRITE_SIZE, amount);
 		return AVA2_SEND_ERROR;
 	}
 
@@ -753,7 +751,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 {
 	struct avalon2_info *info;
 	int ackdetect;
-	int err, amount;
+	int err;
 	int tmp, i, j, modular[AVA2_DEFAULT_MODULARS] = {};
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
 	char mm_dna[AVA2_DEFAULT_MODULARS][AVA2_DNA_LEN];
@@ -779,7 +777,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 
 			avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 			avalon2_send_pkg(avalon2, i + 1, &detect_pkg);
-			err = avalon2_iic_read(avalon2, i + 1, (char *)&ret_pkg, AVA2_READ_SIZE);
+			err = avalon2_iic_read(avalon2, i + 1, (uint8_t *)&ret_pkg, AVA2_READ_SIZE);
 			if (err != AVA2_READ_SIZE) {
 				memset(mm_dna[i], 0, AVA2_DNA_LEN);
 				modular[i] = 0;
@@ -870,48 +868,20 @@ static bool avalon2_prepare(struct thr_info *thr)
 	return true;
 }
 
-static int avalon2_checkdevs(struct cgpu_info *avalon2)
+static void avalon2_checkdevs(struct cgpu_info *avalon2)
 {
 	struct avalon2_info *info = avalon2->device_data;
-	struct avalon2_pkg detect_pkg, send_pkg;
+	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ret_pkg;
-	struct thr_info *thr = avalon2->thr[0];
 	struct avalon2_discover_info discover_info;
-	int i, j, tmp, err, amount;
-
-	/* Check exist devs */
-	if (info->dev_cnt) {
-	    for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		    if (info->modulars[i] && info->enable[i]) {
-			    memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
-			    tmp = be32toh(i + 1);
-			    memcpy(detect_pkg.data + 28, &tmp, 4);
-
-			    avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
-			    avalon2_send_pkg(avalon2, i + 1, &detect_pkg);
-			    memset(&ret_pkg, 0, sizeof(ret_pkg));
-			    err = avalon2_iic_read(avalon2, i + 1, (char *)&ret_pkg, AVA2_READ_SIZE);
-			    if (err != AVA2_READ_SIZE) {
-				    applog(LOG_DEBUG, "Avalon2 checkdevs id:%d lost!", i);
-				    info->modulars[i] = 0;
-				    info->enable[i] = 0;
-				    info->dev_cnt--;
-				    if (info->dev_cnt < 0) {
-					    applog(LOG_DEBUG, "Avalon2 checkdevs dev_cnt < 0!");
-					    info->dev_cnt = 0;
-				    }
-			    }
-			    /* TODO: check ret_pkg.data with info->mm_dna */
-		    }
-	    }
-	}
+	int i, j, tmp, err;
 
 	/* Discover */
 	memset(&send_pkg, 0, sizeof(send_pkg));
 	avalon2_init_pkg(&send_pkg, AVA2_P_DISCOVER, 1, 1);
 	avalon2_send_pkg(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
-	err = avalon2_iic_read(avalon2, AVA2_DEVID_BROADCAST, (char*)&ret_pkg, AVA2_READ_SIZE);
+	err = avalon2_iic_read(avalon2, AVA2_DEVID_BROADCAST, (uint8_t *)&ret_pkg, AVA2_READ_SIZE);
 	if (err != AVA2_READ_SIZE) {
 	    return;
 	}
@@ -995,7 +965,7 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 	avalon2_init_pkg(&send_pkg, AVA2_P_SETDEVID, 1, 1);
 	avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
 	memset(&ret_pkg, 0, sizeof(ret_pkg));
-	err = avalon2_iic_read(avalon2, i + 1, (char*)&ret_pkg, AVA2_READ_SIZE);
+	err = avalon2_iic_read(avalon2, i + 1, (uint8_t *)&ret_pkg, AVA2_READ_SIZE);
 	if (err != AVA2_READ_SIZE ||
 	    ret_pkg.type != AVA2_P_ACKSETDEVID ||
 	    0 != memcmp(ret_pkg.data + 15, discover_info.mm_dna, AVA2_DNA_LEN)) {
@@ -1012,9 +982,9 @@ static int avalon2_checkdevs(struct cgpu_info *avalon2)
 
 static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalon2_info *info)
 {
-	struct avalon2_pkg send_pkg, discover_pkg;
+	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
-	int i, tmp, err, amount;
+	int i, tmp;
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
