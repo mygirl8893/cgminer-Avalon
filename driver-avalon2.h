@@ -104,6 +104,7 @@
 
 #define AVA2_DNA_LEN		8
 #define AVA2_DEVID_BROADCAST		0
+#define AVA2_DEVID_NULL		(uint32_t)-1
 
 enum avalon2_fan_fixed {
 	FAN_FIXED,
@@ -164,9 +165,9 @@ struct avalon2_iic_info {
 	} iic_param;
 };
 
-struct avalon2_discover_info {
+struct avalon2_dev_info {
 	char mm_dna[AVA2_DNA_LEN];
-	int modular_id;
+	uint32_t modular_id;
 	char mm_version[16];
 };
 
