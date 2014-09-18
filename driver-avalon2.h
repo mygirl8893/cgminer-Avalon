@@ -63,7 +63,7 @@
 #define AVA2_P_COINBASE	13
 #define AVA2_P_MERKLES	14
 #define AVA2_P_HEADER	15
-#define AVA2_P_POLLING  16
+#define AVA2_P_POLLING	16
 #define AVA2_P_TARGET	17
 #define AVA2_P_REQUIRE	18
 #define AVA2_P_SET	19
@@ -75,7 +75,15 @@
 #define AVA2_P_STATUS		24
 #define AVA2_P_ACKDETECT	25
 #define AVA2_P_TEST_RET		26
-/* Avalon2 protocol package type */
+
+/* Only for addressing */
+#define AVA2_P_DISCOVER		30
+#define AVA2_P_SETDEVID		31
+
+#define AVA2_P_ACKDISCOVER	40
+#define AVA2_P_ACKSETDEVID	41
+
+#define AVA2_MODULE_BROADCAST	0
 
 /* Avalon2/3 firmware prefix */
 #define AVA2_FW2_PREFIXSTR	"20"
@@ -94,6 +102,8 @@
 #define AVA2_IIC_WRITE		0xa3
 #define AVA2_IIC_READ		0xa4
 #define AVA2_IIC_XFER		0xa5
+
+#define AVA2_DNA_LEN		8
 
 enum avalon2_fan_fixed {
 	FAN_FIXED,
@@ -117,6 +127,7 @@ struct avalon2_info {
 
 	int modulars[AVA2_DEFAULT_MODULARS];
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
+	char mm_dna[AVA2_DEFAULT_MODULARS][AVA2_DNA_LEN];
 	int dev_type[AVA2_DEFAULT_MODULARS];
 	bool enable[AVA2_DEFAULT_MODULARS];
 
@@ -150,6 +161,12 @@ struct avalon2_iic_info {
 		uint32_t speed;
 		uint8_t slave_addr;
 	} iic_param;
+};
+
+struct avalon2_discover_info {
+	char mm_dna[AVA2_DNA_LEN];
+	int modular_id;
+	char mm_version[16];
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
