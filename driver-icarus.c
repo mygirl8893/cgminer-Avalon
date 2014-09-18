@@ -1168,7 +1168,7 @@ cmr2_retry:
 			continue;
 
 		memset(nonce_bin, 0, sizeof(nonce_bin));
-		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 100);
+		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 300);
 		if (ret != ICA_NONCE_OK)
 			continue;
 
