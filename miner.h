@@ -208,12 +208,6 @@ static inline int fsync (int fd)
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
-#ifdef MIPSEB
-#ifndef roundl
-#define roundl(x)   (long double)((long long)((x==0)?0.0:((x)+((x)>0)?0.5:-0.5)))
-#endif
-#endif
-
 /* No semtimedop on apple so ignore timeout till we implement one */
 #ifdef __APPLE__
 #define semtimedop(SEM, SOPS, VAL, TIMEOUT) semop(SEM, SOPS, VAL)
@@ -232,24 +226,27 @@ static inline int fsync (int fd)
  * listed driver. */
 #define FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bitforce) \
-	DRIVER_ADD_COMMAND(icarus) \
 	DRIVER_ADD_COMMAND(modminer)
 
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
+	DRIVER_ADD_COMMAND(ants1) \
+	DRIVER_ADD_COMMAND(ants2) \
+	DRIVER_ADD_COMMAND(avalon) \
+	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(cointerra) \
 	DRIVER_ADD_COMMAND(hashfast) \
+	DRIVER_ADD_COMMAND(hashratio) \
+	DRIVER_ADD_COMMAND(icarus) \
 	DRIVER_ADD_COMMAND(klondike) \
 	DRIVER_ADD_COMMAND(knc) \
 	DRIVER_ADD_COMMAND(bitmineA1) \
 	DRIVER_ADD_COMMAND(drillbit) \
 	DRIVER_ADD_COMMAND(bab) \
 	DRIVER_ADD_COMMAND(minion) \
-	DRIVER_ADD_COMMAND(ants1) \
-	DRIVER_ADD_COMMAND(avalon2) \
-	DRIVER_ADD_COMMAND(avalon) \
-	DRIVER_ADD_COMMAND(spondoolies)
+	DRIVER_ADD_COMMAND(sp10) \
+	DRIVER_ADD_COMMAND(sp30)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
@@ -428,6 +425,7 @@ struct cgpu_info {
 	char *name;
 	char *device_path;
 	void *device_data;
+	void *dup_data;
 	char *unique_id;
 #ifdef USE_USBUTILS
 	struct cg_usb_device *usbdev;
@@ -991,6 +989,7 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern float opt_anu_freq;
+extern float opt_rock_freq;
 #endif
 extern bool opt_worktime;
 #ifdef USE_AVALON
@@ -1014,8 +1013,29 @@ extern char *opt_bitmine_a1_options;
 extern char *opt_bitmain_options;
 extern bool opt_bitmain_hwerror;
 #endif
+#ifdef USE_ANT_S2
+extern char *opt_bitmain_dev;
+extern char *opt_bitmain_options;
+extern bool opt_bitmain_hwerror;
+extern bool opt_bitmain_checkall;
+extern bool opt_bitmain_checkn2diff;
+extern bool opt_bitmain_beeper;
+extern bool opt_bitmain_tempoverctrl;
+#endif
 #ifdef USE_MINION
+extern int opt_minion_chipreport;
+extern char *opt_minion_cores;
 extern char *opt_minion_freq;
+extern bool opt_minion_idlecount;
+extern int opt_minion_ledcount;
+extern int opt_minion_ledlimit;
+extern bool opt_minion_noautofreq;
+extern bool opt_minion_overheat;
+extern int opt_minion_spidelay;
+extern char *opt_minion_spireset;
+extern int opt_minion_spisleep;
+extern int opt_minion_spiusec;
+extern char *opt_minion_temp;
 #endif
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;
@@ -1074,6 +1094,10 @@ extern pthread_cond_t restart_cond;
 extern void clear_stratum_shares(struct pool *pool);
 extern void clear_pool_work(struct pool *pool);
 extern void set_target(unsigned char *dest_target, double diff);
+#if defined (USE_AVALON2) || defined (USE_HASHRATIO)
+bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
+			 uint32_t nonce2, uint32_t nonce);
+#endif
 extern int restart_wait(struct thr_info *thr, unsigned int mstime);
 
 extern void kill_work(void);
@@ -1183,6 +1207,7 @@ struct pool {
 	bool submit_old;
 	bool removed;
 	bool lp_started;
+	bool blocking;
 
 	char *hdr_path;
 	char *lp_url;
@@ -1231,7 +1256,6 @@ struct pool {
 	/* Stratum variables */
 	char *stratum_url;
 	char *stratum_port;
-	struct addrinfo stratum_hints;
 	SOCKETTYPE sock;
 	char *sockbuf;
 	size_t sockbuf_size;
@@ -1455,7 +1479,8 @@ extern bool log_curses_only(int prio, const char *datetime, const char *str);
 extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
-extern void pool_failed(struct pool *pool);
+extern void stratum_resumed(struct pool *pool);
+extern void pool_died(struct pool *pool);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
@@ -1545,5 +1570,9 @@ extern struct api_data *api_add_hs(struct api_data *root, char *name, double *da
 extern struct api_data *api_add_diff(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_percent(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_avg(struct api_data *root, char *name, float *data, bool copy_data);
+
+extern void dupalloc(struct cgpu_info *cgpu, int timelimit);
+extern void dupcounters(struct cgpu_info *cgpu, uint64_t *checked, uint64_t *dups);
+extern bool isdupnonce(struct cgpu_info *cgpu, struct work *work, uint32_t nonce);
 
 #endif /* __MINER_H__ */

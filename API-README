@@ -100,7 +100,7 @@ The STATUS section is:
    Standard long time of request in seconds
 
   Code=N
-   Each unique reply has a unigue Code (See api.c - #define MSG_NNNNNN)
+   Each unique reply has a unique Code (See api.c - #define MSG_NNNNNN)
 
   Msg=string
    Message matching the Code value N
@@ -442,6 +442,19 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               The current options are:
                                AVA+BTB opt=freq val=256 to 1024 - chip frequency
                                BTB opt=millivolts val=1000 to 1400 - corevoltage
+                               MBA opt=reset val=0 to chipcount - reset a chip
+                               MBA opt=freq val=0-chip:100-1400 - set chip freq
+                               MBA opt=ledcount val=0-100 - chip count for led
+                               MBA opt=ledlimit val=0-200 - led off below GHs
+                               MBA opt=spidelay val=0-9999 - SPI per I/O delay
+                               MBA opt=spireset i|s0-9999 - SPI regular reset
+                               MBA opt=spisleep val=0-9999 - SPI reset sleep ms
+
+ lcd           LCD            An all-in-one short status summary of the miner
+                              e.g. Elapsed,GHS av,GHS 5m,GHS 5s,Temp,
+                                   Last Share Difficulty,Last Share Time,
+                                   Best Share,Last Valid Work,Found Blocks,
+                                   Pool,User|
 
  lockstats (*) none           There is no reply section just the STATUS section
                               stating the results of the request
@@ -482,6 +495,10 @@ api-example.php - a php script to access the API
  You must modify the line "$socket = getsock('127.0.0.1', 4028);" at the
  beginning of "function request($cmd)" to change where it looks for cgminer
 
+api-example.rb - a Ruby script to access the API.
+ usage: ruby api-example.rb command[:parameter] [HOST [PORT]]
+This script prints the parsed cgminer API response
+
 API.java/API.class
  a java program to access the API (with source code)
   usAge is: java API command address port
@@ -502,6 +519,13 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V3.4 (cgminer v4.3.?)
+
+Added API commands:
+ 'lcd' - An all-in-one short status summary of the miner
+
+---------
 
 API V3.3 (cgminer v4.2.0)
 

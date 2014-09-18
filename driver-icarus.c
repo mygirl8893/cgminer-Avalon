@@ -57,6 +57,7 @@
 // The size of a successful nonce read
 #define ANT_READ_SIZE 5
 #define ICARUS_READ_SIZE 4
+#define ROCK_READ_SIZE 8
 
 // Ensure the sizes are correct for the Serial read
 #if (ICARUS_READ_SIZE != 4)
@@ -185,6 +186,77 @@ static const char *MODE_LONG_STREQ = "long=";
 static const char *MODE_VALUE_STR = "value";
 static const char *MODE_UNKNOWN_STR = "unknown";
 
+#define MAX_DEVICE_NUM 100
+#define MAX_WORK_BUFFER_SIZE 2
+#define MAX_CHIP_NUM 24
+// Set it to 3 or 9
+#define	NONCE_CORRECTION_TIMES	3
+#define MAX_TRIES	4
+#define	RM_CMD_MASK		0x0F
+#define	RM_STATUS_MASK		0xF0
+#define	RM_CHIP_MASK		0x3F
+#define	RM_PRODUCT_MASK		0xC0
+#define	RM_PRODUCT_RBOX		0x00
+#define	RM_PRODUCT_T1		0x40
+#define	RM_PRODUCT_T2		0x80
+#define	RM_PRODUCT_TEST		0xC0
+
+#if (NONCE_CORRECTION_TIMES == 9)
+static int32_t rbox_corr_values[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
+#endif
+#if (NONCE_CORRECTION_TIMES == 3)
+static int32_t rbox_corr_values[] = {0, 1, -1};
+#endif
+
+typedef enum {
+	NONCE_DATA1_OFFSET = 0,
+	NONCE_DATA2_OFFSET,
+	NONCE_DATA3_OFFSET,
+	NONCE_DATA4_OFFSET,
+	NONCE_TASK_CMD_OFFSET,
+	NONCE_CHIP_NO_OFFSET,
+	NONCE_TASK_NO_OFFSET,
+	NONCE_COMMAND_OFFSET,
+	NONCE_MAX_OFFSET
+} NONCE_OFFSET;
+
+typedef enum {
+	NONCE_DATA_CMD = 0,
+	NONCE_TASK_COMPLETE_CMD,
+	NONCE_GET_TASK_CMD,
+} NONCE_COMMAND;
+
+typedef struct nonce_data {
+	int chip_no;
+	unsigned int task_no ;
+	unsigned char work_state;
+	int cmd_value;
+} NONCE_DATA;
+
+typedef enum {
+	ROCKMINER_RBOX = 0,
+	ROCKMINER_T1,
+	ROCKMINER_T2,
+	ROCKMINER_MAX
+} ROCKMINER_PRODUCT_T;
+
+typedef struct rockminer_chip_info {
+	unsigned char freq;
+	int error_cnt;
+	time_t last_received_task_complete_time;
+} ROCKMINER_CHIP_INFO;
+
+typedef struct rockminer_device_info {
+	unsigned char detect_chip_no;
+	unsigned char chip_max;
+	unsigned char product_id;
+	float min_frq;
+	float def_frq;
+	float max_frq;
+	ROCKMINER_CHIP_INFO chip[MAX_CHIP_NUM];
+	time_t dev_detect_time;
+} ROCKMINER_DEVICE_INFO;
+
 struct ICARUS_INFO {
 	enum sub_ident ident;
 	int intinfo;
@@ -234,6 +306,15 @@ struct ICARUS_INFO {
 	int nonce_size;
 
 	bool failing;
+
+	ROCKMINER_DEVICE_INFO rmdev;
+	struct work *g_work[MAX_CHIP_NUM][MAX_WORK_BUFFER_SIZE];
+	char rock_init[64];
+	uint64_t nonces_checked;
+	uint64_t nonces_correction_times;
+	uint64_t nonces_correction_tests;
+	uint64_t nonces_fail;
+	uint64_t nonces_correction[NONCE_CORRECTION_TIMES];
 };
 
 #define ICARUS_MIDSTATE_SIZE 32
@@ -432,6 +513,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			break;
 		case IDENT_AMU:
 		case IDENT_ANU:
+		case IDENT_LIN:
 			// Enable the UART
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_IFC_ENABLE,
 				 CP210X_VALUE_UART_ENABLE,
@@ -853,15 +935,15 @@ unsigned char crc5(unsigned char *ptr, unsigned char len)
 		memcpy(crcin, crcout, 5);
 	}
 	crc = 0;
-	if(crcin[4])
+	if (crcin[4])
 		crc |= 0x10;
-	if(crcin[3])
+	if (crcin[3])
 		crc |= 0x08;
-	if(crcin[2])
+	if (crcin[2])
 		crc |= 0x04;
-	if(crcin[1])
+	if (crcin[1])
 		crc |= 0x02;
-	if(crcin[0])
+	if (crcin[0])
 		crc |= 0x01;
 	return crc;
 }
@@ -959,6 +1041,34 @@ static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info)
 	return true;
 }
 
+static void rock_init_last_received_task_complete_time(struct ICARUS_INFO *info)
+{
+	int i;
+
+	if (opt_rock_freq < info->rmdev.min_frq ||
+	    opt_rock_freq > info->rmdev.max_frq)
+		opt_rock_freq = info->rmdev.def_frq;
+
+	for (i = 0; i < MAX_CHIP_NUM; ++i) {
+		info->rmdev.chip[i].last_received_task_complete_time = time(NULL);
+		info->rmdev.chip[i].freq = opt_rock_freq/10 - 1;
+		info->rmdev.chip[i].error_cnt = 0;
+	}
+
+	info->rmdev.dev_detect_time = time(NULL);
+}
+
+
+static void icarus_clear(struct cgpu_info *icarus, struct ICARUS_INFO *info)
+{
+	char buf[512];
+	int amt;
+
+	do {
+		usb_read_ii_timeout(icarus, info->intinfo, buf, 512, &amt, 100, C_GETRESULTS);
+	} while (amt > 0);
+}
+
 static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	int this_option_offset = ++option_offset;
@@ -1042,6 +1152,7 @@ cmr2_retry:
 	tries = 2;
 	ok = false;
 	while (!ok && tries-- > 0) {
+		icarus_clear(icarus, info);
 		icarus_initialise(icarus, baud);
 
 		if (info->ident == IDENT_ANU && !set_anu_freq(icarus, info)) {
@@ -1061,13 +1172,20 @@ cmr2_retry:
 		if (ret != ICA_NONCE_OK)
 			continue;
 
+		if (info->nonce_size == ICARUS_READ_SIZE && usb_buffer_size(icarus) == 4) {
+			applog(LOG_DEBUG, "%s %i: Detected Rockminer, deferring detection",
+			       icarus->drv->name, icarus->device_id);
+			usb_buffer_clear(icarus);
+			break;
+
+		}
 		if (info->nonce_size == ICARUS_READ_SIZE && usb_buffer_size(icarus) == 1) {
 			usb_buffer_clear(icarus);
 			icarus->usbdev->ident = info->ident = IDENT_ANU;
 			info->nonce_size = ANT_READ_SIZE;
 			info->Hs = ANTMINERUSB_HASH_TIME;
 			icarus->drv->name = "ANU";
-			applog(LOG_DEBUG, "%s %i: Detected Antminer U1, changing nonce size to %d",
+			applog(LOG_DEBUG, "%s %i: Detected Antminer U1/2, changing nonce size to %d",
 			       icarus->drv->name, icarus->device_id, ANT_READ_SIZE);
 		}
 
@@ -1223,8 +1341,231 @@ shin:
 	return NULL;
 }
 
+static int64_t rock_scanwork(struct thr_info *thr);
+
+static void rock_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
+{
+	if (cgpu->temp)
+		tailsprintf(buf, bufsiz, "%3.0fMHz %3.0fC", opt_rock_freq, cgpu->temp);
+	else
+		tailsprintf(buf, bufsiz, "%.0fMHz", opt_rock_freq);
+}
+
+static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+{
+	struct ICARUS_INFO *info;
+	struct timeval tv_start, tv_finish;
+	char *ob_hex = NULL;
+
+	// Block 171874 nonce = (0xa2870100) = 0x000187a2
+	// N.B. golden_ob MUST take less time to calculate
+	//	than the timeout set in icarus_open()
+	//	This one takes ~0.53ms on Rev3 Icarus
+	const char golden_ob[] =
+		"4679ba4ec99876bf4bfe086082b40025"
+		"4df6c356451471139a3afa71e48f544a"
+		"00000000000000000000000000000000"
+		"aa1ff05587320b1a1426674f2fa722ce";
+
+	const char golden_nonce[] = "000187a2";
+	const uint32_t golden_nonce_val = 0x000187a2;
+	unsigned char nonce_bin[ROCK_READ_SIZE];
+	struct ICARUS_WORK workdata;
+	char *nonce_hex;
+	struct cgpu_info *icarus;
+	int ret, err, amount, tries;
+	bool ok;
+	int correction_times = 0;
+	NONCE_DATA nonce_data;
+	uint32_t nonce;
+	char *newname = NULL;
+
+	if ((sizeof(workdata) << 1) != (sizeof(golden_ob) - 1))
+		quithere(1, "Data and golden_ob sizes don't match");
+
+	icarus = usb_alloc_cgpu(&icarus_drv, 1);
+
+	if (!usb_init(icarus, dev, found))
+		goto shin;
+
+	hex2bin((void *)(&workdata), golden_ob, sizeof(workdata));
+	rev((void *)(&(workdata.midstate)), ICARUS_MIDSTATE_SIZE);
+	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
+	if (opt_debug) {
+		ob_hex = bin2hex((void *)(&workdata), sizeof(workdata));
+		applog(LOG_WARNING, "%s%d: send_gold_nonce %s",
+			icarus->drv->name, icarus->device_id, ob_hex);
+		free(ob_hex);
+	}
+
+	info = (struct ICARUS_INFO *)calloc(1, sizeof(struct ICARUS_INFO));
+	if (unlikely(!info))
+		quit(1, "Failed to malloc ICARUS_INFO");
+	(void)memset(info, 0, sizeof(struct ICARUS_INFO));
+	icarus->device_data = (void *)info;
+	icarus->usbdev->ident = info->ident = IDENT_LIN;
+	info->nonce_size = ROCK_READ_SIZE;
+	info->fail_time = 10;
+	info->nonce_mask = 0xffffffff;
+	update_usb_stats(icarus);
+
+	tries = MAX_TRIES;
+	ok = false;
+	while (!ok && tries-- > 0) {
+		icarus_initialise(icarus, info->baud);
+
+		applog(LOG_DEBUG, "tries: %d", tries);
+		workdata.unused[ICARUS_UNUSED_SIZE - 3] = opt_rock_freq/10 - 1;
+		workdata.unused[ICARUS_UNUSED_SIZE - 2] = (MAX_TRIES-1-tries);
+		info->rmdev.detect_chip_no++;
+		if (info->rmdev.detect_chip_no >= MAX_TRIES)
+			info->rmdev.detect_chip_no = 0;
+		//g_detect_chip_no = (g_detect_chip_no + 1) & MAX_CHIP_NUM;
+
+		err = usb_write_ii(icarus, info->intinfo,
+				   (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
+		if (err != LIBUSB_SUCCESS || amount != sizeof(workdata))
+			continue;
+
+		memset(nonce_bin, 0, sizeof(nonce_bin));
+		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 100);
+
+		applog(LOG_DEBUG, "Rockminer nonce_bin: %02x %02x %02x %02x %02x %02x %02x %02x",
+				  nonce_bin[0], nonce_bin[1], nonce_bin[2], nonce_bin[3],
+				  nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
+		if (ret != ICA_NONCE_OK) {
+			applog(LOG_DEBUG, "detect_one get_gold_nonce error, tries = %d", tries);
+			continue;
+		}
+
+		newname = NULL;
+		switch (nonce_bin[NONCE_CHIP_NO_OFFSET] & RM_PRODUCT_MASK) {
+			case RM_PRODUCT_T1:
+				newname = "LIR"; // Rocketbox
+				info->rmdev.product_id = ROCKMINER_T1;
+				info->rmdev.chip_max = 12;
+				info->rmdev.min_frq = 200;
+				info->rmdev.def_frq = 300;
+				info->rmdev.max_frq = 400;
+				break;
+			case RM_PRODUCT_T2: // what's this?
+				newname = "LIX";
+				info->rmdev.product_id = ROCKMINER_T2;
+				info->rmdev.chip_max = 16;
+				info->rmdev.min_frq = 200;
+				info->rmdev.def_frq = 300;
+				info->rmdev.max_frq = 400;
+				break;
+			case RM_PRODUCT_RBOX:
+				newname = "LIN"; // R-Box
+				info->rmdev.product_id = ROCKMINER_RBOX;
+				info->rmdev.chip_max = 4;
+				info->rmdev.min_frq = 200;
+				info->rmdev.def_frq = 270;
+				info->rmdev.max_frq = 400;
+				break;
+			default:
+				continue;
+		}
+
+		snprintf(info->rock_init, sizeof(info->rock_init), "%02x %02x %02x %02x",
+				  nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
+
+		nonce_data.chip_no = nonce_bin[NONCE_CHIP_NO_OFFSET] & RM_CHIP_MASK;
+		if (nonce_data.chip_no >= info->rmdev.chip_max)
+			nonce_data.chip_no = 0;
+
+		nonce_data.cmd_value = nonce_bin[NONCE_TASK_CMD_OFFSET] & RM_CMD_MASK;
+		if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD) {
+			applog(LOG_DEBUG, "complete g_detect_chip_no: %d", info->rmdev.detect_chip_no);
+			workdata.unused[ICARUS_UNUSED_SIZE - 3] = opt_rock_freq/10 - 1;
+			workdata.unused[ICARUS_UNUSED_SIZE - 2] =  info->rmdev.detect_chip_no;
+			info->rmdev.detect_chip_no++;
+			if (info->rmdev.detect_chip_no >= MAX_TRIES)
+				info->rmdev.detect_chip_no = 0;
+
+			err = usb_write_ii(icarus, info->intinfo,
+				   (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
+			if (err != LIBUSB_SUCCESS || amount != sizeof(workdata))
+				continue;
+			applog(LOG_DEBUG, "send_gold_nonce usb_write_ii");
+			continue;
+		}
+
+		memcpy((char *)&nonce, nonce_bin, ICARUS_READ_SIZE);
+		nonce = htobe32(nonce);
+		applog(LOG_DEBUG, "Rockminer nonce: %08X", nonce);
+		correction_times = 0;
+		while (correction_times < NONCE_CORRECTION_TIMES) {
+			nonce_hex = bin2hex(nonce_bin, 4);
+			if (golden_nonce_val == nonce + rbox_corr_values[correction_times]) {
+				memset(&(info->g_work[0]), 0, sizeof(info->g_work));
+				rock_init_last_received_task_complete_time(info);
+
+				ok = true;
+				break;
+			} else {
+				applog(LOG_DEBUG, "detect_one gold_nonce compare error times = %d",
+						  correction_times);
+				if (tries < 0 && info->ident != IDENT_CMR2) {
+					applog(LOG_WARNING,
+						"Icarus Detect: "
+						"Test failed at %s: get %s, should: %s",
+						icarus->device_path, nonce_hex, golden_nonce);
+				}
+
+				if (nonce == 0)
+					break;
+			}
+			free(nonce_hex);
+			correction_times++;
+		}
+	}
+
+	if (!ok)
+		goto unshin;
+
+	if (newname) {
+		if (!icarus->drv->copy)
+			icarus->drv = copy_drv(icarus->drv);
+		icarus->drv->name = newname;
+	}
+
+	applog(LOG_DEBUG, "Icarus Detect: Test succeeded at %s: got %s",
+		          icarus->device_path, golden_nonce);
+
+	/* We have a real Rockminer! */
+	if (!add_cgpu(icarus))
+		goto unshin;
+
+	icarus->drv->scanwork = rock_scanwork;
+	icarus->drv->dname = "Rockminer";
+	icarus->drv->get_statline_before = &rock_statline_before;
+
+	applog(LOG_INFO, "%s%d: Found at %s",
+			  icarus->drv->name, icarus->device_id,
+			  icarus->device_path);
+
+	timersub(&tv_finish, &tv_start, &(info->golden_tv));
+
+	return icarus;
+
+unshin:
+
+	usb_uninit(icarus);
+	free(info);
+	icarus->device_data = NULL;
+
+shin:
+
+	icarus = usb_free_cgpu(icarus);
+
+	return NULL;
+}
+
 static void icarus_detect(bool __maybe_unused hotplug)
 {
+	usb_detect(&icarus_drv, rock_detect_one);
 	usb_detect(&icarus_drv, icarus_detect_one);
 }
 
@@ -1274,6 +1615,186 @@ static void cmr2_commands(struct cgpu_info *icarus)
 	}
 }
 
+void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct thr_info *thr)
+{
+	struct cgpu_info *icarus = thr->cgpu;
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
+	int err, amount;
+	struct ICARUS_WORK workdata;
+	char *ob_hex;
+	struct work *work = NULL;
+
+	if (info->g_work[chip_no][current_task_id] == NULL) {
+		work = get_work(thr, thr->id);
+		if (work == NULL)
+			return;
+		info->g_work[chip_no][current_task_id] = work;
+	} else {
+		work = info->g_work[chip_no][current_task_id];
+		applog(LOG_DEBUG, "::resend work");
+	}
+
+	memset((void *)(&workdata), 0, sizeof(workdata));
+	memcpy(&(workdata.midstate), work->midstate, ICARUS_MIDSTATE_SIZE);
+	memcpy(&(workdata.work), work->data + ICARUS_WORK_DATA_OFFSET, ICARUS_WORK_SIZE);
+	workdata.unused[ICARUS_UNUSED_SIZE - 4] = 0xaa;
+	if (info->rmdev.chip[chip_no].freq > (info->rmdev.max_frq/10 - 1) || 
+	    info->rmdev.chip[chip_no].freq < (info->rmdev.min_frq/10 - 1))
+		rock_init_last_received_task_complete_time(info);
+
+	workdata.unused[ICARUS_UNUSED_SIZE - 3] = info->rmdev.chip[chip_no].freq; //icarus->freq/10 - 1; ;
+	workdata.unused[ICARUS_UNUSED_SIZE - 2] = chip_no ;
+	workdata.unused[ICARUS_UNUSED_SIZE - 1] = 0x55;
+
+	if (opt_debug) {
+		ob_hex = bin2hex((void *)(work->data), 128);
+		applog(LOG_WARNING, "%s%d: work->data %s",
+			icarus->drv->name, icarus->device_id, ob_hex);
+		free(ob_hex);
+	}
+
+	// We only want results for the work we are about to send
+	usb_buffer_clear(icarus);
+
+	err = usb_write_ii(icarus, info->intinfo, (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
+
+	if (err < 0 || amount != sizeof(workdata)) {
+		applog(LOG_ERR, "%s%i: Comms error (werr=%d amt=%d)",
+				icarus->drv->name, icarus->device_id, err, amount);
+		dev_error(icarus, REASON_DEV_COMMS_ERROR);
+		icarus_initialise(icarus, info->baud);
+
+		if (info->g_work[chip_no][current_task_id])
+		{
+			free_work(info->g_work[chip_no][current_task_id]);
+			info->g_work[chip_no][current_task_id] = NULL;
+		}
+
+		return;
+	}
+
+	return;
+}
+
+static void process_history(struct cgpu_info *icarus, struct ICARUS_INFO *info, uint32_t nonce,
+			    uint64_t hash_count, struct timeval *elapsed, struct timeval *tv_start)
+{
+	struct ICARUS_HISTORY *history0, *history;
+	struct timeval tv_history_start, tv_history_finish;
+	int count;
+	double Hs, W, fullnonce;
+	int read_time, i;
+	bool limited;
+	uint32_t values;
+	int64_t hash_count_range;
+	double Ti, Xi;
+
+	// Ignore possible end condition values ...
+	// TODO: set limitations on calculated values depending on the device
+	// to avoid crap values caused by CPU/Task Switching/Swapping/etc
+	if ((nonce & info->nonce_mask) <= END_CONDITION ||
+	    (nonce & info->nonce_mask) >= (info->nonce_mask & ~END_CONDITION))
+		return;
+
+	cgtime(&tv_history_start);
+
+	history0 = &(info->history[0]);
+
+	if (history0->values == 0)
+		timeradd(tv_start, &history_sec, &(history0->finish));
+
+	Ti = (double)(elapsed->tv_sec)
+		+ ((double)(elapsed->tv_usec))/((double)1000000)
+		- ((double)ICARUS_READ_TIME(info->baud));
+	Xi = (double)hash_count;
+	history0->sumXiTi += Xi * Ti;
+	history0->sumXi += Xi;
+	history0->sumTi += Ti;
+	history0->sumXi2 += Xi * Xi;
+
+	history0->values++;
+
+	if (history0->hash_count_max < hash_count)
+		history0->hash_count_max = hash_count;
+	if (history0->hash_count_min > hash_count || history0->hash_count_min == 0)
+		history0->hash_count_min = hash_count;
+
+	if (history0->values >= info->min_data_count
+	&&  timercmp(tv_start, &(history0->finish), >)) {
+		for (i = INFO_HISTORY; i > 0; i--)
+			memcpy(&(info->history[i]),
+				&(info->history[i-1]),
+				sizeof(struct ICARUS_HISTORY));
+
+		// Initialise history0 to zero for summary calculation
+		memset(history0, 0, sizeof(struct ICARUS_HISTORY));
+
+		// We just completed a history data set
+		// So now recalc read_time based on the whole history thus we will
+		// initially get more accurate until it completes INFO_HISTORY
+		// total data sets
+		count = 0;
+		for (i = 1 ; i <= INFO_HISTORY; i++) {
+			history = &(info->history[i]);
+			if (history->values >= MIN_DATA_COUNT) {
+				count++;
+
+				history0->sumXiTi += history->sumXiTi;
+				history0->sumXi += history->sumXi;
+				history0->sumTi += history->sumTi;
+				history0->sumXi2 += history->sumXi2;
+				history0->values += history->values;
+
+				if (history0->hash_count_max < history->hash_count_max)
+					history0->hash_count_max = history->hash_count_max;
+				if (history0->hash_count_min > history->hash_count_min || history0->hash_count_min == 0)
+					history0->hash_count_min = history->hash_count_min;
+			}
+		}
+
+		// All history data
+		Hs = (history0->values*history0->sumXiTi - history0->sumXi*history0->sumTi)
+			/ (history0->values*history0->sumXi2 - history0->sumXi*history0->sumXi);
+		W = history0->sumTi/history0->values - Hs*history0->sumXi/history0->values;
+		hash_count_range = history0->hash_count_max - history0->hash_count_min;
+		values = history0->values;
+
+		// Initialise history0 to zero for next data set
+		memset(history0, 0, sizeof(struct ICARUS_HISTORY));
+
+		fullnonce = W + Hs * (((double)0xffffffff) + 1);
+		read_time = SECTOMS(fullnonce) - ICARUS_READ_REDUCE;
+		if (info->read_time_limit > 0 && read_time > info->read_time_limit) {
+			read_time = info->read_time_limit;
+			limited = true;
+		} else
+			limited = false;
+
+		info->Hs = Hs;
+		info->read_time = read_time;
+
+		info->fullnonce = fullnonce;
+		info->count = count;
+		info->W = W;
+		info->values = values;
+		info->hash_count_range = hash_count_range;
+
+		if (info->min_data_count < MAX_MIN_DATA_COUNT)
+			info->min_data_count *= 2;
+		else if (info->timing_mode == MODE_SHORT)
+			info->do_icarus_timing = false;
+
+		applog(LOG_WARNING, "%s%d Re-estimate: Hs=%e W=%e read_time=%dms%s fullnonce=%.3fs",
+				icarus->drv->name, icarus->device_id, Hs, W, read_time,
+				limited ? " (limited)" : "", fullnonce);
+	}
+	info->history_count++;
+	cgtime(&tv_history_finish);
+
+	timersub(&tv_history_finish, &tv_history_start, &tv_history_finish);
+	timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
+}
+
 static int64_t icarus_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
@@ -1285,20 +1806,10 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	uint32_t nonce;
 	int64_t hash_count = 0;
 	struct timeval tv_start, tv_finish, elapsed;
-	struct timeval tv_history_start, tv_history_finish;
-	double Ti, Xi;
-	int curr_hw_errors, i;
+	int curr_hw_errors;
 	bool was_hw_error;
 	struct work *work;
-
-	struct ICARUS_HISTORY *history0, *history;
-	int count;
-	double Hs, W, fullnonce;
-	int read_time;
-	bool limited;
 	int64_t estimate_hashes;
-	uint32_t values;
-	int64_t hash_count_range;
 
 	if (unlikely(share_work_tdiff(icarus) > info->fail_time)) {
 		if (info->failing) {
@@ -1417,113 +1928,175 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 			nonce, (long unsigned int)hash_count,
 			(long)elapsed.tv_sec, (long)elapsed.tv_usec);
 
-	// Ignore possible end condition values ... and hw errors
-	// TODO: set limitations on calculated values depending on the device
-	// to avoid crap values caused by CPU/Task Switching/Swapping/etc
-	if (info->do_icarus_timing
-	&&  !was_hw_error
-	&&  ((nonce & info->nonce_mask) > END_CONDITION)
-	&&  ((nonce & info->nonce_mask) < (info->nonce_mask & ~END_CONDITION))) {
-		cgtime(&tv_history_start);
-
-		history0 = &(info->history[0]);
-
-		if (history0->values == 0)
-			timeradd(&tv_start, &history_sec, &(history0->finish));
-
-		Ti = (double)(elapsed.tv_sec)
-			+ ((double)(elapsed.tv_usec))/((double)1000000)
-			- ((double)ICARUS_READ_TIME(info->baud));
-		Xi = (double)hash_count;
-		history0->sumXiTi += Xi * Ti;
-		history0->sumXi += Xi;
-		history0->sumTi += Ti;
-		history0->sumXi2 += Xi * Xi;
-
-		history0->values++;
-
-		if (history0->hash_count_max < hash_count)
-			history0->hash_count_max = hash_count;
-		if (history0->hash_count_min > hash_count || history0->hash_count_min == 0)
-			history0->hash_count_min = hash_count;
-
-		if (history0->values >= info->min_data_count
-		&&  timercmp(&tv_start, &(history0->finish), >)) {
-			for (i = INFO_HISTORY; i > 0; i--)
-				memcpy(&(info->history[i]),
-					&(info->history[i-1]),
-					sizeof(struct ICARUS_HISTORY));
-
-			// Initialise history0 to zero for summary calculation
-			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
-
-			// We just completed a history data set
-			// So now recalc read_time based on the whole history thus we will
-			// initially get more accurate until it completes INFO_HISTORY
-			// total data sets
-			count = 0;
-			for (i = 1 ; i <= INFO_HISTORY; i++) {
-				history = &(info->history[i]);
-				if (history->values >= MIN_DATA_COUNT) {
-					count++;
-
-					history0->sumXiTi += history->sumXiTi;
-					history0->sumXi += history->sumXi;
-					history0->sumTi += history->sumTi;
-					history0->sumXi2 += history->sumXi2;
-					history0->values += history->values;
-
-					if (history0->hash_count_max < history->hash_count_max)
-						history0->hash_count_max = history->hash_count_max;
-					if (history0->hash_count_min > history->hash_count_min || history0->hash_count_min == 0)
-						history0->hash_count_min = history->hash_count_min;
-				}
-			}
-
-			// All history data
-			Hs = (history0->values*history0->sumXiTi - history0->sumXi*history0->sumTi)
-				/ (history0->values*history0->sumXi2 - history0->sumXi*history0->sumXi);
-			W = history0->sumTi/history0->values - Hs*history0->sumXi/history0->values;
-			hash_count_range = history0->hash_count_max - history0->hash_count_min;
-			values = history0->values;
-			
-			// Initialise history0 to zero for next data set
-			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
-
-			fullnonce = W + Hs * (((double)0xffffffff) + 1);
-			read_time = SECTOMS(fullnonce) - ICARUS_READ_REDUCE;
-			if (info->read_time_limit > 0 && read_time > info->read_time_limit) {
-				read_time = info->read_time_limit;
-				limited = true;
-			} else
-				limited = false;
-
-			info->Hs = Hs;
-			info->read_time = read_time;
-
-			info->fullnonce = fullnonce;
-			info->count = count;
-			info->W = W;
-			info->values = values;
-			info->hash_count_range = hash_count_range;
-
-			if (info->min_data_count < MAX_MIN_DATA_COUNT)
-				info->min_data_count *= 2;
-			else if (info->timing_mode == MODE_SHORT)
-				info->do_icarus_timing = false;
-
-			applog(LOG_WARNING, "%s%d Re-estimate: Hs=%e W=%e read_time=%dms%s fullnonce=%.3fs",
-					icarus->drv->name, icarus->device_id, Hs, W, read_time,
-					limited ? " (limited)" : "", fullnonce);
-		}
-		info->history_count++;
-		cgtime(&tv_history_finish);
-
-		timersub(&tv_history_finish, &tv_history_start, &tv_history_finish);
-		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
-	}
+	if (info->do_icarus_timing && !was_hw_error)
+		process_history(icarus, info, nonce, hash_count, &elapsed, &tv_start);
 out:
 	free_work(work);
+
+	return hash_count;
+}
+
+static int64_t rock_scanwork(struct thr_info *thr)
+{
+	struct cgpu_info *icarus = thr->cgpu;
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
+	int ret;
+	unsigned char nonce_bin[ICARUS_BUF_SIZE];
+	uint32_t nonce;
+	int64_t hash_count = 0;
+	struct timeval tv_start, tv_finish, elapsed;
+	struct work *work = NULL;
+	int64_t estimate_hashes;
+	int correction_times = 0;
+	NONCE_DATA nonce_data;
+
+	int chip_no = 0;
+	time_t recv_time = 0;
+
+	if (unlikely(share_work_tdiff(icarus) > info->fail_time)) {
+		if (info->failing) {
+			if (share_work_tdiff(icarus) > info->fail_time + 60) {
+				applog(LOG_ERR, "%s %d: Device failed to respond to restart",
+				       icarus->drv->name, icarus->device_id);
+				usb_nodev(icarus);
+				return -1;
+			}
+		} else {
+			applog(LOG_WARNING, "%s %d: No valid hashes for over %d secs, attempting to reset",
+			       icarus->drv->name, icarus->device_id, info->fail_time);
+			usb_reset(icarus);
+			info->failing = true;
+		}
+	}
+
+	// Device is gone
+	if (icarus->usbinfo.nodev)
+		return -1;
+
+	elapsed.tv_sec = elapsed.tv_usec = 0;
+
+	for (chip_no = 0; chip_no < info->rmdev.chip_max; chip_no++) {
+		recv_time = time(NULL);
+		if (recv_time > info->rmdev.chip[chip_no].last_received_task_complete_time + 1) {
+			info->rmdev.chip[chip_no].last_received_task_complete_time = recv_time;
+			rock_send_task(chip_no, 0,thr);
+			break;
+		}
+	}
+
+	memset(nonce_bin, 0, sizeof(nonce_bin));
+	ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, thr, 3000);//info->read_time);
+
+	nonce_data.chip_no = nonce_bin[NONCE_CHIP_NO_OFFSET] & RM_CHIP_MASK;
+	if (nonce_data.chip_no >= info->rmdev.chip_max)
+		nonce_data.chip_no = 0;
+	nonce_data.task_no = (nonce_bin[NONCE_TASK_NO_OFFSET] >= 2) ? 0 : nonce_bin[NONCE_TASK_NO_OFFSET];
+	nonce_data.cmd_value = nonce_bin[NONCE_TASK_CMD_OFFSET] & RM_CMD_MASK;
+	nonce_data.work_state = nonce_bin[NONCE_TASK_CMD_OFFSET] & RM_STATUS_MASK;
+
+	icarus->temp = (double)nonce_bin[NONCE_COMMAND_OFFSET];
+	if (icarus->temp == 128)
+		icarus->temp = 0;
+
+	if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD) {
+		info->rmdev.chip[nonce_data.chip_no].last_received_task_complete_time = time(NULL);
+		if (info->g_work[nonce_data.chip_no][nonce_data.task_no]) {
+			free_work(info->g_work[nonce_data.chip_no][nonce_data.task_no]);
+			info->g_work[nonce_data.chip_no][nonce_data.task_no] = NULL;
+		}
+		goto out;
+	}
+
+	if (nonce_data.cmd_value == NONCE_GET_TASK_CMD) {
+		rock_send_task(nonce_data.chip_no, nonce_data.task_no, thr);
+		goto out;
+	}
+
+	if (ret == ICA_NONCE_TIMEOUT)
+		rock_send_task(nonce_data.chip_no, nonce_data.task_no, thr);
+
+	work = info->g_work[nonce_data.chip_no][nonce_data.task_no];
+	if (work == NULL)
+		goto out;
+
+	if (ret == ICA_NONCE_ERROR)
+		goto out;
+
+	// aborted before becoming idle, get new work
+	if (ret == ICA_NONCE_TIMEOUT || ret == ICA_NONCE_RESTART) {
+		timersub(&tv_finish, &tv_start, &elapsed);
+
+		// ONLY up to just when it aborted
+		// We didn't read a reply so we don't subtract ICARUS_READ_TIME
+		estimate_hashes = ((double)(elapsed.tv_sec)
+					+ ((double)(elapsed.tv_usec))/((double)1000000)) / info->Hs;
+
+		// If some Serial-USB delay allowed the full nonce range to
+		// complete it can't have done more than a full nonce
+		if (unlikely(estimate_hashes > 0xffffffff))
+			estimate_hashes = 0xffffffff;
+
+		applog(LOG_DEBUG, "%s%d: no nonce = 0x%08lX hashes (%ld.%06lds)",
+				icarus->drv->name, icarus->device_id,
+				(long unsigned int)estimate_hashes,
+				(long)elapsed.tv_sec, (long)elapsed.tv_usec);
+
+		goto out;
+	}
+
+	memcpy((char *)&nonce, nonce_bin, ICARUS_READ_SIZE);
+	nonce = htobe32(nonce);
+	recv_time = time(NULL);
+	if ((recv_time-info->rmdev.dev_detect_time) >= 60) {
+		unsigned char i;
+		info->rmdev.dev_detect_time  = recv_time;
+		for (i = 0; i < info->rmdev.chip_max; i ++) {
+			if (info->rmdev.chip[i].error_cnt >= 12) {
+				if (info->rmdev.chip[i].freq > info->rmdev.min_frq)
+					info->rmdev.chip[i].freq--;
+			} else if (info->rmdev.chip[i].error_cnt <= 1) {
+				if (info->rmdev.chip[i].freq < (info->rmdev.def_frq / 10 - 1))
+					info->rmdev.chip[i].freq++;
+			}
+			info->rmdev.chip[i].error_cnt = 0;
+		}
+	}
+
+	correction_times = 0;
+	info->nonces_checked++;
+	while (correction_times < NONCE_CORRECTION_TIMES) {
+		if (correction_times > 0) {
+			info->nonces_correction_tests++;
+			if (correction_times == 1)
+				info->nonces_correction_times++;
+		}
+		if (submit_nonce(thr, work, nonce + rbox_corr_values[correction_times])) {
+			info->nonces_correction[correction_times]++;
+			hash_count++;
+			info->failing = false;
+			applog(LOG_DEBUG, "Rockminer nonce :::OK:::");
+			break;
+		} else {
+			applog(LOG_DEBUG, "Rockminer nonce error times = %d", correction_times);
+			if (nonce == 0)
+				break;
+		}
+		correction_times++;
+	}
+	if (correction_times >= NONCE_CORRECTION_TIMES)
+		info->nonces_fail++;
+
+	hash_count = (hash_count * info->nonce_mask);
+
+	if (opt_debug || info->do_icarus_timing)
+		timersub(&tv_finish, &tv_start, &elapsed);
+
+	applog(LOG_DEBUG, "%s%d: nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
+			icarus->drv->name, icarus->device_id,
+			nonce, (long unsigned int)hash_count,
+			(long)elapsed.tv_sec, (long)elapsed.tv_usec);
+
+out:
 
 	return hash_count;
 }
@@ -1532,6 +2105,10 @@ static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(cgpu->device_data);
+	char data[4096];
+	int i, off;
+	size_t len;
+	float avg;
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than
@@ -1554,6 +2131,39 @@ static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "work_division", &(info->work_division), false);
 	root = api_add_int(root, "fpga_count", &(info->fpga_count), false);
+
+	if (info->ident == IDENT_LIN) {
+		root = api_add_string(root, "rock_init", info->rock_init, false);
+		root = api_add_uint8(root, "rock_chips", &(info->rmdev.detect_chip_no), false);
+		root = api_add_uint8(root, "rock_chip_max", &(info->rmdev.chip_max), false);
+		root = api_add_uint8(root, "rock_prod_id", &(info->rmdev.product_id), false);
+		root = api_add_avg(root, "rock_min_freq", &(info->rmdev.min_frq), false);
+		root = api_add_avg(root, "rock_max_freq", &(info->rmdev.max_frq), false);
+		root = api_add_uint64(root, "rock_check", &(info->nonces_checked), false);
+		root = api_add_uint64(root, "rock_corr", &(info->nonces_correction_times), false);
+		root = api_add_uint64(root, "rock_corr_tests", &(info->nonces_correction_tests), false);
+		root = api_add_uint64(root, "rock_corr_fail", &(info->nonces_fail), false);
+		if (info->nonces_checked <= 0)
+			avg = 0;
+		else
+			avg = (float)(info->nonces_correction_tests) / (float)(info->nonces_checked);
+		root = api_add_avg(root, "rock_corr_avg", &avg, true);
+		data[0] = '\0';
+		off = 0;
+		for (i = 0; i < NONCE_CORRECTION_TIMES; i++) {
+			len = snprintf(data+off, sizeof(data)-off,
+						"%s%"PRIu64,
+						i > 0 ? "/" : "",
+						info->nonces_correction[i]);
+			if (len >= (sizeof(data)-off))
+				off = sizeof(data)-1;
+			else {
+				if (len > 0)
+					off += len;
+			}
+		}
+		root = api_add_string(root, "rock_corr_finds", data, true);
+	}
 
 	return root;
 }

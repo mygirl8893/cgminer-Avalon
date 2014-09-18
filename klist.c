@@ -255,8 +255,63 @@ void _k_add_tail(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS)
 	list->count_up++;
 }
 
-void k_unlink_item(K_LIST *list, K_ITEM *item)
+void _k_insert_before(K_LIST *list, K_ITEM *item, K_ITEM *before, KLIST_FFL_ARGS)
 {
+	if (item->name != list->name) {
+		quithere(1, "List %s can't %s() a %s item" KLIST_FFL,
+				list->name, __func__, item->name, KLIST_FFL_PASS);
+	}
+
+	if (!before) {
+		quithere(1, "%s() (%s) can't before a null item" KLIST_FFL,
+				__func__, list->name, KLIST_FFL_PASS);
+	}
+
+	item->next = before;
+	item->prev = before->prev;
+	if (before->prev)
+		before->prev->next = item;
+	else
+		list->head = item;
+	before->prev = item;
+
+	list->count++;
+	list->count_up++;
+}
+
+void _k_insert_after(K_LIST *list, K_ITEM *item, K_ITEM *after, KLIST_FFL_ARGS)
+{
+	if (item->name != list->name) {
+		quithere(1, "List %s can't %s() a %s item" KLIST_FFL,
+				list->name, __func__, item->name, KLIST_FFL_PASS);
+	}
+
+	if (!after) {
+		quithere(1, "%s() (%s) can't after a null item" KLIST_FFL,
+				__func__, list->name, KLIST_FFL_PASS);
+	}
+
+	item->prev = after;
+	item->next = after->next;
+	if (after->next)
+		after->next->prev = item;
+	else {
+		if (list->do_tail)
+			list->tail = item;
+	}
+	after->next = item;
+
+	list->count++;
+	list->count_up++;
+}
+
+void _k_unlink_item(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS)
+{
+	if (item->name != list->name) {
+		quithere(1, "List %s can't %s() a %s item" KLIST_FFL,
+				list->name, __func__, item->name, KLIST_FFL_PASS);
+	}
+
 	if (item->prev)
 		item->prev->next = item->next;
 
@@ -274,6 +329,66 @@ void k_unlink_item(K_LIST *list, K_ITEM *item)
 	item->prev = item->next = NULL;
 
 	list->count--;
+}
+
+void _k_list_transfer_to_head(K_LIST *from, K_LIST *to, KLIST_FFL_ARGS)
+{
+	if (from->name != to->name) {
+		quithere(1, "List %s can't %s() to a %s list" KLIST_FFL,
+				from->name, __func__, to->name, KLIST_FFL_PASS);
+	}
+
+	if (!(from->do_tail)) {
+		quithere(1, "List %s can't %s() - do_tail is false" KLIST_FFL,
+				from->name, __func__, KLIST_FFL_PASS);
+	}
+
+	if (!(from->head))
+		return;
+
+	if (to->head)
+		to->head->prev = from->tail;
+	else
+		to->tail = from->tail;
+
+	from->tail->next = to->head;
+	to->head = from->head;
+
+	from->head = from->tail = NULL;
+	to->count += from->count;
+	from->count = 0;
+	to->count_up += from->count_up;
+	from->count_up = 0;
+}
+
+void _k_list_transfer_to_tail(K_LIST *from, K_LIST *to, KLIST_FFL_ARGS)
+{
+	if (from->name != to->name) {
+		quithere(1, "List %s can't %s() to a %s list" KLIST_FFL,
+				from->name, __func__, to->name, KLIST_FFL_PASS);
+	}
+
+	if (!(from->do_tail)) {
+		quithere(1, "List %s can't %s() - do_tail is false" KLIST_FFL,
+				from->name, __func__, KLIST_FFL_PASS);
+	}
+
+	if (!(from->head))
+		return;
+
+	if (to->tail)
+		to->tail->next = from->head;
+	else
+		to->head = from->head;
+
+	from->head->prev = to->tail;
+	to->tail = from->tail;
+
+	from->head = from->tail = NULL;
+	to->count += from->count;
+	from->count = 0;
+	to->count_up += from->count_up;
+	from->count_up = 0;
 }
 
 K_LIST *_k_free_list(K_LIST *list, KLIST_FFL_ARGS)

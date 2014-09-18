@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2013 Con Kolivas
+ * Copyright 2011-2014 Con Kolivas
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -720,6 +720,58 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 	return ret;
 }
 
+static bool _valid_hex(char *s, const char *file, const char *func, const int line)
+{
+	bool ret = false;
+	int i, len;
+
+	if (unlikely(!s)) {
+		applog(LOG_ERR, "Null string passed to valid_hex from"IN_FMT_FFL, file, func, line);
+		return ret;
+	}
+	len = strlen(s);
+	for (i = 0; i < len; i++) {
+		unsigned char idx = s[i];
+
+		if (unlikely(hex2bin_tbl[idx] < 0)) {
+			applog(LOG_ERR, "Invalid char 0x%x passed to valid_hex from"IN_FMT_FFL, idx, file, func, line);
+			return ret;
+		}
+	}
+	ret = true;
+	return ret;
+}
+
+#define valid_hex(s) _valid_hex(s, __FILE__, __func__, __LINE__)
+
+static bool _valid_ascii(char *s, const char *file, const char *func, const int line)
+{
+	bool ret = false;
+	int i, len;
+
+	if (unlikely(!s)) {
+		applog(LOG_ERR, "Null string passed to valid_ascii from"IN_FMT_FFL, file, func, line);
+		return ret;
+	}
+	len = strlen(s);
+	if (unlikely(!len)) {
+		applog(LOG_ERR, "Zero length string passed to valid_ascii from"IN_FMT_FFL, file, func, line);
+		return ret;
+	}
+	for (i = 0; i < len; i++) {
+		unsigned char idx = s[i];
+
+		if (unlikely(idx < 32 || idx > 126)) {
+			applog(LOG_ERR, "Invalid char 0x%x passed to valid_ascii from"IN_FMT_FFL, idx, file, func, line);
+			return ret;
+		}
+	}
+	ret = true;
+	return ret;
+}
+
+#define valid_ascii(s) _valid_ascii(s, __FILE__, __func__, __LINE__)
+
 static const int b58tobin_tbl[] = {
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -1060,14 +1112,23 @@ void ms_to_timeval(struct timeval *val, int64_t ms)
 	val->tv_usec = tvdiv.rem * 1000;
 }
 
+static void spec_nscheck(struct timespec *ts)
+{
+	while (ts->tv_nsec >= 1000000000) {
+		ts->tv_nsec -= 1000000000;
+		ts->tv_sec++;
+	}
+	while (ts->tv_nsec < 0) {
+		ts->tv_nsec += 1000000000;
+		ts->tv_sec--;
+	}
+}
+
 void timeraddspec(struct timespec *a, const struct timespec *b)
 {
 	a->tv_sec += b->tv_sec;
 	a->tv_nsec += b->tv_nsec;
-	if (a->tv_nsec >= 1000000000) {
-		a->tv_nsec -= 1000000000;
-		a->tv_sec++;
-	}
+	spec_nscheck(a);
 }
 
 static int __maybe_unused timespec_to_ms(struct timespec *ts)
@@ -1080,10 +1141,7 @@ static void __maybe_unused timersubspec(struct timespec *a, const struct timespe
 {
 	a->tv_sec -= b->tv_sec;
 	a->tv_nsec -= b->tv_nsec;
-	if (a->tv_nsec < 0) {
-		a->tv_nsec += 1000000000;
-		a->tv_sec--;
-	}
+	spec_nscheck(a);
 }
 
 /* These are cgminer specific sleep functions that use an absolute nanosecond
@@ -1375,7 +1433,7 @@ bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 	if (url_len < 1)
 		return false;
 
-	sprintf(url_address, "%.*s", url_len, url_begin);
+	snprintf(url_address, 254, "%.*s", url_len, url_begin);
 
 	if (port_len) {
 		char *slash;
@@ -1504,7 +1562,8 @@ bool sock_full(struct pool *pool)
 
 static void clear_sockbuf(struct pool *pool)
 {
-	strcpy(pool->sockbuf, "");
+	if (likely(pool->sockbuf))
+		strcpy(pool->sockbuf, "");
 }
 
 static void clear_sock(struct pool *pool)
@@ -1685,35 +1744,13 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	ntime = __json_array_string(val, 7);
 	clean = json_is_true(json_array_get(val, 8));
 
-#ifdef USE_AVALON2
-	static struct timeval tv_last;
-	struct timeval tv_now;
-
-	cgtime(&tv_now);
-	applog(LOG_DEBUG, "Stratum pool %p: Clean %d: (Now: %ld, Last: %ld) tdiff: %ld",
-	       pool, clean,
-	       (long)tv_now.tv_sec, (long)tv_last.tv_sec,
-	       (long)tdiff(&tv_now, &tv_last));
-	if (pool == current_pool()) {
-		if ((double)tdiff(&tv_now, &tv_last) < (double)opt_stratum_ignore &&
-		    clean == false) {
-			applog(LOG_ERR, "Ignore job_id: %s", job_id);
-			ret = true;
-			goto out;
-		}
-
-		tv_last.tv_sec = tv_now.tv_sec;
-		tv_last.tv_usec = tv_now.tv_usec;
-	}
-#endif
-	if (!job_id || !prev_hash || !coinbase1 || !coinbase2 || !bbversion || !nbit || !ntime) {
+	if (!valid_ascii(job_id) || !valid_hex(prev_hash) || !valid_hex(coinbase1) ||
+	    !valid_hex(coinbase2) || !valid_hex(bbversion) || !valid_hex(nbit) ||
+	    !valid_hex(ntime)) {
 		/* Annoying but we must not leak memory */
-		if (job_id)
-			free(job_id);
-		if (coinbase1)
-			free(coinbase1);
-		if (coinbase2)
-			free(coinbase2);
+		free(job_id);
+		free(coinbase1);
+		free(coinbase2);
 		goto out;
 	}
 
@@ -1901,7 +1938,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 	if (!port)
 		port = pool->stratum_port;
 
-	sprintf(address, "%s:%s", url, port);
+	snprintf(address, 254, "%s:%s", url, port);
 
 	if (!extract_sockaddr(address, &sockaddr_url, &stratum_port))
 		return false;
@@ -1921,12 +1958,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 	free(tmp);
 	mutex_unlock(&pool->stratum_lock);
 
-	if (!restart_stratum(pool)) {
-		pool_failed(pool);
-		return false;
-	}
-
-	return true;
+	return restart_stratum(pool);
 }
 
 static bool send_version(struct pool *pool, json_t *val)
@@ -2321,7 +2353,7 @@ static bool sock_connecting(void)
 }
 static bool setup_stratum_socket(struct pool *pool)
 {
-	struct addrinfo servinfobase, *servinfo, *hints, *p;
+	struct addrinfo *servinfo, hints, *p;
 	char *sockaddr_url, *sockaddr_port;
 	int sockd;
 
@@ -2332,11 +2364,9 @@ static bool setup_stratum_socket(struct pool *pool)
 	pool->sock = 0;
 	mutex_unlock(&pool->stratum_lock);
 
-	hints = &pool->stratum_hints;
-	memset(hints, 0, sizeof(struct addrinfo));
-	hints->ai_family = AF_UNSPEC;
-	hints->ai_socktype = SOCK_STREAM;
-	servinfo = &servinfobase;
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
 
 	if (!pool->rpc_proxy && opt_socks_proxy) {
 		pool->rpc_proxy = opt_socks_proxy;
@@ -2351,7 +2381,7 @@ static bool setup_stratum_socket(struct pool *pool)
 		sockaddr_url = pool->sockaddr_url;
 		sockaddr_port = pool->stratum_port;
 	}
-	if (getaddrinfo(sockaddr_url, sockaddr_port, hints, &servinfo) != 0) {
+	if (getaddrinfo(sockaddr_url, sockaddr_port, &hints, &servinfo) != 0) {
 		if (!pool->probed) {
 			applog(LOG_WARNING, "Failed to resolve (?wrong URL) %s:%s",
 			       sockaddr_url, sockaddr_port);
@@ -2572,14 +2602,14 @@ resend:
 	if (!sessionid)
 		applog(LOG_DEBUG, "Failed to get sessionid in initiate_stratum");
 	nonce1 = json_array_string(res_val, 1);
-	if (!nonce1) {
-		applog(LOG_INFO, "Failed to get nonce1 in initiate_stratum");
+	if (!valid_hex(nonce1)) {
+		applog(LOG_INFO, "Failed to get valid nonce1 in initiate_stratum");
 		free(sessionid);
 		goto out;
 	}
 	n2size = json_integer_value(json_array_get(res_val, 2));
-	if (!n2size) {
-		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
+	if (n2size < 2 || n2size > 16) {
+		applog(LOG_INFO, "Failed to get valid n2size in initiate_stratum");
 		free(sessionid);
 		free(nonce1);
 		goto out;
@@ -2638,13 +2668,21 @@ out:
 
 bool restart_stratum(struct pool *pool)
 {
+	bool ret = false;
+
 	if (pool->stratum_active)
 		suspend_stratum(pool);
 	if (!initiate_stratum(pool))
-		return false;
+		goto out;
 	if (!auth_stratum(pool))
-		return false;
-	return true;
+		goto out;
+	ret = true;
+out:
+	if (!ret)
+		pool_died(pool);
+	else
+		stratum_resumed(pool);
+	return ret;
 }
 
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
@@ -2971,4 +3009,14 @@ bool cg_completion_timeout(void *fn, void *fnarg, int timeout)
 	} else
 		pthread_cancel(pthread);
 	return !ret;
+}
+
+void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, const char *func, const int line)
+{
+	if (unlikely(n < 1 || n > (1ul << 31))) {
+		applog(LOG_ERR, "ERR: Asked to memcpy %u bytes from %s %s():%d",
+			      n, file, func, line);
+		return;
+	}
+	memcpy(dest, src, n);
 }

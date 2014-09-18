@@ -30,11 +30,12 @@
 	defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || \
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
-	defined(USE_ANT_S1) || defined(USE_SPONDOOLIES)
+	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_SP10) || defined(USE_SP30) || \
+	defined(USE_ICARUS) || defined(USE_HASHRATIO)
 #define HAVE_AN_ASIC 1
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
+#if defined(USE_BITFORCE) || defined(USE_MODMINER)
 #define HAVE_AN_FPGA 1
 #endif
 
@@ -132,7 +133,7 @@ static const char SEPARATOR = '|';
 #define JOIN_CMD "CMD="
 #define BETWEEN_JOIN SEPSTR
 
-static const char *APIVERSION = "3.3";
+static const char *APIVERSION = "3.4";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -157,6 +158,9 @@ static const char *DEVICECODE = ""
 #ifdef USE_ANT_S1
 			"ANT "
 #endif
+#ifdef USE_ANT_S2
+			"AS2 "
+#endif
 #ifdef USE_AVALON
 			"AVA "
 #endif
@@ -178,6 +182,9 @@ static const char *DEVICECODE = ""
 #ifdef USE_HASHFAST
 			"HFA "
 #endif
+#ifdef USE_HASHRATIO
+			"HRO "
+#endif
 #ifdef USE_BITMINE_A1
 			"BA1 "
 #endif
@@ -196,9 +203,13 @@ static const char *DEVICECODE = ""
 #ifdef USE_COINTERRA
 			"CTA "
 #endif
-#ifdef USE_SPONDOOLIES
+#ifdef USE_SP10
 			"SPN "
 #endif
+#ifdef USE_SP30
+      "S30 "
+#endif
+
 
 			"";
 
@@ -248,6 +259,7 @@ static const char *OSINFO =
 #define _DEBUGSET	"DEBUG"
 #define _SETCONFIG	"SETCONFIG"
 #define _USBSTATS	"USBSTATS"
+#define _LCD		"LCD"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -288,6 +300,7 @@ static const char ISJSON = '{';
 #define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
 #define JSON_SETCONFIG	JSON1 _SETCONFIG JSON2
 #define JSON_USBSTATS	JSON1 _USBSTATS JSON2
+#define JSON_LCD	JSON1 _LCD JSON2
 #define JSON_END	JSON4 JSON5
 #define JSON_END_TRUNCATED	JSON4_TRUNCATED JSON5
 #define JSON_BETWEEN_JOIN	","
@@ -415,6 +428,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_SETQUOTA 122
 #define MSG_LOCKOK 123
 #define MSG_LOCKDIS 124
+#define MSG_LCD 125
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -580,6 +594,7 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_ASCSETOK, PARAM_BOTH,	"ASC %d set OK" },
  { SEVERITY_ERR,   MSG_ASCSETERR, PARAM_BOTH,	"ASC %d set failed: %s" },
 #endif
+ { SEVERITY_SUCC,  MSG_LCD,	PARAM_NONE,	"LCD" },
  { SEVERITY_SUCC,  MSG_LOCKOK,	PARAM_NONE,	"Lock stats created" },
  { SEVERITY_WARN,  MSG_LOCKDIS,	PARAM_NONE,	"Lock stats not enabled" },
  { SEVERITY_FAIL, 0, 0, NULL }
@@ -3964,6 +3979,79 @@ static void ascset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 }
 #endif
 
+static void lcddata(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	struct api_data *root = NULL;
+	struct cgpu_info *cgpu;
+	bool io_open;
+	double ghs = 0.0, last_share_diff = 0.0;
+	float temp = 0.0;
+	time_t last_share_time = 0;
+	time_t last_device_valid_work = 0;
+	struct pool *pool = NULL;
+	char *rpc_url = "none", *rpc_user = "";
+	int i;
+
+	message(io_data, MSG_LCD, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_LCD : _LCD COMSTR);
+
+	// stop hashmeter() changing some while copying
+	mutex_lock(&hash_lock);
+
+	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
+	ghs = total_mhashes_done / total_secs / 1000.0;
+	root = api_add_mhs(root, "GHS av", &ghs, true);
+	ghs = rolling5 / 1000.0;
+	root = api_add_mhs(root, "GHS 5m", &ghs, true);
+	ghs = total_rolling / 1000.0;
+	root = api_add_mhs(root, "GHS 5s", &ghs, true);
+
+	mutex_unlock(&hash_lock);
+
+	temp = 0;
+	last_device_valid_work = 0;
+	for (i = 0; i < total_devices; i++) {
+		cgpu = get_devices(i);
+		if (last_device_valid_work == 0 ||
+		    last_device_valid_work < cgpu->last_device_valid_work)
+			last_device_valid_work = cgpu->last_device_valid_work;
+		if (temp < cgpu->temp)
+			temp = cgpu->temp;
+	}
+
+	last_share_time = 0;
+	last_share_diff = 0;
+	for (i = 0; i < total_pools; i++) {
+		pool = pools[i];
+
+		if (pool->removed)
+			continue;
+
+		if (last_share_time == 0 || last_share_time < pool->last_share_time) {
+			last_share_time = pool->last_share_time;
+			last_share_diff = pool->last_share_diff;
+		}
+	}
+	pool = current_pool();
+	if (pool) {
+		rpc_url = pool->rpc_url;
+		rpc_user = pool->rpc_user;
+	}
+
+	root = api_add_temp(root, "Temperature", &temp, false);
+	root = api_add_diff(root, "Last Share Difficulty", &last_share_diff, false);
+	root = api_add_time(root, "Last Share Time", &last_share_time, false);
+	root = api_add_uint64(root, "Best Share", &best_diff, true);
+	root = api_add_time(root, "Last Valid Work", &last_device_valid_work, false);
+	root = api_add_uint(root, "Found Blocks", &found_blocks, true);
+	root = api_add_escape(root, "Current Pool", rpc_url, true);
+	root = api_add_escape(root, "User", rpc_user, true);
+
+	root = print_data(io_data, root, isjson, false);
+	if (isjson && io_open)
+		io_close(io_data);
+}
+
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -4019,6 +4107,7 @@ struct CMDS {
 	{ "ascset",		ascset,		true,	false },
 #endif
 	{ "asccount",		asccount,	false,	true },
+	{ "lcd",		lcddata,	false,	true },
 	{ "lockstats",		lockstats,	true,	true },
 	{ NULL,			NULL,		false,	false }
 };
@@ -4838,13 +4927,7 @@ void api(int api_thr_id)
 
 					param = NULL;
 
-#if JANSSON_MAJOR_VERSION > 2 || (JANSSON_MAJOR_VERSION == 2 && JANSSON_MINOR_VERSION > 0)
 					json_config = json_loadb(buf, n, 0, &json_err);
-#elif JANSSON_MAJOR_VERSION > 1
-					json_config = json_loads(buf, 0, &json_err);
-#else
-					json_config = json_loads(buf, &json_err);
-#endif
 
 					if (!json_is_object(json_config)) {
 						message(io_data, MSG_INVJSON, 0, NULL, isjson);

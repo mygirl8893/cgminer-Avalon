@@ -9,7 +9,7 @@
  */
 
 /* Compile:
- *   gcc api-example.c -Icompat/jansson-2.5 -Icompat/libusb-1.0/libusb -o cgminer-api
+ *   gcc api-example.c -Icompat/jansson-2.6/src -Icompat/libusb-1.0/libusb -o cgminer-api
  */
 
 #include "config.h"
@@ -242,7 +242,7 @@ int callapi(char *command, char *host, short int port)
 				buf = realloc(buf, bufsz);
 				assert(buf);
 			}
-			
+
 			n = recv(sock, &buf[p], RECVSIZE, 0);
 
 			if (SOCKETFAIL(n)) {
