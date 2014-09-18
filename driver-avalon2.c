@@ -37,12 +37,16 @@
 #include "driver-avalon2.h"
 #include "crc.h"
 #include "sha2.h"
-
+#define ICARUS_MIDSTATE_SIZE 32
+#define ICARUS_WORK_DATA_OFFSET 64
+#define ICARUS_WORK_SIZE 12
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
 #define get_fan_pwm(v)	(AVA2_PWM_MAX - (v) * AVA2_PWM_MAX / 100)
 
+unsigned char nano_firmware[15] = "201408170000000";
+unsigned char nano_version[15];
 int opt_avalon2_freq_min;
 int opt_avalon2_freq_max;
 
@@ -111,6 +115,18 @@ char *set_avalon2_fan(char *arg)
 	avalon2_fan_max = get_fan_pwm(val2);
 
 	return NULL;
+}
+
+static void rev(unsigned char *s, size_t l)
+{
+	size_t i, j;
+	unsigned char t;
+
+	for (i = 0, j = l - 1; i < j; i++, j--) {
+		t = s[i];
+		s[i] = s[j];
+		s[j] = t;
+	}
 }
 
 char *set_avalon2_fixed_speed(enum avalon2_fan_fixed *f)
@@ -694,7 +710,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		avalon2 = usb_free_cgpu(avalon2);
 		return NULL;
 	}
-	avalon2_initialise(avalon2);
+	//avalon2_initialise(avalon2);
 
 	for (j = 0; j < 2; j++) {
 		for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
@@ -711,6 +727,10 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 				applog(LOG_DEBUG, "%s %d: Avalon2 failed usb_read with err %d amount %d",
 				       avalon2->drv->name, avalon2->device_id, err, amount);
 				continue;
+			}else{
+				memset(nano_version,0,15);
+				memcpy(nano_version,ret_pkg.data,15);
+				applog(LOG_DEBUG,"ACKDETECT package = %s",nano_version);
 			}
 			ackdetect = ret_pkg.type;
 			applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
@@ -791,8 +811,24 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 {
 	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
-	int i, tmp;
+	int i, tmp, ret;
+	struct work *work;
+	struct avalon2_pkg midstate_pkg,data_pkg;
 
+	uint8_t result[AVA2_READ_SIZE];
+	work = get_work(thr, thr->id);
+	memset((void *)(&midstate_pkg), 0, sizeof(midstate_pkg));
+	memcpy(&(midstate_pkg.data), work->midstate, ICARUS_MIDSTATE_SIZE);
+	rev((void *)(&(midstate_pkg.data)), ICARUS_MIDSTATE_SIZE);
+	avalon2_init_pkg(&midstate_pkg, AVA2_P_MIDSTATE, 1, 1);
+	avalon2_send_pkgs(avalon2, &midstate_pkg);
+
+	memset((void *)(&data_pkg), 0, sizeof(data_pkg));
+	memcpy(data_pkg.data+20, work->data + ICARUS_WORK_DATA_OFFSET, ICARUS_WORK_SIZE);
+	rev((void *)((data_pkg.data+20)), ICARUS_WORK_SIZE);
+	avalon2_init_pkg(&data_pkg, AVA2_P_DATA, 1, 1);
+	avalon2_send_pkgs(avalon2, &data_pkg);
+	/*
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
 			uint8_t result[AVA2_READ_SIZE];
@@ -801,10 +837,10 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 			cgsleep_ms(opt_avalon2_polling_delay);
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 
-			tmp = be32toh(info->led_red[i]); /* RED LED */
+			tmp = be32toh(info->led_red[i]);
 			memcpy(send_pkg.data + 12, &tmp, 4);
 
-			tmp = be32toh(i); /* ID */
+			tmp = be32toh(i);
 			memcpy(send_pkg.data + 28, &tmp, 4);
 			if (info->led_red[i] && mm_cmp_1404(info, i)) {
 				avalon2_init_pkg(&send_pkg, AVA2_P_TEST, 1, 1);
@@ -820,6 +856,11 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 				decode_pkg(thr, &ar, result);
 		}
 	}
+	*/
+
+	ret = avalon2_gets(avalon2, result);
+	if (ret == AVA2_GETS_OK)
+		decode_pkg(thr, &ar, result);
 
 	return 0;
 }

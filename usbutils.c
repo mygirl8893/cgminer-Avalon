@@ -260,6 +260,21 @@ static struct usb_epinfo ava2_epinfos[] = {
 static struct usb_intinfo ava2_ints[] = {
 	USB_EPS(0, ava2_epinfos)
 };
+
+static struct usb_epinfo avau_epinfos0[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,   16, EPI(0x82), 0, 0 }
+};
+
+static struct usb_epinfo avau_epinfos1[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,    64, EPI(0x81), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,    64, EPO(0x01), 0, 0 }
+};
+
+static struct usb_intinfo nano_ints[] = {
+	USB_EPS(1, avau_epinfos1),
+	USB_EPS(0, avau_epinfos0)
+};
+
 #endif
 
 #ifdef USE_KLONDIKE
@@ -574,6 +589,16 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = AVALON_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(ava2_ints) },
+	{
+		.drv = DRIVER_avalon2,
+		.name = "AV2",
+		.ident = IDENT_AV2,
+		.idVendor = 0x29f1,
+		.idProduct = 0x33f1,
+		.config = 1,
+		.timeout = AVALON_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(nano_ints) },
 #endif
 #ifdef USE_HASHFAST
 	{

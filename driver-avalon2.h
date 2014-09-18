@@ -75,8 +75,9 @@
 #define AVA2_P_STATUS		24
 #define AVA2_P_ACKDETECT	25
 #define AVA2_P_TEST_RET		26
-#define AVA2_P_LONGCOINBASE	27
 /* Avalon2 protocol package type */
+#define AVA2_P_MIDSTATE		27
+#define AVA2_P_DATA			28
 
 /* Avalon2/3 firmware prefix */
 #define AVA2_FW2_PREFIXSTR	"20"
