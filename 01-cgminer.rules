@@ -7,6 +7,10 @@ ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", SUBSYSTEM=="usb", ACTION=="ad
 # Lancelot and Avalon
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
 
+# Avalon2
+ATTRS{idVendor}=="29f1", ATTRS{idProduct}=="33f2", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+ATTRS{idVendor}=="29f1", ATTRS{idProduct}=="33f1", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
 # Icarus
 ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
 
