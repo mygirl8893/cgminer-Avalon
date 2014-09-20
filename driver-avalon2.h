@@ -19,33 +19,9 @@
 #define AVA2_MINER_THREADS	1
 
 #define AVA2_RESET_FAULT_DECISECONDS	10
-#define AVA2_IO_SPEED		115200
-
-#define AVA2_DEFAULT_MODULARS	1
-
-#define AVA2_PWM_MAX	0x3FF
-#define AVA2_DEFAULT_FAN_PWM	15 /* % */
-#define AVA2_DEFAULT_FAN_MIN	10
-#define AVA2_DEFAULT_FAN_MAX	85
 
 #define AVALON2_TEMP_OVERHEAT	98
 #define AVALON2_DEFAULT_POLLING_DELAY	20 /* ms */
-
-#define AVA2_DEFAULT_VOLTAGE_MIN	6000
-#define AVA2_DEFAULT_VOLTAGE_MAX	11000
-
-#define AVA2_DEFAULT_FREQUENCY_MIN	300
-#define AVA2_DEFAULT_FREQUENCY_MAX	2000
-
-/* Avalon2 default values */
-#define AVA2_DEFAULT_MINERS	10
-#define AVA2_DEFAULT_VOLTAGE	10000 /* v * 10000 */
-#define AVA2_DEFAULT_FREQUENCY	1500 /* In MHs */
-
-/* Avalon3 default values */
-#define AVA2_AVA3_MINERS	5
-#define AVA2_AVA3_VOLTAGE	6660 /* 0.666v */
-#define AVA2_AVA3_FREQUENCY	450  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -106,36 +82,13 @@ struct avalon2_pkg {
 
 struct avalon2_info {
 	struct timeval last_stratum;
-	struct pool pool;
-	int pool_no;
 
-	int modulars[AVA2_DEFAULT_MODULARS];
-	char mm_version[AVA2_DEFAULT_MODULARS][16];
-	int dev_type[AVA2_DEFAULT_MODULARS];
-	bool enable[AVA2_DEFAULT_MODULARS];
+	char mm_version[16];
+	int dev_type;
 
-	int set_frequency;
-	int set_voltage;
-
-	int get_voltage[AVA2_DEFAULT_MODULARS];
-	int get_frequency[AVA2_DEFAULT_MODULARS];
-	int power_good[AVA2_DEFAULT_MODULARS];
-
-	int fan_pwm;
-	int fan_pct;
-	int temp_max;
-
-	int fan[2 * AVA2_DEFAULT_MODULARS];
-	int temp[2 * AVA2_DEFAULT_MODULARS];
-
-	int local_works[AVA2_DEFAULT_MODULARS];
-	int hw_works[AVA2_DEFAULT_MODULARS];
-
-	int local_work[AVA2_DEFAULT_MODULARS];
-	int hw_work[AVA2_DEFAULT_MODULARS];
-	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
-
-	int led_red[AVA2_DEFAULT_MODULARS];
+	int frequency;
+	int temp;
+	int hot;
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))

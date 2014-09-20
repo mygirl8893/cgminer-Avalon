@@ -99,9 +99,12 @@ static int avalon2_init_pkg(struct avalon2_pkg *pkg, uint8_t type, uint8_t idx, 
 
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
+	struct cgpu_info *avalon2 = thr->cgpu;
+	struct avalon2_info *info = avalon2->device_data;
 	unsigned int expected_crc;
 	unsigned int actual_crc;
 	int type = AVA2_GETS_ERROR;
+	int tmp;
 
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
@@ -122,6 +125,14 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			break;
 		case AVA2_P_STATUS:
 			applog(LOG_DEBUG, "Avalon2: AVA2_P_STATUS");
+			memcpy(&tmp, ar->data, 4);
+			info->frequency = tmp;
+
+			memcpy(&tmp, ar->data + 4, 4);
+			info->temp = tmp;
+
+			memcpy(&tmp, ar->data + 8, 4);
+			info->hot = tmp;
 			break;
 		case AVA2_P_ACKDETECT:
 			applog(LOG_DEBUG, "Avalon2: AVA2_P_ACKDETECT");
@@ -282,23 +293,8 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 
 	info = avalon2->device_data;
 
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		strcpy(info->mm_version[i], mm_version);
-		info->modulars[i] = 1;	/* Enable modular */
-		info->enable[i] = 1;
-		info->dev_type[i] = AVA2_ID_AVAX;
-
-		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2)) {
-			info->dev_type[i] = AVA2_ID_AVA2;
-			info->set_voltage = AVA2_DEFAULT_VOLTAGE_MIN;
-			info->set_frequency = AVA2_DEFAULT_FREQUENCY;
-		}
-		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW3_PREFIXSTR, 2)) {
-			info->dev_type[i] = AVA2_ID_AVA3;
-			info->set_voltage = AVA2_AVA3_VOLTAGE;
-			info->set_frequency = AVA2_AVA3_FREQUENCY;
-		}
-	}
+	strcpy(info->mm_version, mm_version);
+	info->dev_type = AVA2_ID_AVA3;
 
 	return avalon2;
 }
@@ -311,6 +307,19 @@ static inline void avalon2_detect(bool __maybe_unused hotplug)
 static void avalon2_update(struct cgpu_info *avalon2)
 {
     struct avalon2_info *info = avalon2->device_data;
+    struct avalon2_pkg send_pkg;
+    struct avalon2_ret ar;
+    struct thr_info *thr = avalon2->thr[0];
+    uint8_t result[AVA2_READ_SIZE];
+    int ret;
+
+    memset(&send_pkg, 0, sizeof(send_pkg));
+    avalon2_init_pkg(&send_pkg, AVA2_P_REQUIRE, 1, 1);
+    avalon2_send_pkgs(avalon2, &send_pkg);
+
+    ret = avalon2_gets(avalon2, result);
+    if (ret == AVA2_GETS_OK)
+	    decode_pkg(thr, &ar, result);
 
     cgtime(&info->last_stratum);
 }
@@ -376,96 +385,20 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon2_info *info = cgpu->device_data;
-	int i, j, a, b;
 	char buf[24];
-	double hwp;
-	int minerindex, minercount;
 
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA2_ID_AVAX)
-			continue;
-		sprintf(buf, "ID%d MM Version", i + 1);
-		root = api_add_string(root, buf, (char *)&(info->mm_version[i]), false);
-	}
+	if (info->dev_type != AVA2_ID_AVAX) {
+	    sprintf(buf, "MM Version");
+	    root = api_add_string(root, buf, (char *)&(info->mm_version), false);
 
-	minerindex = 0;
-	minercount = 0;
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if (info->dev_type[i] == AVA2_ID_AVAX) {
-			minerindex += AVA2_DEFAULT_MINERS;
-			continue;
-		}
+	    sprintf(buf, "Temperature");
+	    root = api_add_int(root, buf, &(info->temp), false);
 
-		if (info->dev_type[i] == AVA2_ID_AVA2)
-			minercount = AVA2_DEFAULT_MINERS;
+	    sprintf(buf, "Frequency");
+	    root = api_add_int(root, buf, &(info->frequency), false);
 
-		if (info->dev_type[i] == AVA2_ID_AVA3)
-			minercount = AVA2_AVA3_MINERS;
-
-		for (j = minerindex; j < (minerindex + minercount); j++) {
-			sprintf(buf, "Match work count%02d", j+1);
-			root = api_add_int(root, buf, &(info->matching_work[j]), false);
-		}
-		minerindex += AVA2_DEFAULT_MINERS;
-	}
-
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA2_ID_AVAX)
-			continue;
-		sprintf(buf, "Local works%d", i + 1);
-		root = api_add_int(root, buf, &(info->local_works[i]), false);
-	}
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA2_ID_AVAX)
-			continue;
-		sprintf(buf, "Hardware error works%d", i + 1);
-		root = api_add_int(root, buf, &(info->hw_works[i]), false);
-	}
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA2_ID_AVAX)
-			continue;
-		a = info->hw_works[i];
-		b = info->local_works[i];
-		hwp = b ? ((double)a / (double)b) : 0;
-
-		sprintf(buf, "Device hardware error%d%%", i + 1);
-		root = api_add_percent(root, buf, &hwp, true);
-	}
-	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i/2] == AVA2_ID_AVAX)
-			continue;
-		sprintf(buf, "Temperature%d", i + 1);
-		root = api_add_int(root, buf, &(info->temp[i]), false);
-	}
-	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i/2] == AVA2_ID_AVAX)
-			continue;
-		sprintf(buf, "Fan%d", i + 1);
-		root = api_add_int(root, buf, &(info->fan[i]), false);
-	}
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA2_ID_AVAX)
-			continue;
-		sprintf(buf, "Voltage%d", i + 1);
-		root = api_add_int(root, buf, &(info->get_voltage[i]), false);
-	}
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA2_ID_AVAX)
-			continue;
-		sprintf(buf, "Frequency%d", i + 1);
-		root = api_add_int(root, buf, &(info->get_frequency[i]), false);
-	}
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA2_ID_AVAX)
-			continue;
-		sprintf(buf, "Power good %02x", i + 1);
-		root = api_add_int(root, buf, &(info->power_good[i]), false);
-	}
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA2_ID_AVAX)
-			continue;
-		sprintf(buf, "Led %02x", i + 1);
-		root = api_add_int(root, buf, &(info->led_red[i]), false);
+	    sprintf(buf, "Hot");
+	    root = api_add_int(root, buf, &(info->hot), false);
 	}
 
 	return root;
@@ -474,11 +407,9 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *avalon2)
 {
 	struct avalon2_info *info = avalon2->device_data;
-	int temp = info->temp[0];
-	float volts = (float)info->set_voltage / 10000;
 
-	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", info->set_frequency,
-		    temp, info->fan_pct, volts);
+	tailsprintf(buf, bufsiz, "%4dMhz %2dC %s", info->frequency,
+		    info->temp, info->hot ? "HOT" : "COOL");
 }
 
 struct device_drv avalon2_drv = {
