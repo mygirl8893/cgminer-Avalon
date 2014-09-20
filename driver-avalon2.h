@@ -21,7 +21,7 @@
 #define AVA2_RESET_FAULT_DECISECONDS	10
 #define AVA2_IO_SPEED		115200
 
-#define AVA2_DEFAULT_MODULARS	4
+#define AVA2_DEFAULT_MODULARS	1
 
 #define AVA2_PWM_MAX	0x3FF
 #define AVA2_DEFAULT_FAN_PWM	15 /* % */
@@ -77,8 +77,7 @@
 #define AVA2_P_TEST_RET		26
 #define AVA2_P_LONGCOINBASE	27
 /* Avalon2 protocol package type */
-#define AVA2_P_MIDSTATE		28
-#define AVA2_P_DATA		29
+#define AVA2_P_WORK		28
 
 /* Avalon2/3 firmware prefix */
 #define AVA2_FW2_PREFIXSTR	"20"
