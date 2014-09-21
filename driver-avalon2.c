@@ -830,7 +830,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 			if (dev_info[i].modular_id != AVA2_DEVID_NULL)
 				continue;
 
-			dev_info[i].modular_id = i;
+			dev_info[i].modular_id = i + 1;
 			memcpy(dev_info[i].mm_version, ret_pkg.data, 15);
 			dev_info[i].mm_version[15] = '\0';
 			memcpy(dev_info[i].mm_dna, ret_pkg.data + 15, AVA2_DNA_LEN);
