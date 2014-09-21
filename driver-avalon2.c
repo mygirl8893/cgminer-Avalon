@@ -769,14 +769,43 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 	}
 	avalon2_iic_init(avalon2);
 
-	modular[0] = 0;
+
 	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
+		modular[i] = 0;
+		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
+		tmp = be32toh(i);
+		memcpy(detect_pkg.data + 28, &tmp, 4);
+
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_DETECT");
+		avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
+		avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg);
+		err = avalon2_iic_read(avalon2, i, (char *)&ret_pkg, AVA2_READ_SIZE);
+		if (err != AVA2_READ_SIZE) {
+			applog(LOG_DEBUG, "%s %d: Avalon2 failed usb_read with err %d",
+			       avalon2->drv->name, avalon2->device_id, err);
+			continue;
+		}
+		ackdetect = ret_pkg.type;
+		applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
+		if (ackdetect != AVA2_P_ACKDETECT)
+			continue;
+		modular[i] = 1;
+		memcpy(mm_version[i], ret_pkg.data, 15);
+		mm_version[i][15] = '\0';
+	}
+
+
+	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
+		if (modular[i])
+			continue;
+
 		strcpy(mm_version[i], AVA2_MM_VERNULL);
 		/* Send out detect pkg */
 		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
 		tmp = be32toh(AVA2_MODULE_BROADCAST);
 		memcpy(detect_pkg.data + 28, &tmp, 4);
 
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_DISCOVER");
 		avalon2_init_pkg(&detect_pkg, AVA2_P_DISCOVER, 1, 1);
 		avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg);
 		err = avalon2_iic_read(avalon2, AVA2_MODULE_BROADCAST, (char *)&ret_pkg, AVA2_READ_SIZE);
@@ -796,7 +825,6 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		mm_version[i][15] = '\0';
 		memcpy(mm_dna[i], ret_pkg.data + 15, AVA2_DNA_LEN);
 
-		
 		/* Send out SETDEVID pkg */
 		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
 		memcpy(detect_pkg.data, mm_version[i], 15);
@@ -804,6 +832,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		tmp = be32toh(i);
 		memcpy(detect_pkg.data + 28, &tmp, 4);
 
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_SETDEVID");
 		avalon2_init_pkg(&detect_pkg, AVA2_P_SETDEVID, 1, 1);
 		avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg);
 		err = avalon2_iic_read(avalon2, i, (char *)&ret_pkg, AVA2_READ_SIZE);
@@ -816,7 +845,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		ackdetect = ret_pkg.type;
 		if (ackdetect != AVA2_P_ACKSETDEVID)
 			break;
-		applog(LOG_DEBUG, "Avalon2 set dev ID[%d]: %d", i, ackdetect);
+		applog(LOG_DEBUG, "Avalon2: Set device ID[%d]: %d", i, ackdetect);
 	}
 
 	/* We have a real Avalon! */
