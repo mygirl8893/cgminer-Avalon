@@ -374,6 +374,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
 			if (info->dev_type[modular_id] == AVA2_ID_AVA3)
 				info->get_frequency[modular_id] = info->get_frequency[modular_id] * 768 / 65;
+			if (info->dev_type[modular_id] == AVA2_ID_AVA4)
+				info->get_frequency[modular_id] = info->get_frequency[modular_id] * 3986 / 65;
 			info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
 			info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
 			info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
@@ -889,6 +891,11 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 			info->set_voltage = AVA2_AVA3_VOLTAGE;
 			info->set_frequency = AVA2_AVA3_FREQUENCY;
 		}
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW4_PREFIXSTR, 2)) {
+			info->dev_type[i] = AVA2_ID_AVA4;
+			info->set_voltage = AVA2_AVA4_VOLTAGE;
+			info->set_frequency = AVA2_AVA4_FREQUENCY;
+		}
 	}
 
 	if (!opt_avalon2_voltage_min)
@@ -1149,6 +1156,9 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		if (info->dev_type[i] == AVA2_ID_AVA3)
 			minercount = AVA2_AVA3_MINERS;
 
+		if (info->dev_type[i] == AVA2_ID_AVA4)
+			minercount = AVA2_AVA4_MINERS;
+
 		for (j = minerindex; j < (minerindex + minercount); j++) {
 			sprintf(buf, "Match work count%02d", j+1);
 			root = api_add_int(root, buf, &(info->matching_work[j]), false);
@@ -1221,7 +1231,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *avalon2)
 {
 	struct avalon2_info *info = avalon2->device_data;
-	int temp = get_temp_max(info);
+	int temp = get_current_temp_max(info);
 	float volts = (float)info->set_voltage / 10000;
 
 	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", info->set_frequency,

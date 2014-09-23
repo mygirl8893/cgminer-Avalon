@@ -34,7 +34,7 @@
 #define AVA2_DEFAULT_VOLTAGE_MIN	6000
 #define AVA2_DEFAULT_VOLTAGE_MAX	11000
 
-#define AVA2_DEFAULT_FREQUENCY_MIN	300
+#define AVA2_DEFAULT_FREQUENCY_MIN	200
 #define AVA2_DEFAULT_FREQUENCY_MAX	2000
 
 /* Avalon2 default values */
@@ -46,6 +46,11 @@
 #define AVA2_AVA3_MINERS	5
 #define AVA2_AVA3_VOLTAGE	6660 /* 0.666v */
 #define AVA2_AVA3_FREQUENCY	450  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
+
+/* Avalon4 default values */
+#define AVA2_AVA4_MINERS	10
+#define AVA2_AVA4_VOLTAGE	7000 /* 0.666v */
+#define AVA2_AVA4_FREQUENCY	200  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -89,11 +94,13 @@
 #define AVA2_FW2_PREFIXSTR	"20"
 #define AVA2_FW3_PREFIXSTR	"33"
 #define AVA2_FW35_PREFIXSTR	"35"
+#define AVA2_FW4_PREFIXSTR	"40"
 
 #define AVA2_MM_VERNULL		"NONE"
 
 #define AVA2_ID_AVA2		3255
 #define AVA2_ID_AVA3		3233
+#define AVA2_ID_AVA4		3222
 #define AVA2_ID_AVAX		3200
 
 #define AVA2_IIC_RESET		0xa0
