@@ -62,7 +62,8 @@ int opt_avalon2_polling_delay = AVALON2_DEFAULT_POLLING_DELAY;
 enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
 static int avalon2_dev_add(struct cgpu_info *avalon2, struct avalon2_dev_info *dev_info, uint32_t index);
 static int avalon2_dev_del(struct cgpu_info *avalon2, uint32_t index);
-static struct avalon2_dev_info *avalon2_dev_get(struct cgpu_info *avalon2, uint32_t index);
+static struct avalon2_dev_info *avalon2_dev_getbyindex(struct cgpu_info *avalon2, uint32_t index);
+static int avalon2_dev_getindexbydna(struct cgpu_info *avalon2, char mm_dna[]);
 static int avalon2_dev_setid(struct cgpu_info *avalon2, struct avalon2_dev_info *dev_info, uint8_t slave_addr);
 static void avalon2_checkdevs(struct cgpu_info *avalon2);
 
@@ -411,14 +412,21 @@ static int decode_pkg(struct cgpu_info *avalon2, struct avalon2_ret *ar, uint8_t
 
 			/* Already have id */
 			if (dev_info.modular_id != AVA2_DEVID_BROADCAST) {
-				applog(LOG_DEBUG, "Avalon2: Already have id:%d\n", dev_info.modular_id);
+				applog(LOG_DEBUG, "Avalon2: Already have id:%d", dev_info.modular_id);
 				break;
 			}
 
-			/* Got a new modular, modular_id == AVA2_DEVID_BROADCAST */
-			for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-				if (!avalon2_dev_get(avalon2, i))
-					break;
+			i = avalon2_dev_getindexbydna(avalon2, dev_info.mm_dna);
+			if (-1 != i) {
+				/* Lost id */
+				applog(LOG_DEBUG, "Avalon2: Forget id:%d, tell it again", dev_info.modular_id);
+				hexdump(dev_info.mm_dna, AVA2_DNA_LEN);
+			} else {
+				/* Got a new modular, modular_id == AVA2_DEVID_BROADCAST */
+				for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+					if (!avalon2_dev_getbyindex(avalon2, i))
+						break;
+				}
 			}
 
 			if (i == AVA2_DEFAULT_MODULARS) {
@@ -431,7 +439,7 @@ static int decode_pkg(struct cgpu_info *avalon2, struct avalon2_ret *ar, uint8_t
 				avalon2_dev_add(avalon2, &dev_info, i);
 			break;
 		default:
-			applog(LOG_DEBUG, "Avalon2: Unknown response type:%d\n", type);
+			applog(LOG_DEBUG, "Avalon2: Unknown response type:%d", type);
 			type = AVA2_GETS_ERROR;
 			break;
 		}
@@ -823,7 +831,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 				continue;
 			}
 			ackdetect = ret_pkg.type;
-			applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
+			applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i + 1, ackdetect);
 			if (ackdetect != AVA2_P_ACKDETECT)
 				continue;
 
@@ -930,7 +938,6 @@ static int avalon2_dev_add(struct cgpu_info *avalon2, struct avalon2_dev_info *d
 	return 0;
 }
 
-/* TODO: delete unused device */
 static int avalon2_dev_del(struct cgpu_info *avalon2, uint32_t index)
 {
 	struct avalon2_info *info;
@@ -940,16 +947,18 @@ static int avalon2_dev_del(struct cgpu_info *avalon2, uint32_t index)
 		return 1;
 	}
 
+	/* keep mm_dna and modular, for allocate same id */
 	info = avalon2->device_data;
 	strcpy(info->mm_version[index], AVA2_MM_VERNULL);
-	info->modulars[index] = 0;
 	info->enable[index] = 0;
 	info->dev_cnt--;
 	info->dev_type[index] = AVA2_ID_AVAX;
+
+	applog(LOG_DEBUG, "Avalon2 dev del id %d", index + 1);
 	return 0;
 }
 
-static struct avalon2_dev_info *avalon2_dev_get(struct cgpu_info *avalon2, uint32_t index)
+static struct avalon2_dev_info *avalon2_dev_getbyindex(struct cgpu_info *avalon2, uint32_t index)
 {
 	static struct avalon2_dev_info dev_info;
 	struct avalon2_info *info;
@@ -970,29 +979,49 @@ static struct avalon2_dev_info *avalon2_dev_get(struct cgpu_info *avalon2, uint3
 	return NULL;
 }
 
+static int avalon2_dev_getindexbydna(struct cgpu_info *avalon2, char mm_dna[])
+{
+	static struct avalon2_dev_info dev_info;
+	struct avalon2_info *info;
+	int i;
+
+	info = avalon2->device_data;
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if (!memcmp(info->mm_dna[i], mm_dna, AVA2_DNA_LEN))
+		    return i;
+	}
+
+	return -1;
+}
+
 static int avalon2_dev_setid(struct cgpu_info *avalon2, struct avalon2_dev_info *dev_info, uint8_t slave_addr)
 {
 	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ret_pkg;
 	int tmp, err;
+	int retry = 0;
 
-	memset(&send_pkg, 0, sizeof(send_pkg));
-	memcpy(send_pkg.data, dev_info->mm_version, 15);
-	memcpy(send_pkg.data + 15, dev_info->mm_dna, AVA2_DNA_LEN);
-	tmp = be32toh(dev_info->modular_id);
-	memcpy(send_pkg.data + 28, &tmp, 4);
-	avalon2_init_pkg(&send_pkg, AVA2_P_SETDEVID, 1, 1);
-	avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
-	memset(&ret_pkg, 0, sizeof(ret_pkg));
-	err = avalon2_iic_read(avalon2, slave_addr, (uint8_t *)&ret_pkg, AVA2_READ_SIZE);
-	if (err != AVA2_READ_SIZE ||
-	    ret_pkg.type != AVA2_P_ACKSETDEVID ||
-	    0 != memcmp(ret_pkg.data + 15, dev_info->mm_dna, AVA2_DNA_LEN)) {
-		applog(LOG_DEBUG, "Avalon2 dev setid failed!");
-		return 1;
+	/* TODO: timeout ? */
+	while (++retry < 3) {
+		memset(&send_pkg, 0, sizeof(send_pkg));
+		memcpy(send_pkg.data, dev_info->mm_version, 15);
+		memcpy(send_pkg.data + 15, dev_info->mm_dna, AVA2_DNA_LEN);
+		tmp = be32toh(dev_info->modular_id);
+		memcpy(send_pkg.data + 28, &tmp, 4);
+		avalon2_init_pkg(&send_pkg, AVA2_P_SETDEVID, 1, 1);
+		avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
+		memset(&ret_pkg, 0, sizeof(ret_pkg));
+		err = avalon2_iic_read(avalon2, slave_addr, (uint8_t *)&ret_pkg, AVA2_READ_SIZE);
+		if (err != AVA2_READ_SIZE ||
+		    ret_pkg.type != AVA2_P_ACKSETDEVID ||
+		    0 != memcmp(ret_pkg.data + 15, dev_info->mm_dna, AVA2_DNA_LEN)) {
+			applog(LOG_DEBUG, "Avalon2 dev setid %d failed!", dev_info->modular_id);
+			continue;
+		}
+		break;
 	}
 
-	applog(LOG_DEBUG, "Avalon2 dev setid = %d\n", dev_info->modular_id);
+	applog(LOG_DEBUG, "Avalon2 dev setid = %d", dev_info->modular_id);
 	return 0;
 }
 
@@ -1020,6 +1049,7 @@ static void avalon2_checkdevs(struct cgpu_info *avalon2)
 
 static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalon2_info *info)
 {
+	static uint8_t errcnt[AVA2_DEFAULT_MODULARS];
 	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
 	int i, tmp;
@@ -1047,8 +1077,17 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 
 			avalon2_send_pkgs(avalon2, i + 1, &send_pkg);
 			ret = avalon2_gets(avalon2, i + 1, result);
-			if (ret == AVA2_GETS_OK)
+			if (ret == AVA2_GETS_OK) {
 				decode_pkg(avalon2, &ar, result);
+				errcnt[i] = 0;
+			} else {
+				/* TODO: why timeout ? */
+				if (errcnt[i] > 10) {
+					avalon2_dev_del(avalon2, i);
+					errcnt[i] = 0;
+				} else
+					errcnt[i]++;
+			}
 		}
 	}
 
@@ -1112,6 +1151,7 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	uint32_t tmp, range, start;
 	struct work *work;
 	struct pool *pool;
+	int i;
 
 	applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d",
 	       thr->work_restart, thr->work_update);
@@ -1186,6 +1226,10 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	/* Package the data */
 	avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
 	avalon2_send_pkgs(avalon2, AVA2_DEVID_BROADCAST, &send_pkg);
+
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++)
+		if (!info->enable[i])
+			avalon2_checkdevs(avalon2);
 }
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
