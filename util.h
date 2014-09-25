@@ -120,6 +120,8 @@ void us_to_timeval(struct timeval *val, int64_t us);
 void us_to_timespec(struct timespec *spec, int64_t us);
 void ms_to_timespec(struct timespec *spec, int64_t ms);
 void timeraddspec(struct timespec *a, const struct timespec *b);
+char *Strcasestr(char *haystack, const char *needle);
+char *Strsep(char **stringp, const char *delim);
 void cgsleep_ms(int ms);
 void cgsleep_us(int64_t us);
 void cgtimer_time(cgtimer_t *ts_start);

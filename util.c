@@ -1144,11 +1144,55 @@ static void __maybe_unused timersubspec(struct timespec *a, const struct timespe
 	spec_nscheck(a);
 }
 
-/* These are cgminer specific sleep functions that use an absolute nanosecond
- * resolution timer to avoid poor usleep accuracy and overruns. */
+char *Strcasestr(char *haystack, const char *needle)
+{
+	char *lowhay, *lowneedle, *ret;
+	int hlen, nlen, i, ofs;
+
+	if (unlikely(!haystack || !needle))
+		return NULL;
+	hlen = strlen(haystack);
+	nlen = strlen(needle);
+	if (!hlen || !nlen)
+		return NULL;
+	lowhay = alloca(hlen);
+	lowneedle = alloca(nlen);
+	for (i = 0; i < hlen; i++)
+		lowhay[i] = tolower(haystack[i]);
+	for (i = 0; i < nlen; i++)
+		lowneedle[i] = tolower(needle[i]);
+	ret = strstr(lowhay, lowneedle);
+	if (!ret)
+		return ret;
+	ofs = ret - lowhay;
+	return haystack + ofs;
+}
+
+char *Strsep(char **stringp, const char *delim)
+{
+	char *ret = *stringp;
+	char *p;
+
+	p = (ret != NULL) ? strpbrk(ret, delim) : NULL;
+
+	if (p == NULL)
+		*stringp = NULL;
+	else {
+		*p = '\0';
+		*stringp = p + 1;
+	}
+
+	return ret;
+}
+
 #ifdef WIN32
+/* Mingw32 has no strsep so create our own custom one  */
+
 /* Windows start time is since 1601 LOL so convert it to unix epoch 1970. */
 #define EPOCHFILETIME (116444736000000000LL)
+
+/* These are cgminer specific sleep functions that use an absolute nanosecond
+ * resolution timer to avoid poor usleep accuracy and overruns. */
 
 /* Return the system time as an lldiv_t in decimicroseconds. */
 static void decius_time(lldiv_t *lidiv)

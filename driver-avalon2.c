@@ -278,20 +278,6 @@ static inline int mm_cmp_1406(struct avalon2_info *info)
 	return 0;
 }
 
-static inline int mm_cmp_1409(struct avalon2_info *info)
-{
-	/* <= 1409 return 1 */
-	char *mm_1409 = "1409";
-	int i;
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		if (info->enable[i] &&
-		    strncmp(info->mm_version[i] + 2, mm_1409, 4) <= 0)
-			return 1;
-	}
-
-	return 0;
-}
-
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
 	struct cgpu_info *avalon2 = thr->cgpu;
@@ -497,12 +483,11 @@ static int avalon2_send_pkgs(struct cgpu_info *avalon2, const struct avalon2_pkg
 
 static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 {
-	struct avalon2_info *info = avalon2->device_data;
 	const int merkle_offset = 36;
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
 	unsigned char target[32];
-	int job_id_len;
+	int job_id_len, n2size;
 	unsigned short crc;
 
 	/* Send out the first stratum message STATIC */
@@ -519,7 +504,8 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	tmp = be32toh(pool->nonce2_offset);
 	memcpy(pkg.data + 4, &tmp, 4);
 
-	tmp = be32toh(pool->n2size);
+	n2size = pool->n2size >= 4 ? 4 : pool->n2size;
+	tmp = be32toh(n2size);
 	memcpy(pkg.data + 8, &tmp, 4);
 
 	tmp = be32toh(merkle_offset);
@@ -565,16 +551,6 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	if (pool->coinbase_len > AVA2_P_COINBASE_SIZE) {
 		int coinbase_len_posthash, coinbase_len_prehash;
 		uint8_t coinbase_prehash[32];
-
-	if (mm_cmp_1409(info)) {
-		applog(LOG_INFO, "Avalon2: MM version less then 1409");
-	} else {
-		memset(pkg.data, 0, AVA2_P_DATA_LEN);
-		avalon2_init_pkg(&pkg, AVA2_P_LONGCOINBASE, 1, 1);
-		if (avalon2_send_pkgs(avalon2, &pkg))
-			return;
-	}
-
 		coinbase_len_prehash = pool->nonce2_offset - (pool->nonce2_offset % SHA256_BLOCK_SIZE);
 		coinbase_len_posthash = pool->coinbase_len - coinbase_len_prehash;
 		sha256_prehash(pool->coinbase, coinbase_len_prehash, coinbase_prehash);
@@ -911,6 +887,10 @@ static void avalon2_update(struct cgpu_info *avalon2)
 		applog(LOG_ERR, "Avalon2: MM merkles have to less then %d", AVA2_P_MERKLES_COUNT);
 		return;
 	}
+	if (pool->n2size < 3) {
+		applog(LOG_ERR, "Avalon2: MM nonce2 size have to >= 3 (%d)", pool->n2size);
+		return;
+	}
 
 	cgtime(&info->last_stratum);
 	cg_rlock(&pool->data_lock);
@@ -943,7 +923,7 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	memcpy(send_pkg.data + 8, &tmp, 4);
 
 	/* Configure the nonce2 offset and range */
-	if(pool->n2size == 3)
+	if (pool->n2size == 3)
 		range = 0xffffff / (total_devices + 1);
 	else
 		range = 0xffffffff / (total_devices + 1);
@@ -1090,7 +1070,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *avalon2)
 {
 	struct avalon2_info *info = avalon2->device_data;
-	int temp = get_temp_max(info);
+	int temp = get_current_temp_max(info);
 	float volts = (float)info->set_voltage / 10000;
 
 	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", info->set_frequency,
