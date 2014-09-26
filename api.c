@@ -4432,7 +4432,7 @@ static void setup_ipaccess()
 	int ipcount, mask, octet, i, shift;
 	char group;
 	bool ipv6;
-	char tmp[NI_MAXHOST];
+	char tmp[30];
 
 	buf = malloc(strlen(opt_api_allow) + 1);
 	if (unlikely(!buf))
@@ -4517,13 +4517,14 @@ static void setup_ipaccess()
 
 			for (i = 0; i < 16; i++)
 				ipaccess[ips].ip.s6_addr[i] = 0; // missing default to '[::]'
-			if (ipv6)
-				if (!inet_pton(AF_INET6, ptr, &(ipaccess[ips].ip)))
+			if (ipv6){
+				if (inet_pton(AF_INET6, ptr, &(ipaccess[ips].ip)) != 1)
 					goto popipo;
+			}
 			else {
 				// v4 mapped v6 address, such as "::ffff:255.255.255.255"
 				sprintf(tmp, "::ffff:%s", ptr);
-				if (!inet_pton(AF_INET6, tmp, &(ipaccess[ips].ip)))
+				if (inet_pton(AF_INET6, tmp, &(ipaccess[ips].ip)) != 1)
 					goto popipo;
 			}
 			for (i = 0; i < 16; i++)
@@ -4571,11 +4572,10 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 	bool addrok = false;
 	int i, j;
 	bool match;
-	char ip[NI_MAXHOST], tmp[NI_MAXHOST];
-	socklen_t cli_siz = sizeof(*cli);
+	char ip[50], tmp[50];
 	struct in6_addr client_ip;
 
-	getnameinfo((struct sockaddr *)cli, cli_siz,
+	getnameinfo((struct sockaddr *)cli, sizeof(*cli),
 			ip, sizeof(ip), NULL, 0, NI_NUMERICHOST);
 	*connectaddr = ip;
 
@@ -4793,8 +4793,8 @@ void api(int api_thr_id)
 	char *binderror;
 	time_t bindstart;
 	short int port = opt_api_port;
-	struct sockaddr_in serv;
-	struct sockaddr_in cli;
+	char port_s[10];
+	struct sockaddr_storage cli;
 	socklen_t clisiz;
 	char cmdbuf[100];
 	char *cmd = NULL;
@@ -4807,6 +4807,7 @@ void api(int api_thr_id)
 	bool isjson;
 	bool did, isjoin = false, firstjoin;
 	int i;
+	struct addrinfo hints, *res;
 
 	SOCKETTYPE *apisock;
 
@@ -4842,27 +4843,26 @@ void api(int api_thr_id)
 	 * to ensure curl has already called WSAStartup() in windows */
 	cgsleep_ms(opt_log_interval*1000);
 
-	*apisock = socket(AF_INET, SOCK_STREAM, 0);
-	if (*apisock == INVSOCK) {
-		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
+	sprintf(port_s, "%d", port);
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_family = AF_UNSPEC;
+	if (getaddrinfo(opt_api_host, port_s, &hints, &res) != 0){
+		applog(LOG_ERR, "API failed to resolve %s", opt_api_host);
 		free(apisock);
 		return;
 	}
-
-	memset(&serv, 0, sizeof(serv));
-
-	serv.sin_family = AF_INET;
-
-	if (!opt_api_allow && !opt_api_network) {
-		serv.sin_addr.s_addr = inet_addr(localaddr);
-		if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
-			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-			free(apisock);
-			return;
-		}
+	while (res != NULL){
+		*apisock = socket(res->ai_family, SOCK_STREAM, 0);
+		if (*apisock > 0)
+			break;
+		res = res -> ai_next;
 	}
-
-	serv.sin_port = htons(port);
+	if (*apisock == INVSOCK) {
+		applog(LOG_ERR, "API initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
+		free(apisock);
+		return;
+	}
 
 #ifndef WIN32
 	// On linux with SO_REUSEADDR, bind will get the port if the previous
@@ -4882,7 +4882,7 @@ void api(int api_thr_id)
 	bound = 0;
 	bindstart = time(NULL);
 	while (bound == 0) {
-		if (SOCKETFAIL(bind(*apisock, (struct sockaddr *)(&serv), sizeof(serv)))) {
+		if (SOCKETFAIL(bind(*apisock, res->ai_addr, res->ai_addrlen))) {
 			binderror = SOCKERRMSG;
 			if ((time(NULL) - bindstart) > 61)
 				break;
