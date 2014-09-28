@@ -375,7 +375,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			if (info->dev_type[modular_id] == AVA2_ID_AVA3)
 				info->get_frequency[modular_id] = info->get_frequency[modular_id] * 768 / 65;
 			if (info->dev_type[modular_id] == AVA2_ID_AVA4)
-				info->get_frequency[modular_id] = info->get_frequency[modular_id] * 3986 / 65;
+				info->get_frequency[modular_id] = info->get_frequency[modular_id] * 3968 / 65;
 			info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
 			info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
 			info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
