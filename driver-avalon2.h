@@ -109,6 +109,7 @@
 #define AVA2_IIC_WRITE		0xa3
 #define AVA2_IIC_READ		0xa4
 #define AVA2_IIC_XFER		0xa5
+#define AVA2_IIC_INFO		0xa6
 
 #define AVA2_DNA_LEN		8
 

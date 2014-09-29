@@ -453,6 +453,11 @@ static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_i
 		iic_pkg[7] = iic_info->iic_param.slave_addr;
 		break;
 
+	case AVA2_IIC_INFO:
+		iic_pkg[0] = 4;
+		iic_pkg[3] = AVA2_IIC_INFO;
+		break;
+
 	default:
 		break;
 	}
@@ -563,6 +568,42 @@ static int avalon2_iic_init(struct cgpu_info *avalon2)
 	}
 
 	applog(LOG_DEBUG, "Avalon2: USB2IIC Converter versioin: %s", rbuf + 4);
+	return 0;
+}
+
+static int avalon2_iic_getinfo(struct cgpu_info *avalon2)
+{
+	struct avalon2_iic_info iic_info;
+	int err, wlen, rlen;
+	uint8_t wbuf[AVA2_IIC_P_SIZE];
+	uint8_t rbuf[AVA2_IIC_P_SIZE];
+	uint8_t *pdata = rbuf + 4;
+
+	if (unlikely(avalon2->usbinfo.nodev))
+		return 1;
+
+	iic_info.iic_op = AVA2_IIC_INFO;
+	avalon2_iic_init_pkg(wbuf, &iic_info, NULL, 0);
+
+	/* Device info: (9 bytes)
+	 * tempadc(2), reqRdIndex, reqWrIndex,
+	 * respRdIndex, respWrIndex, tx_flags, state
+	 * */
+	rlen = 7;
+	memset(rbuf, 0, AVA2_IIC_P_SIZE);
+	err = avalon2_iic_xfer(avalon2, wbuf, AVA2_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	if (err) {
+		applog(LOG_ERR, "Avalon2: Failed to get info from Avalon USB2IIC Converter");
+		applog(LOG_ERR, "Avalon2: AUC FW Version must >= AUC-20140929 / tag >= 351409");
+		return 1;
+	}
+
+	applog(LOG_DEBUG, "Avalon2: AUC tempADC(%03d), reqcnt(%d), respcnt(%d), txflag(%d), state(%d)",
+			be16toh(pdata[0] << 8 | pdata[1]),
+			pdata[2],
+			pdata[3],
+			be16toh(pdata[4] << 8 | pdata[5]),
+			pdata[6]);
 	return 0;
 }
 
@@ -770,7 +811,6 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		return NULL;
 	}
 	avalon2_iic_init(avalon2);
-
 
 	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
 		modular[i] = 0;
