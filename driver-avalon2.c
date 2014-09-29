@@ -1,4 +1,5 @@
 /*
+ * Copyright 2014 Mikeqin <Fengling.Qin@gmail.com>
  * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
@@ -37,6 +38,7 @@
 #include "driver-avalon2.h"
 #include "crc.h"
 #include "sha2.h"
+#include "hexdump.c"
 
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
@@ -50,6 +52,7 @@ int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_MIN;
 int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
 static int avalon2_fan_min = get_fan_pwm(AVA2_DEFAULT_FAN_MIN);
 static int avalon2_fan_max = get_fan_pwm(AVA2_DEFAULT_FAN_MAX);
+static struct avalon2_iic_info avalon2_iic;
 
 int opt_avalon2_voltage_min;
 int opt_avalon2_voltage_max;
@@ -308,8 +311,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 		memcpy(&modular_id, ar->data + 28, 4);
 		modular_id = be32toh(modular_id);
-		if (modular_id > 3)
-			modular_id = 0;
+		applog(LOG_DEBUG, "Avalon2: decode modular id: %d", modular_id);
 
 		switch(type) {
 		case AVA2_P_NONCE:
@@ -372,6 +374,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
 			if (info->dev_type[modular_id] == AVA2_ID_AVA3)
 				info->get_frequency[modular_id] = info->get_frequency[modular_id] * 768 / 65;
+			if (info->dev_type[modular_id] == AVA2_ID_AVA4)
+				info->get_frequency[modular_id] = info->get_frequency[modular_id] * 3968 / 65;
 			info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
 			info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
 			info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
@@ -404,78 +408,209 @@ out:
 	return type;
 }
 
-static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
+/*
+ #  IIC packet format: length[1]+transId[1]+sesId[1]+req[1]+data[60]
+ #  length: 4+len(data)
+ #  transId: 0
+ #  sesId: 0
+ #  req:
+ #        a0:RESET
+ #        a1:INIT
+ #        a2:DEINIT
+ #        a3:WRITE
+ #        a4:READ
+ #        a5:XFER
+ #  data:
+ #    INIT: clock_rate[4] + reserved[4] + payload[52]
+ #    XFER: txSz[1]+rxSz[1]+options[1]+slaveAddr[1] + payload[56]
+ */
+static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_info, uint8_t *buf, int len)
 {
-	int i;
-	int read_amount = AVA2_READ_SIZE;
-	uint8_t buf_tmp[AVA2_READ_SIZE];
-	uint8_t buf_copy[2 * AVA2_READ_SIZE];
-	uint8_t *buf_back = buf;
-	int ret = 0;
+	memset(iic_pkg, 0, AVA2_IIC_P_SIZE);
 
-	while (true) {
-		int err;
+	switch (iic_info->iic_op) {
+	case AVA2_IIC_INIT:
+		iic_pkg[0] = 8;	/* 4 bytes IIC header + 4 bytes xfer header */
+		iic_pkg[3] = AVA2_IIC_INIT;
+		iic_pkg[4] = iic_info->iic_param.speed & 0xff;
+		iic_pkg[5] = (iic_info->iic_param.speed >> 8) & 0xff;
+		iic_pkg[6] = (iic_info->iic_param.speed >> 16) & 0xff;
+		iic_pkg[7] = iic_info->iic_param.speed >> 24;
+		break;
 
-		do {
-			memset(buf, 0, read_amount);
-			err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
-			if (unlikely(err && err != LIBUSB_ERROR_TIMEOUT)) {
-				applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets got %d", err, ret);
-				return AVA2_GETS_ERROR;
-			}
-			if (likely(ret >= read_amount)) {
-				for (i = 1; i < read_amount; i++) {
-					if (buf_back[i - 1] == AVA2_H1 && buf_back[i] == AVA2_H2)
-						break;
-				}
-				i -= 1;
-				if (i) {
-					err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
-					if (unlikely(err < 0 || ret != read_amount)) {
-						applog(LOG_ERR, "Avalon2: Error %d on 2nd read in avalon_gets got %d", err, ret);
-						return AVA2_GETS_ERROR;
-					}
-					memcpy(buf_copy, buf_back + i, AVA2_READ_SIZE - i);
-					memcpy(buf_copy + AVA2_READ_SIZE - i, buf_tmp, i);
-					memcpy(buf_back, buf_copy, AVA2_READ_SIZE);
-				}
-				return AVA2_GETS_OK;
-			}
-			buf += ret;
-			read_amount -= ret;
-		} while (ret > 0);
+	case AVA2_IIC_WRITE:
+		iic_pkg[0] = 8 + len + 1; /* len + 1 was for converter 39 bytes MM package to 40 bytes */
+		iic_pkg[3] = AVA2_IIC_XFER;
+		iic_pkg[4] = len + 1;
+		iic_pkg[7] = iic_info->iic_param.slave_addr;
+		memcpy(iic_pkg + 8, buf, len);
+		break;
 
-		return AVA2_GETS_TIMEOUT;
+	case AVA2_IIC_READ:
+		iic_pkg[0] = 8;
+		iic_pkg[3] = AVA2_IIC_XFER;
+		iic_pkg[5] = len + 1;
+		iic_pkg[7] = iic_info->iic_param.slave_addr;
+		break;
+
+	default:
+		break;
 	}
+
+	return 0;
 }
 
-static int avalon2_send_pkg(struct cgpu_info *avalon2, const struct avalon2_pkg *pkg)
+static int avalon2_iic_xfer(struct cgpu_info *avalon2,
+			    uint8_t *wbuf, int wlen, int *write,
+			    uint8_t *rbuf, int rlen, int *read)
 {
-	int err, amount;
-	uint8_t buf[AVA2_WRITE_SIZE];
-	int nr_len = AVA2_WRITE_SIZE;
+	int err;
+
+	err = usb_write(avalon2, (char *)wbuf, wlen, write, C_AVA2_WRITE);
+	if (err || *write != wlen)
+		applog(LOG_DEBUG, "Avalon2: AUC xfer %d, w(%d-%d)!", err, wlen, *write);
+
+	rlen += 4; 		/* Add 4 bytes IIC header */
+	err = usb_read(avalon2, (char *)rbuf, rlen, read, C_AVA2_READ);
+	if (err || *read != rlen) {
+		applog(LOG_DEBUG, "Avalon2: AUC xfer %d, r(%d-%d)!", err, rlen - 4, *read);
+		hexdump(rbuf, rlen);
+	}
+
+	*read = rbuf[0] - 4;	/* Remove 4 bytes IIC header */
+
+	return err;
+}
+
+static int avalon2_iic_read(struct cgpu_info *avalon2, uint8_t slave_addr, uint8_t *buf, int buf_len)
+{
+	struct avalon2_iic_info iic_info;
+
+	int err, wcount, rcount;
+	uint8_t wbuf[AVA2_IIC_P_SIZE];
+	uint8_t rbuf[AVA2_IIC_P_SIZE];
+
+	if (unlikely(avalon2->usbinfo.nodev))
+		return AVA2_GETS_ERROR;
+
+	cgsleep_ms(10);
+
+	iic_info.iic_op = AVA2_IIC_READ;
+	iic_info.iic_param.slave_addr = slave_addr;
+
+	avalon2_iic_init_pkg(wbuf, &iic_info, NULL, buf_len);
+
+	memset(rbuf, 0, AVA2_IIC_P_SIZE);
+	err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wcount, rbuf, wbuf[5], &rcount);
+	if (err)
+		return AVA2_GETS_ERROR;
+
+	rcount -= 1;		/* Convert 40 bytes MM message back to 39 bytes */
+	if (rcount != buf_len) {
+		applog(LOG_DEBUG, "Avalon2: IIC read error, r(%d-%d)", buf_len, rcount);
+		return AVA2_GETS_EXTRA_DATA;
+	}
+
+	memcpy(buf, rbuf + 4, buf_len); /* Offset 4 bytes IIC header */
+	return rcount;
+}
+
+static int avalon2_iic_write(struct cgpu_info *avalon2, uint8_t slave_addr, uint8_t *buf, int len)
+{
+	struct avalon2_iic_info iic_info;
+
+	int err, wlen, rlen;
+	uint8_t wbuf[AVA2_IIC_P_SIZE];
+	uint8_t rbuf[AVA2_IIC_P_SIZE];
 
 	if (unlikely(avalon2->usbinfo.nodev))
 		return AVA2_SEND_ERROR;
 
-	memcpy(buf, pkg, AVA2_WRITE_SIZE);
-	err = usb_write(avalon2, (char *)buf, nr_len, &amount, C_AVA2_WRITE);
-	if (err || amount != nr_len) {
-		applog(LOG_DEBUG, "Avalon2: Send(%d)!", amount);
+	/* slave address start from 1 */
+	iic_info.iic_op = AVA2_IIC_WRITE;
+	iic_info.iic_param.slave_addr = slave_addr;
+
+	avalon2_iic_init_pkg(wbuf, &iic_info, buf, len);
+	err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wlen, rbuf, 0, &rlen);
+	if (err) {
+		applog(LOG_ERR, "Avalon2: IIC write error %d", err);
+		return 0;
+	}
+
+	return wlen - 8 - 1;	/* Remove the 4 bytes IIC header, 4 bytes xfer header and MM padding:1 */
+}
+
+static int avalon2_iic_init(struct cgpu_info *avalon2)
+{
+	struct avalon2_iic_info iic_info;
+	int err, wlen, rlen;
+	uint8_t wbuf[AVA2_IIC_P_SIZE];
+	uint8_t rbuf[AVA2_IIC_P_SIZE];
+
+	if (unlikely(avalon2->usbinfo.nodev))
+		return 1;
+
+	iic_info.iic_op = AVA2_IIC_INIT;
+	iic_info.iic_param.speed = AVA2_IIC_SPEED_DEFAUL;
+	avalon2_iic_init_pkg(wbuf, &iic_info, NULL, 0);
+
+	rlen = 12;		/* Version length: 12 (AUC-20140909) */
+	memset(rbuf, 0, AVA2_IIC_P_SIZE);
+	err = avalon2_iic_xfer(avalon2, wbuf, AVA2_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	if (err) {
+		applog(LOG_ERR, "Avalon2: Failed to init Avalon USB2IIC Converter");
+		return 1;
+	}
+
+	applog(LOG_DEBUG, "Avalon2: USB2IIC Converter versioin: %s", rbuf + 4);
+	return 0;
+}
+
+static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t slave_addr, uint8_t *buf)
+{
+	int i;
+	int read_amount = AVA2_READ_SIZE;
+	int ret = 0;
+
+	memset(buf, 0, AVA2_READ_SIZE);
+	ret = avalon2_iic_read(avalon2, slave_addr, buf, AVA2_READ_SIZE);
+	if (unlikely(ret <= 0)) {
+		applog(LOG_ERR, "Avalon2: Error on read in avalon_gets got %d", ret);
+		return AVA2_GETS_ERROR;
+	}
+	if (likely(ret == read_amount)) {
+		if (buf[0] == AVA2_H1 && buf[1] == AVA2_H2) {
+			return AVA2_GETS_OK;
+		}
+	}
+
+	return AVA2_GETS_ERROR;
+}
+
+static int avalon2_send_pkg(struct cgpu_info *avalon2, uint8_t slave_addr, const struct avalon2_pkg *pkg)
+{
+	int amount;
+
+	if (unlikely(avalon2->usbinfo.nodev))
+		return AVA2_SEND_ERROR;
+
+	amount = avalon2_iic_write(avalon2, slave_addr, (uint8_t *)pkg, AVA2_WRITE_SIZE);
+	if (amount != AVA2_WRITE_SIZE) {
+		applog(LOG_DEBUG, "Avalon2: Send(%d-%d)!", AVA2_WRITE_SIZE, amount);
 		return AVA2_SEND_ERROR;
 	}
 
 	return AVA2_SEND_OK;
 }
 
-static int avalon2_send_pkgs(struct cgpu_info *avalon2, const struct avalon2_pkg *pkg)
+static int avalon2_send_pkgs(struct cgpu_info *avalon2, uint8_t slave_addr, const struct avalon2_pkg *pkg)
 {
 	int ret;
 
 	do {
 		if (unlikely(avalon2->usbinfo.nodev))
 			return -1;
-		ret = avalon2_send_pkg(avalon2, pkg);
+		ret = avalon2_send_pkg(avalon2, slave_addr, pkg);
 	} while (ret != AVA2_SEND_OK);
 
 	return 0;
@@ -521,7 +656,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	memcpy(pkg.data + 24, &tmp, 4);
 
 	avalon2_init_pkg(&pkg, AVA2_P_STATIC, 1, 1);
-	if (avalon2_send_pkgs(avalon2, &pkg))
+	if (avalon2_send_pkgs(avalon2, AVA2_MODULE_BROADCAST, &pkg))
 		return;
 
 	set_target(target, pool->sdiff);
@@ -533,7 +668,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 		free(target_str);
 	}
 	avalon2_init_pkg(&pkg, AVA2_P_TARGET, 1, 1);
-	if (avalon2_send_pkgs(avalon2, &pkg))
+	if (avalon2_send_pkgs(avalon2, AVA2_MODULE_BROADCAST, &pkg))
 		return;
 
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s",
@@ -545,7 +680,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	pkg.data[0] = (crc & 0xff00) >> 8;
 	pkg.data[1] = crc & 0x00ff;
 	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
-	if (avalon2_send_pkgs(avalon2, &pkg))
+	if (avalon2_send_pkgs(avalon2, AVA2_MODULE_BROADCAST, &pkg))
 		return;
 
 	if (pool->coinbase_len > AVA2_P_COINBASE_SIZE) {
@@ -557,24 +692,24 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 
 		a = (coinbase_len_posthash / AVA2_P_DATA_LEN) + 1;
 		b = coinbase_len_posthash % AVA2_P_DATA_LEN;
-	        memcpy(pkg.data, coinbase_prehash, 32);
-	        avalon2_init_pkg(&pkg, AVA2_P_COINBASE, 1, a + (b ? 1 : 0));
-	        if (avalon2_send_pkg(avalon2, &pkg))
+		memcpy(pkg.data, coinbase_prehash, 32);
+		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, 1, a + (b ? 1 : 0));
+		if (avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &pkg))
 			return;
-	        applog(LOG_DEBUG, "Avalon2: Pool stratum message modified COINBASE: %d %d", a, b);
-	        for (i = 1; i < a; i++) {
-	                memcpy(pkg.data, pool->coinbase + coinbase_len_prehash + i * 32 - 32, 32);
-	                avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, a + (b ? 1 : 0));
-			if (avalon2_send_pkg(avalon2, &pkg))
-	                        return;
-	        }
-	        if (b) {
-	                memset(pkg.data, 0, AVA2_P_DATA_LEN);
+		applog(LOG_DEBUG, "Avalon2: Pool stratum message modified COINBASE: %d %d", a, b);
+		for (i = 1; i < a; i++) {
+			memcpy(pkg.data, pool->coinbase + coinbase_len_prehash + i * 32 - 32, 32);
+			avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, a + (b ? 1 : 0));
+			if (avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &pkg))
+				return;
+		}
+		if (b) {
+			memset(pkg.data, 0, AVA2_P_DATA_LEN);
 			memcpy(pkg.data, pool->coinbase + coinbase_len_prehash + i * 32 - 32, b);
-	                avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, i + 1);
-	                if (avalon2_send_pkg(avalon2, &pkg))
-	                        return;
-	        }
+			avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, i + 1);
+			if (avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &pkg))
+				return;
+		}
 	} else {
 		a = pool->coinbase_len / AVA2_P_DATA_LEN;
 		b = pool->coinbase_len % AVA2_P_DATA_LEN;
@@ -582,14 +717,14 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 		for (i = 0; i < a; i++) {
 			memcpy(pkg.data, pool->coinbase + i * 32, 32);
 			avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, a + (b ? 1 : 0));
-			if (avalon2_send_pkg(avalon2, &pkg))
+			if (avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &pkg))
 				return;
 		}
 		if (b) {
 			memset(pkg.data, 0, AVA2_P_DATA_LEN);
 			memcpy(pkg.data, pool->coinbase + i * 32, b);
 			avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, i + 1);
-			if (avalon2_send_pkg(avalon2, &pkg))
+			if (avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &pkg))
 				return;
 		}
 	}
@@ -601,7 +736,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 		memset(pkg.data, 0, AVA2_P_DATA_LEN);
 		memcpy(pkg.data, pool->swork.merkle_bin[i], 32);
 		avalon2_init_pkg(&pkg, AVA2_P_MERKLES, i + 1, b);
-		if (avalon2_send_pkgs(avalon2, &pkg))
+		if (avalon2_send_pkgs(avalon2, AVA2_MODULE_BROADCAST, &pkg))
 			return;
 	}
 
@@ -610,47 +745,9 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 		memset(pkg.data, 0, AVA2_P_HEADER);
 		memcpy(pkg.data, pool->header_bin + i * 32, 32);
 		avalon2_init_pkg(&pkg, AVA2_P_HEADER, i + 1, 4);
-		if (avalon2_send_pkgs(avalon2, &pkg))
+		if (avalon2_send_pkgs(avalon2, AVA2_MODULE_BROADCAST, &pkg))
 			return;
 	}
-}
-
-static void avalon2_initialise(struct cgpu_info *avalon2)
-{
-	uint32_t ava2_data[2] = { PL2303_VALUE_LINE0, PL2303_VALUE_LINE1 };
-	int interface;
-
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	interface = usb_interface(avalon2);
-	// Set Data Control
-	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, 8,
-		     interface, C_VENDOR);
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, 9,
-		     interface, C_VENDOR);
-
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	// Set Line Control
-	usb_transfer_data(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_LINE, PL2303_VALUE_LINE,
-			  interface, ava2_data, PL2303_VALUE_LINE_SIZE, C_SETLINE);
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	// Vendor
-	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, PL2303_VALUE_VENDOR,
-		     interface, C_VENDOR);
-
-	if (avalon2->usbinfo.nodev)
-		return;
-
-	// Set More Line Control ?
-	usb_transfer(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, 3, interface, C_SETLINE);
 }
 
 static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
@@ -660,6 +757,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 	int err, amount;
 	int tmp, i, j, modular[AVA2_DEFAULT_MODULARS] = {};
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
+	char mm_dna[AVA2_DEFAULT_MODULARS][AVA2_DNA_LEN];
 
 	struct cgpu_info *avalon2 = usb_alloc_cgpu(&avalon2_drv, 1);
 	struct avalon2_pkg detect_pkg;
@@ -670,38 +768,85 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		avalon2 = usb_free_cgpu(avalon2);
 		return NULL;
 	}
-	avalon2_initialise(avalon2);
+	avalon2_iic_init(avalon2);
 
-	for (j = 0; j < 2; j++) {
-		for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-			strcpy(mm_version[i], AVA2_MM_VERNULL);
-			/* Send out detect pkg */
-			memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
-			tmp = be32toh(i);
-			memcpy(detect_pkg.data + 28, &tmp, 4);
 
-			avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
-			avalon2_send_pkg(avalon2, &detect_pkg);
-			err = usb_read(avalon2, (char *)&ret_pkg, AVA2_READ_SIZE, &amount, C_AVA2_READ);
-			if (err < 0 || amount != AVA2_READ_SIZE) {
-				applog(LOG_DEBUG, "%s %d: Avalon2 failed usb_read with err %d amount %d",
-				       avalon2->drv->name, avalon2->device_id, err, amount);
-				continue;
-			}
-			ackdetect = ret_pkg.type;
-			applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
-			if (ackdetect != AVA2_P_ACKDETECT && modular[i] == 0)
-				continue;
-			modular[i] = 1;
-			memcpy(mm_version[i], ret_pkg.data, 15);
-			mm_version[i][15] = '\0';
+	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
+		modular[i] = 0;
+		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
+		tmp = be32toh(i);
+		memcpy(detect_pkg.data + 28, &tmp, 4);
+
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_DETECT");
+		avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
+		avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg);
+		err = avalon2_iic_read(avalon2, i, (char *)&ret_pkg, AVA2_READ_SIZE);
+		if (err != AVA2_READ_SIZE) {
+			applog(LOG_DEBUG, "%s %d: Avalon2 failed usb_read with err %d",
+			       avalon2->drv->name, avalon2->device_id, err);
+			continue;
 		}
+		ackdetect = ret_pkg.type;
+		applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
+		if (ackdetect != AVA2_P_ACKDETECT)
+			continue;
+		modular[i] = 1;
+		memcpy(mm_version[i], ret_pkg.data, 15);
+		mm_version[i][15] = '\0';
 	}
-	if (!modular[0] && !modular[1] && !modular[2] && !modular[3]) {
-		applog(LOG_DEBUG, "Not an Avalon2 device");
-		usb_uninit(avalon2);
-		usb_free_cgpu(avalon2);
-		return NULL;
+
+
+	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
+		if (modular[i])
+			continue;
+
+		strcpy(mm_version[i], AVA2_MM_VERNULL);
+		/* Send out detect pkg */
+		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
+		tmp = be32toh(AVA2_MODULE_BROADCAST);
+		memcpy(detect_pkg.data + 28, &tmp, 4);
+
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_DISCOVER");
+		avalon2_init_pkg(&detect_pkg, AVA2_P_DISCOVER, 1, 1);
+		avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg);
+		err = avalon2_iic_read(avalon2, AVA2_MODULE_BROADCAST, (char *)&ret_pkg, AVA2_READ_SIZE);
+		if (err != AVA2_READ_SIZE) {
+			applog(LOG_DEBUG, "%s %d: Avalon2 failed usb_read with err %d",
+			       avalon2->drv->name, avalon2->device_id, err);
+			break;
+		}
+
+		ackdetect = ret_pkg.type;
+		applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
+		hexdump((uint8_t *)&ret_pkg, AVA2_READ_SIZE);
+		if (ackdetect != AVA2_P_ACKDISCOVER)
+			break;
+		modular[i] = 1;
+		memcpy(mm_version[i], ret_pkg.data, 15);
+		mm_version[i][15] = '\0';
+		memcpy(mm_dna[i], ret_pkg.data + 15, AVA2_DNA_LEN);
+
+		/* Send out SETDEVID pkg */
+		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
+		memcpy(detect_pkg.data, mm_version[i], 15);
+		memcpy(detect_pkg.data + 15, mm_dna[i], AVA2_DNA_LEN);
+		tmp = be32toh(i);
+		memcpy(detect_pkg.data + 28, &tmp, 4);
+
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_SETDEVID");
+		avalon2_init_pkg(&detect_pkg, AVA2_P_SETDEVID, 1, 1);
+		avalon2_send_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg);
+		err = avalon2_iic_read(avalon2, i, (char *)&ret_pkg, AVA2_READ_SIZE);
+		if (err != AVA2_READ_SIZE) {
+			applog(LOG_DEBUG, "%s %d: Avalon2 failed usb_read with err %d",
+			       avalon2->drv->name, avalon2->device_id, err);
+			break;
+		}
+
+		ackdetect = ret_pkg.type;
+		if (ackdetect != AVA2_P_ACKSETDEVID)
+			break;
+		applog(LOG_DEBUG, "Avalon2: Set device ID[%d]: %d", i, ackdetect);
 	}
 
 	/* We have a real Avalon! */
@@ -726,7 +871,9 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		strcpy(info->mm_version[i], mm_version[i]);
 		info->modulars[i] = modular[i];	/* Enable modular */
 		info->enable[i] = modular[i];
+
 		info->dev_type[i] = AVA2_ID_AVAX;
+		memcpy(info->mm_dna[i], mm_dna, AVA2_DNA_LEN);
 
 		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2)) {
 			info->dev_type[i] = AVA2_ID_AVA2;
@@ -737,6 +884,16 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 			info->dev_type[i] = AVA2_ID_AVA3;
 			info->set_voltage = AVA2_AVA3_VOLTAGE;
 			info->set_frequency = AVA2_AVA3_FREQUENCY;
+		}
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW35_PREFIXSTR, 2)) {
+			info->dev_type[i] = AVA2_ID_AVA3;
+			info->set_voltage = AVA2_AVA3_VOLTAGE;
+			info->set_frequency = AVA2_AVA3_FREQUENCY;
+		}
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW4_PREFIXSTR, 2)) {
+			info->dev_type[i] = AVA2_ID_AVA4;
+			info->set_voltage = AVA2_AVA4_VOLTAGE;
+			info->set_frequency = AVA2_AVA4_FREQUENCY;
 		}
 	}
 
@@ -765,11 +922,11 @@ static bool avalon2_prepare(struct thr_info *thr)
 
 static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalon2_info *info)
 {
-	struct avalon2_pkg send_pkg;
+	struct avalon2_pkg send_pkg, discover_pkg;
 	struct avalon2_ret ar;
-	int i, tmp;
+	int i, tmp, err, amount;
 
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
 			uint8_t result[AVA2_READ_SIZE];
 			int ret;
@@ -784,14 +941,14 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 			memcpy(send_pkg.data + 28, &tmp, 4);
 			if (info->led_red[i] && mm_cmp_1404(info, i)) {
 				avalon2_init_pkg(&send_pkg, AVA2_P_TEST, 1, 1);
-				avalon2_send_pkgs(avalon2, &send_pkg);
+				avalon2_send_pkgs(avalon2, i, &send_pkg);
 				info->enable[i] = 0;
 				continue;
 			} else
 				avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
 
-			avalon2_send_pkgs(avalon2, &send_pkg);
-			ret = avalon2_gets(avalon2, result);
+			avalon2_send_pkgs(avalon2, i, &send_pkg);
+			ret = avalon2_gets(avalon2, i, result);
 			if (ret == AVA2_GETS_OK)
 				decode_pkg(thr, &ar, result);
 		}
@@ -937,7 +1094,7 @@ static void avalon2_update(struct cgpu_info *avalon2)
 
 	/* Package the data */
 	avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
-	avalon2_send_pkgs(avalon2, &send_pkg);
+	avalon2_send_pkgs(avalon2, AVA2_MODULE_BROADCAST, &send_pkg);
 }
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
@@ -997,6 +1154,9 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 
 		if (info->dev_type[i] == AVA2_ID_AVA3)
 			minercount = AVA2_AVA3_MINERS;
+
+		if (info->dev_type[i] == AVA2_ID_AVA4)
+			minercount = AVA2_AVA4_MINERS;
 
 		for (j = minerindex; j < (minerindex + minercount); j++) {
 			sprintf(buf, "Match work count%02d", j+1);
@@ -1077,14 +1237,6 @@ static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		    temp, info->fan_pct, volts);
 }
 
-static void avalon2_shutdown(struct thr_info *thr)
-{
-	struct cgpu_info *avalon2 = thr->cgpu;
-	int interface = usb_interface(avalon2);
-
-	usb_transfer(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, 0, interface, C_SETLINE);
-}
-
 struct device_drv avalon2_drv = {
 	.drv_id = DRIVER_avalon2,
 	.dname = "avalon2",
@@ -1097,5 +1249,4 @@ struct device_drv avalon2_drv = {
 	.flush_work = avalon2_update,
 	.update_work = avalon2_update,
 	.scanwork = avalon2_scanhash,
-	.thread_shutdown = avalon2_shutdown,
 };

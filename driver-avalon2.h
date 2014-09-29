@@ -34,7 +34,7 @@
 #define AVA2_DEFAULT_VOLTAGE_MIN	6000
 #define AVA2_DEFAULT_VOLTAGE_MAX	11000
 
-#define AVA2_DEFAULT_FREQUENCY_MIN	300
+#define AVA2_DEFAULT_FREQUENCY_MIN	200
 #define AVA2_DEFAULT_FREQUENCY_MAX	2000
 
 /* Avalon2 default values */
@@ -46,6 +46,11 @@
 #define AVA2_AVA3_MINERS	5
 #define AVA2_AVA3_VOLTAGE	6660 /* 0.666v */
 #define AVA2_AVA3_FREQUENCY	450  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
+
+/* Avalon4 default values */
+#define AVA2_AVA4_MINERS	10
+#define AVA2_AVA4_VOLTAGE	7000 /* 0.666v */
+#define AVA2_AVA4_FREQUENCY	200  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -63,7 +68,7 @@
 #define AVA2_P_COINBASE	13
 #define AVA2_P_MERKLES	14
 #define AVA2_P_HEADER	15
-#define AVA2_P_POLLING  16
+#define AVA2_P_POLLING	16
 #define AVA2_P_TARGET	17
 #define AVA2_P_REQUIRE	18
 #define AVA2_P_SET	19
@@ -75,18 +80,37 @@
 #define AVA2_P_STATUS		24
 #define AVA2_P_ACKDETECT	25
 #define AVA2_P_TEST_RET		26
-#define AVA2_P_LONGCOINBASE	27
-/* Avalon2 protocol package type */
+
+/* Only for addressing */
+#define AVA2_P_DISCOVER		30
+#define AVA2_P_SETDEVID		31
+
+#define AVA2_P_ACKDISCOVER	40
+#define AVA2_P_ACKSETDEVID	41
+
+#define AVA2_MODULE_BROADCAST	0
 
 /* Avalon2/3 firmware prefix */
 #define AVA2_FW2_PREFIXSTR	"20"
 #define AVA2_FW3_PREFIXSTR	"33"
+#define AVA2_FW35_PREFIXSTR	"35"
+#define AVA2_FW4_PREFIXSTR	"40"
 
 #define AVA2_MM_VERNULL		"NONE"
 
 #define AVA2_ID_AVA2		3255
 #define AVA2_ID_AVA3		3233
+#define AVA2_ID_AVA4		3222
 #define AVA2_ID_AVAX		3200
+
+#define AVA2_IIC_RESET		0xa0
+#define AVA2_IIC_INIT		0xa1
+#define AVA2_IIC_DEINIT		0xa2
+#define AVA2_IIC_WRITE		0xa3
+#define AVA2_IIC_READ		0xa4
+#define AVA2_IIC_XFER		0xa5
+
+#define AVA2_DNA_LEN		8
 
 enum avalon2_fan_fixed {
 	FAN_FIXED,
@@ -110,6 +134,7 @@ struct avalon2_info {
 
 	int modulars[AVA2_DEFAULT_MODULARS];
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
+	char mm_dna[AVA2_DEFAULT_MODULARS][AVA2_DNA_LEN];
 	int dev_type[AVA2_DEFAULT_MODULARS];
 	bool enable[AVA2_DEFAULT_MODULARS];
 
@@ -137,13 +162,30 @@ struct avalon2_info {
 	int led_red[AVA2_DEFAULT_MODULARS];
 };
 
+struct avalon2_iic_info {
+	uint8_t iic_op;
+	union {
+		uint32_t speed;
+		uint8_t slave_addr;
+	} iic_param;
+};
+
+struct avalon2_discover_info {
+	char mm_dna[AVA2_DNA_LEN];
+	int modular_id;
+	char mm_version[16];
+};
+
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
 #define AVA2_READ_SIZE AVA2_WRITE_SIZE
+#define AVA2_IIC_P_SIZE	64
+#define AVA2_IIC_SPEED_DEFAUL	1000000
 
 #define AVA2_GETS_OK 0
 #define AVA2_GETS_TIMEOUT -1
 #define AVA2_GETS_RESTART -2
 #define AVA2_GETS_ERROR -3
+#define AVA2_GETS_EXTRA_DATA -4
 
 #define AVA2_SEND_OK 0
 #define AVA2_SEND_ERROR -1
