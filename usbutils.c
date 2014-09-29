@@ -109,14 +109,13 @@ static cgtimer_t usb11_cgt;
 static struct list_head ut_list;
 
 #ifdef USE_BFLSC
-// N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
-static struct usb_epinfo bas_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+static struct usb_epinfo bflsc_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPO(2), 0, 0 }
 };
 
-static struct usb_intinfo bas_ints[] = {
-	USB_EPS(0, bas_epinfos)
+static struct usb_intinfo bflsc_ints[] = {
+	USB_EPS(0, bflsc_epinfos)
 };
 #endif
 
@@ -415,7 +414,19 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.timeout = BFLSC_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		INTINFO(bas_ints) },
+		INTINFO(bflsc_ints) },
+	{
+		.drv = DRIVER_bflsc,
+		.name = "BMA",
+		.ident = IDENT_BMA,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6014,
+		//.iManufacturer = "BUTTERFLY LABS"
+		.iProduct = "BitFORCE SC-28nm",
+		.config = 1,
+		.timeout = BFLSC_TIMEOUT_MS,
+		.latency = LATENCY_STD,
+		INTINFO(bflsc_ints) },
 #endif
 #ifdef USE_BITFORCE
 	{
@@ -558,16 +569,6 @@ static struct usb_find_devices find_dev[] = {
 		INTINFO(ava_ints) },
 #endif
 #ifdef USE_AVALON2
-	{
-		.drv = DRIVER_avalon2,
-		.name = "AV2",
-		.ident = IDENT_AV2,
-		.idVendor = 0x067b,
-		.idProduct = 0x2303,
-		.config = 1,
-		.timeout = AVALON_TIMEOUT_MS,
-		.latency = LATENCY_UNUSED,
-		INTINFO(ava2_ints) },
 	{
 		.drv = DRIVER_avalon2,
 		.name = "AV2",
