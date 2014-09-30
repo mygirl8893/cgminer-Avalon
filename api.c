@@ -4641,10 +4641,9 @@ static void mcast()
 
 	sprintf(port_s, "%d", opt_api_mcast_port);
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = AF_UNSPEC;
 	if (getaddrinfo(opt_api_mcast_addr, port_s, &hints, &res) != 0)
-		quit(1, "Invalid Multicast Address");
+		quit(1, "Invalid API Multicast Address");
 	host = res;
 	while (host != NULL){
 		mcast_sock = socket(res->ai_family, SOCK_DGRAM, 0);
@@ -4654,7 +4653,7 @@ static void mcast()
 	}
 	if (mcast_sock == INVSOCK) {
 		freeaddrinfo(res);
-		quit(1, "Could not open multicast socket");
+		quit(1, "API mcast could not open socket");
 	}
 
 	int optval = 1;
@@ -4686,7 +4685,7 @@ static void mcast()
 		case AF_INET: {
 			struct ip_mreq grp;
 			memset(&grp, 0, sizeof(grp));
-			grp.imr_multiaddr.s_addr = ((struct sockaddr_in *)host)->sin_addr.s_addr;
+			grp.imr_multiaddr.s_addr = ((struct sockaddr_in *)(host->ai_addr))->sin_addr.s_addr;
 			grp.imr_interface.s_addr = INADDR_ANY;
 
 			if (SOCKETFAIL(setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
@@ -4771,7 +4770,7 @@ static void mcast()
 				}
 				if (reply_sock == INVSOCK) {
 					freeaddrinfo(res);
-					applog(LOG_ERR, "Could not open socket to client %s", connectaddr);
+					applog(LOG_ERR, "API mcast could not open socket to client %s", connectaddr);
 					continue;
 				}
 
