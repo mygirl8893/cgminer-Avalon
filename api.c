@@ -4697,7 +4697,7 @@ static void mcast()
 		}
 		case AF_INET6: {
 			struct ipv6_mreq grp;
-			memcpy(&grp.ipv6mr_multiaddr, &(((struct sockaddr_in6 *)host)->sin6_addr),
+			memcpy(&grp.ipv6mr_multiaddr, &(((struct sockaddr_in6 *)(host->ai_addr))->sin6_addr),
 					sizeof(struct in6_addr));
 			grp.ipv6mr_interface= 0;
 
