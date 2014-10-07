@@ -285,7 +285,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 {
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
-	struct pool *pool, *real_pool, *pool_stratum = &info->pool;
+	struct pool *pool, *real_pool;
+	struct pool *pool_stratum0 = &info->pool0;
+	struct pool *pool_stratum1 = &info->pool1;
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
@@ -342,9 +344,13 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 			real_pool = pool = pools[pool_no];
 			if (job_idcmp(job_id, pool->swork.job_id)) {
-				if (!job_idcmp(job_id, pool_stratum->swork.job_id)) {
-					applog(LOG_DEBUG, "Avalon2: Match to previous stratum! (%s)", pool_stratum->swork.job_id);
-					pool = pool_stratum;
+				if (!job_idcmp(job_id, pool_stratum0->swork.job_id)) {
+					applog(LOG_DEBUG, "Avalon2: Match to previous stratum0! (%s)", pool_stratum0->swork.job_id);
+					pool = pool_stratum0;
+				} else if (!job_idcmp(job_id, pool_stratum1->swork.job_id)) {
+					applog(LOG_DEBUG, "Avalon2: Match to previous stratum1! (%s)", pool_stratum1->swork.job_id);
+					pool = pool_stratum1;
+
 				} else {
 					applog(LOG_ERR, "Avalon2: Cannot match to any stratum! (%s)", pool->swork.job_id);
 					break;
@@ -956,7 +962,8 @@ static bool avalon2_prepare(struct thr_info *thr)
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
-	cglock_init(&info->pool.data_lock);
+	cglock_init(&info->pool0.data_lock);
+	cglock_init(&info->pool1.data_lock);
 
 	return true;
 }
@@ -998,12 +1005,14 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 	return 0;
 }
 
-static void copy_pool_stratum(struct avalon2_info *info, struct pool *pool)
+static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 {
 	int i;
 	int merkles = pool->merkles;
 	size_t coinbase_len = pool->coinbase_len;
-	struct pool *pool_stratum = &info->pool;
+
+	if (!pool->swork.job_id)
+		return;
 
 	if (!job_idcmp((unsigned char *)pool->swork.job_id, pool_stratum->swork.job_id))
 		return;
@@ -1093,7 +1102,8 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	cgtime(&info->last_stratum);
 	cg_rlock(&pool->data_lock);
 	info->pool_no = pool->pool_no;
-	copy_pool_stratum(info, pool);
+	copy_pool_stratum(&info->pool1, &info->pool0);
+	copy_pool_stratum(&info->pool0, pool);
 	avalon2_stratum_pkgs(avalon2, pool);
 	cg_runlock(&pool->data_lock);
 
