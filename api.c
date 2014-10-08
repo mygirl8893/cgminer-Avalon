@@ -4477,8 +4477,8 @@ static void setup_ipaccess()
 
 		ipaccess[ips].group = group;
 
-		if (strcmp(ptr, ALLIP) == 0){
-			for (i = 0; i < 16; i++){
+		if (strcmp(ptr, ALLIP) == 0) {
+			for (i = 0; i < 16; i++) {
 				ipaccess[ips].ip.s6_addr[i] = 0;
 				ipaccess[ips].mask.s6_addr[i] = 0;
 			}
@@ -4487,7 +4487,7 @@ static void setup_ipaccess()
 			ipv6 = false;
 			end = strchr(ptr, '/');
 			slash = end--;
-			if (*ptr == '[' && *end == ']'){
+			if (*ptr == '[' && *end == ']') {
 				*(ptr++) = '\0';
 				*(end--) = '\0';
 				ipv6 = true;
@@ -4508,7 +4508,7 @@ static void setup_ipaccess()
 				shift = 7;
 				while (mask-- > 0) {
 					ipaccess[ips].mask.s6_addr[i] |= 1 << shift;
-					if (shift-- == 0){
+					if (shift-- == 0) {
 						i++;
 						shift = 7;
 					}
@@ -4517,7 +4517,7 @@ static void setup_ipaccess()
 
 			for (i = 0; i < 16; i++)
 				ipaccess[ips].ip.s6_addr[i] = 0; // missing default to '[::]'
-			if (ipv6){
+			if (ipv6) {
 				if (inet_pton(AF_INET6, ptr, &(ipaccess[ips].ip)) != 1)
 					goto popipo;
 			}
@@ -4580,7 +4580,7 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 			*connectaddr, INET6_ADDRSTRLEN, NULL, 0, NI_NUMERICHOST);
 
 	// v4 mapped v6 address, such as "::ffff:255.255.255.255"
-	if (cli->ss_family == AF_INET){
+	if (cli->ss_family == AF_INET) {
 		sprintf(tmp, "::ffff:%s", *connectaddr);
 		inet_pton(AF_INET6, tmp, &client_ip);
 	}
@@ -4589,7 +4589,7 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 
 	*group = NOPRIVGROUP;
 	if (opt_api_allow) {
-		for (i = 0; i < ips; i++){
+		for (i = 0; i < ips; i++) {
 			match = true;
 			for (j = 0; j < 16; j++)
 				if ((client_ip.s6_addr[j] & ipaccess[i].mask.s6_addr[j])
@@ -4597,7 +4597,7 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 					match = false;
 					break;
 				}
-			if (match){
+			if (match) {
 				addrok = true;
 				*group = ipaccess[i].group;
 				break;
@@ -4645,7 +4645,7 @@ static void mcast()
 	if (getaddrinfo(opt_api_mcast_addr, port_s, &hints, &res) != 0)
 		quit(1, "Invalid API Multicast Address");
 	host = res;
-	while (host != NULL){
+	while (host != NULL) {
 		mcast_sock = socket(res->ai_family, SOCK_DGRAM, 0);
 		if (mcast_sock > 0)
 			break;
@@ -4894,7 +4894,7 @@ void api(int api_thr_id)
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = AF_UNSPEC;
-	if (getaddrinfo(opt_api_host, port_s, &hints, &res) != 0){
+	if (getaddrinfo(opt_api_host, port_s, &hints, &res) != 0) {
 		applog(LOG_ERR, "API failed to resolve %s", opt_api_host);
 		free(apisock);
 		return;
