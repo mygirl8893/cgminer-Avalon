@@ -1,6 +1,5 @@
 /*
  * Copyright 2011 Kano
- * Copyright 2014 Mikeqin
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -14,7 +13,6 @@
 
 #include "config.h"
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +36,7 @@
 	#define INVSOCK -1
 	#define CLOSESOCKET close
 
-	#define SOCKETINIT do{}while(0)
+	#define SOCKETINIT {}
 
 	#define SOCKERRMSG strerror(errno)
 #endif
@@ -112,6 +110,7 @@
 
 	static char *WSAErrorMsg()
 	{
+		char *msg;
 		int i;
 		int id = WSAGetLastError();
 
@@ -129,21 +128,16 @@
 
 	static WSADATA WSA_Data;
 
-	#define SOCKETINIT	do {  \
-				    int wsa; \
-				    if (wsa = WSAStartup(0x0202, &WSA_Data)) { \
-					    printf("Socket startup failed: %d\n", wsa); \
-					    return 1; \
-					}  \
-				} while (0)
+	#define SOCKETINIT	int wsa; \
+				if (wsa = WSAStartup(0x0202, &WSA_Data)) { \
+					printf("Socket startup failed: %d\n", wsa); \
+					return 1; \
+				}
 
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
 	#endif
 #endif
-
-#undef RECVSIZE
-#define RECVSIZE 65500
 
 static const char SEPARATOR = '|';
 static const char COMMA = ',';
@@ -193,22 +187,23 @@ void display(char *buf)
 	}
 }
 
+#define SOCKSIZ 65535
+
 int callapi(char *command, char *host, short int port)
 {
-	size_t bufsz = RECVSIZE;
-	char *buf = malloc(bufsz + 1);
 	struct hostent *ip;
 	struct sockaddr_in serv;
 	SOCKETTYPE sock;
 	int ret = 0;
-	int n, p;
+	int n;
+	char *buf = NULL;
+	size_t len, p;
 
-	assert(buf);
 	SOCKETINIT;
 
 	ip = gethostbyname(host);
 	if (!ip) {
-		printf("Failed to resolve host %s\n", host);
+		printf("Couldn't get hostname: '%s'\n", host);
 		return 1;
 	}
 
@@ -234,16 +229,24 @@ int callapi(char *command, char *host, short int port)
 		ret = 1;
 	}
 	else {
+		len = SOCKSIZ;
+		buf = malloc(len+1);
+		if (!buf) {
+			printf("Err: OOM (%d)\n", (int)(len+1));
+			return 1;
+		}
 		p = 0;
-		buf[0] = '\0';
-		while (1) {
-			if (bufsz < RECVSIZE + p) {
-				bufsz *= 2;
-				buf = realloc(buf, bufsz);
-				assert(buf);
+		while (42) {
+			if ((len - p) < 1) {
+				len += SOCKSIZ;
+				buf = realloc(buf, len+1);
+				if (!buf) {
+					printf("Err: OOM (%d)\n", (int)(len+1));
+					return 1;
+				}
 			}
 
-			n = recv(sock, &buf[p], RECVSIZE, 0);
+			n = recv(sock, &buf[p], len - p , 0);
 
 			if (SOCKETFAIL(n)) {
 				printf("Recv failed: %s\n", SOCKERRMSG);
@@ -255,20 +258,16 @@ int callapi(char *command, char *host, short int port)
 				break;
 
 			p += n;
-			buf[p] = '\0';
 		}
+		buf[p] = '\0';
 
-		if (!ONLY)
-			printf("Reply was '%s'\n", buf);
-		else
+		if (ONLY)
 			printf("%s\n", buf);
-
-		if (!ONLY)
+		else {
+			printf("Reply was '%s'\n", buf);
 			display(buf);
+		}
 	}
-
-	if (buf)
-	    free(buf);
 
 	CLOSESOCKET(sock);
 
@@ -303,7 +302,7 @@ int main(int argc, char *argv[])
 		if (strcmp(argv[1], "-?") == 0
 		||  strcmp(argv[1], "-h") == 0
 		||  strcmp(argv[1], "--help") == 0) {
-			fprintf(stderr, "Usage: %s [command [ip/host [port]]]\n", argv[0]);
+			fprintf(stderr, "usAge: %s [command [ip/host [port]]]\n", argv[0]);
 			return 1;
 		}
 

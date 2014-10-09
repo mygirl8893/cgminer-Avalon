@@ -534,8 +534,8 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			_transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_BAUD, 0,
 				 interface, &data, sizeof(data), C_SETBAUD);
 			break;
-		case IDENT_AVA:
-			break;
+ 		case IDENT_AVA:
+ 			break;
 		default:
 			quit(1, "icarus_intialise() called with invalid %s cgid %i ident=%d",
 				icarus->drv->name, icarus->cgminer_id, ident);
@@ -1118,11 +1118,11 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 	info->ident = usb_ident(icarus);
 	switch (info->ident) {
 		case IDENT_ICA:
+        case IDENT_AVA:
 		case IDENT_BLT:
 		case IDENT_LLT:
 		case IDENT_AMU:
 		case IDENT_CMR1:
-		case IDENT_AVA:
 			info->timeout = ICARUS_WAIT_TIMEOUT;
 			break;
 		case IDENT_ANU:

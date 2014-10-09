@@ -348,6 +348,9 @@ struct device_drv {
 
 	/* Highest target diff the device supports */
 	double max_diff;
+
+	/* Lowest diff the controller can safely run at */
+	double min_diff;
 };
 
 extern struct device_drv *copy_drv(struct device_drv*);
@@ -964,6 +967,7 @@ extern bool opt_protocol;
 extern bool have_longpoll;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
+extern int opt_suggest_diff;
 extern char *cgminer_path;
 extern bool opt_fail_only;
 extern bool opt_lowmem;
@@ -1025,7 +1029,10 @@ extern bool opt_bitmain_tempoverctrl;
 #ifdef USE_MINION
 extern int opt_minion_chipreport;
 extern char *opt_minion_cores;
+extern bool opt_minion_extra;
 extern char *opt_minion_freq;
+extern int opt_minion_freqchange;
+extern int opt_minion_freqpercent;
 extern bool opt_minion_idlecount;
 extern int opt_minion_ledcount;
 extern int opt_minion_ledlimit;
@@ -1445,6 +1452,7 @@ extern int share_work_tdiff(struct cgpu_info *cgpu);
 extern struct work *get_work(struct thr_info *thr, const int thr_id);
 extern void __add_queued(struct cgpu_info *cgpu, struct work *work);
 extern struct work *get_queued(struct cgpu_info *cgpu);
+extern struct work *__get_queued(struct cgpu_info *cgpu);
 extern void add_queued(struct cgpu_info *cgpu, struct work *work);
 extern struct work *get_queue_work(struct thr_info *thr, struct cgpu_info *cgpu, int thr_id);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);

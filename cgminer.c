@@ -255,7 +255,10 @@ static char *opt_set_null;
 #ifdef USE_MINION
 int opt_minion_chipreport;
 char *opt_minion_cores;
+bool opt_minion_extra;
 char *opt_minion_freq;
+int opt_minion_freqchange = 1000;
+int opt_minion_freqpercent = 70;
 bool opt_minion_idlecount;
 int opt_minion_ledcount;
 int opt_minion_ledlimit = 98;
@@ -401,7 +404,7 @@ struct stratum_share {
 static struct stratum_share *stratum_shares = NULL;
 
 char *opt_socks_proxy = NULL;
-
+int opt_suggest_diff;
 static const char def_conf[] = "cgminer.conf";
 static char *default_config;
 static bool config_loaded;
@@ -944,7 +947,7 @@ static char *set_userpass(const char *arg)
 		return "Failed to find : delimited user info";
 	pool->rpc_pass = strtok(NULL, ":");
 	if (!pool->rpc_pass)
-		return "Failed to find : delimited pass info";
+		pool->rpc_pass = strdup("");
 
 	return NULL;
 }
@@ -1136,10 +1139,10 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_AVALON2
 	OPT_WITH_CBARG("--avalon2-freq",
 		     set_avalon2_freq, NULL, &opt_set_avalon2_freq,
-		     "Set frequency range for Avalon2, single value or range"),
+		     "Set frequency range for Avalon2, single value or range, step: 25"),
 	OPT_WITH_CBARG("--avalon2-voltage",
 		     set_avalon2_voltage, NULL, &opt_set_avalon2_voltage,
-		     "Set Avalon2 core voltage, in millivolts"),
+		     "Set Avalon2 core voltage, in millivolts, step: 125"),
 	OPT_WITH_CBARG("--avalon2-fan",
 		     set_avalon2_fan, NULL, &opt_set_avalon2_fan,
 		     "Set Avalon2 target fan speed"),
@@ -1376,9 +1379,18 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--minion-cores",
 		     opt_set_charp, NULL, &opt_minion_cores,
 		     opt_hidden),
+	OPT_WITHOUT_ARG("--minion-extra",
+		     opt_set_bool, &opt_minion_extra,
+		     opt_hidden),
 	OPT_WITH_ARG("--minion-freq",
 		     opt_set_charp, NULL, &opt_minion_freq,
 		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)"),
+	OPT_WITH_ARG("--minion-freqchange",
+		     set_int_0_to_9999, opt_show_intval, &opt_minion_freqchange,
+		     "Millisecond total time to do frequency changes (default: 1000)"),
+	OPT_WITH_ARG("--minion-freqpercent",
+		     set_int_0_to_100, opt_show_intval, &opt_minion_freqpercent,
+		     "Percentage to use when starting up a chip (default: 70%)"),
 	OPT_WITHOUT_ARG("--minion-idlecount",
 		     opt_set_bool, &opt_minion_idlecount,
 		     "Report when IdleCount is >0 or changes"),
@@ -1497,6 +1509,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
+	OPT_WITH_ARG("--suggest-diff",
+		     opt_set_intval, NULL, &opt_suggest_diff,
+		     "Suggest miner difficulty for pool to user (default: none)"),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
@@ -6149,8 +6164,6 @@ static bool cnx_needed(struct pool *pool)
 	 * it. */
 	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
 		return true;
-	if (pool_unworkable(cp))
-		return true;
 	/* We've run out of work, bring anything back to life. */
 	if (no_work)
 		return true;
@@ -6356,14 +6369,13 @@ static void *stratum_sthread(void *userdata)
 			bool sessionid_match;
 
 			if (likely(stratum_send(pool, s, strlen(s)))) {
-				if (pool_tclear(pool, &pool->submit_fail))
-						applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
-
 				mutex_lock(&sshare_lock);
 				HASH_ADD_INT(stratum_shares, id, sshare);
 				pool->sshares++;
 				mutex_unlock(&sshare_lock);
 
+				if (pool_tclear(pool, &pool->submit_fail))
+						applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 				applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
 				submitted = true;
 				break;
@@ -6874,6 +6886,7 @@ bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *r
 
 	work->mined = true;
 	work->device_diff = MIN(drv->max_diff, work->work_difficulty);
+	work->device_diff = MAX(drv->min_diff, work->device_diff);
 
 	ret = submit_nonce(thr, work, nonce);
 	free_work(work);
@@ -7155,6 +7168,7 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
 	thread_reportin(thr);
 	work->mined = true;
 	work->device_diff = MIN(cgpu->drv->max_diff, work->work_difficulty);
+	work->device_diff = MAX(cgpu->drv->min_diff, work->device_diff);
 	return work;
 }
 
@@ -7408,6 +7422,7 @@ static void hash_sole_work(struct thr_info *mythr)
 			break;
 		}
 		work->device_diff = MIN(drv->max_diff, work->work_difficulty);
+		work->device_diff = MAX(drv->min_diff, work->device_diff);
 
 		do {
 			cgtime(&tv_start);
@@ -7561,14 +7576,10 @@ void __add_queued(struct cgpu_info *cgpu, struct work *work)
 	HASH_ADD_INT(cgpu->queued_work, id, work);
 }
 
-/* This function is for retrieving one work item from the unqueued pointer and
- * adding it to the hashtable of queued work. Code using this function must be
- * able to handle NULL as a return which implies there is no work available. */
-struct work *get_queued(struct cgpu_info *cgpu)
+struct work *__get_queued(struct cgpu_info *cgpu)
 {
 	struct work *work = NULL;
 
-	wr_lock(&cgpu->qlock);
 	if (cgpu->unqueued_work) {
 		work = cgpu->unqueued_work;
 		if (unlikely(stale_work(work, false))) {
@@ -7578,6 +7589,19 @@ struct work *get_queued(struct cgpu_info *cgpu)
 			__add_queued(cgpu, work);
 		cgpu->unqueued_work = NULL;
 	}
+
+	return work;
+}
+
+/* This function is for retrieving one work item from the unqueued pointer and
+ * adding it to the hashtable of queued work. Code using this function must be
+ * able to handle NULL as a return which implies there is no work available. */
+struct work *get_queued(struct cgpu_info *cgpu)
+{
+	struct work *work;
+
+	wr_lock(&cgpu->qlock);
+	work = __get_queued(cgpu);
 	wr_unlock(&cgpu->qlock);
 
 	return work;
@@ -8742,16 +8766,18 @@ static bool input_pool(bool live)
 	wlogprint("Input server details.\n");
 
 	url = curses_input("URL");
-	if (!url)
+	if (!strcmp(url, "-1"))
 		goto out;
 
 	user = curses_input("Username");
-	if (!user)
+	if (!strcmp(user, "-1"))
 		goto out;
 
 	pass = curses_input("Password");
-	if (!pass)
-		goto out;
+	if (!strcmp(pass, "-1")) {
+		free(pass);
+		pass = strdup("");
+	}
 
 	pool = add_pool();
 
@@ -8773,12 +8799,9 @@ out:
 	immedok(logwin, false);
 
 	if (!ret) {
-		if (url)
-			free(url);
-		if (user)
-			free(user);
-		if (pass)
-			free(pass);
+		free(url);
+		free(user);
+		free(pass);
 	}
 	return ret;
 }
@@ -9029,6 +9052,7 @@ void null_device_drv(struct device_drv *drv)
 
 	drv->zero_stats = &noop_zero_stats;
 	drv->max_diff = 1;
+	drv->min_diff = 1;
 }
 
 void enable_device(struct cgpu_info *cgpu)
@@ -9536,7 +9560,9 @@ int main(int argc, char *argv[])
 		pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 		if (!pool->rpc_userpass) {
-			if (!pool->rpc_user || !pool->rpc_pass)
+			if (!pool->rpc_pass)
+				pool->rpc_pass = strdup("");
+			if (!pool->rpc_user)
 				early_quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
 			siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
 			pool->rpc_userpass = malloc(siz);
