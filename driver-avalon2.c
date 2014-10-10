@@ -444,7 +444,6 @@ static int avalon2_iic_xfer(struct cgpu_info *avalon2,
 	if (err || *write != wlen)
 		applog(LOG_DEBUG, "Avalon2: AUC xfer %d, w(%d-%d)!", err, wlen, *write);
 
-	cgsleep_ms(10);		/* FIXME: xiangfu */
 	rlen += 4; 		/* Add 4 bytes IIC header */
 	err = usb_read(avalon2, (char *)rbuf, rlen, read, C_AVA2_READ);
 	if (err || *read != rlen) {
@@ -714,7 +713,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 	}
 	avalon2_iic_init(avalon2);
 
-	for (i = 1; i < 101; i++) {
+	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
 		modular[i] = 0;
 		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
 		tmp = be32toh(i);
@@ -732,51 +731,23 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
 		if (ackdetect != AVA2_P_ACKDETECT)
 			continue;
+
 		modular[i] = 1;
 		memcpy(mm_version[i], ret_pkg.data, 15);
 		mm_version[i][15] = '\0';
 	}
 
-
 	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (modular[i])
 			continue;
-
 		strcpy(mm_version[i], AVA2_MM_VERNULL);
+
 		/* Send out detect pkg */
-		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
-		tmp = be32toh(AVA2_MODULE_BROADCAST);
-		memcpy(detect_pkg.data + 28, &tmp, 4);
-
 		applog(LOG_DEBUG, "Avalon2: AVA2_P_DISCOVER");
-		avalon2_init_pkg(&detect_pkg, AVA2_P_DISCOVER, 1, 1);
-		err = avalon2_iic_xfer_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
-		if (err == AVA2_SEND_OK) {
-			applog(LOG_DEBUG, "%s %d: Avalon2 AUC xfer data with err %d",
-			       avalon2->drv->name, avalon2->device_id, err);
-			break;
-		}
-
-		ackdetect = ret_pkg.type;
-		applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
-		hexdump((uint8_t *)&ret_pkg, AVA2_READ_SIZE);
-		if (ackdetect != AVA2_P_ACKDISCOVER)
-			break;
-		modular[i] = 1;
-		memcpy(mm_version[i], ret_pkg.data, 15);
-		mm_version[i][15] = '\0';
-		memcpy(mm_dna[i], ret_pkg.data + 15, AVA2_DNA_LEN);
-
-		/* Send out SETDEVID pkg */
 		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
-		memcpy(detect_pkg.data, mm_version[i], 15);
-		memcpy(detect_pkg.data + 15, mm_dna[i], AVA2_DNA_LEN);
 		tmp = be32toh(i);
 		memcpy(detect_pkg.data + 28, &tmp, 4);
-
-		applog(LOG_DEBUG, "Avalon2: AVA2_P_SETDEVID");
-		avalon2_init_pkg(&detect_pkg, AVA2_P_SETDEVID, 1, 1);
-
+		avalon2_init_pkg(&detect_pkg, AVA2_P_DISCOVER, 1, 1);
 		err = avalon2_iic_xfer_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
 		if (err != AVA2_SEND_OK) {
 			applog(LOG_DEBUG, "%s %d: Avalon2 AUC xfer data with err %d",
@@ -785,9 +756,15 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		}
 
 		ackdetect = ret_pkg.type;
-		if (ackdetect != AVA2_P_ACKSETDEVID)
+		applog(LOG_DEBUG, "Avalon2 Discover ID[%d]: %d", i, ackdetect);
+		hexdump((uint8_t *)&ret_pkg, AVA2_READ_SIZE);
+		if (ackdetect != AVA2_P_ACKDISCOVER)
 			break;
-		applog(LOG_DEBUG, "Avalon2: Set device ID[%d]: %d", i, ackdetect);
+
+		modular[i] = 1;
+		memcpy(mm_dna[i], ret_pkg.data, AVA2_DNA_LEN);
+		memcpy(mm_version[i], ret_pkg.data + AVA2_DNA_LEN, 15);
+		mm_version[i][15] = '\0';
 	}
 
 	/* We have a real Avalon! */
