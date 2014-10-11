@@ -1155,6 +1155,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon2-polling-delay",
 		     set_int_1_to_65535, opt_show_intval, &opt_avalon2_polling_delay,
 		     "Set Avalon2 polling delay value (ms)"),
+    OPT_WITH_ARG("--avalon2-aucspeed",
+            opt_set_intval, opt_show_intval, &opt_avalon2_aucspeed,
+            "Set Avalon2 AUC IIC bus speed, default (1000000)"),
+    OPT_WITH_ARG("--avalon2-aucxferdelay",
+            opt_set_intval, opt_show_intval, &opt_avalon2_aucxferdelay,
+            "Set Avalon2 AUC IIC xfer delay, default (4800) ~= 1ms"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",

@@ -51,6 +51,8 @@
 #define AVA2_AVA4_MINERS	10
 #define AVA2_AVA4_VOLTAGE	7000 /* 0.666v */
 #define AVA2_AVA4_FREQUENCY	200  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
+#define AVA2_AVA4_AUCSPEED  1000000
+#define AVA2_AVA4_AUCXFERDELAY  4800
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -168,7 +170,7 @@ struct avalon2_info {
 struct avalon2_iic_info {
 	uint8_t iic_op;
 	union {
-		uint32_t speed;
+		uint32_t aucParam[2];
 		uint8_t slave_addr;
 	} iic_param;
 };
@@ -182,7 +184,6 @@ struct avalon2_discover_info {
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
 #define AVA2_READ_SIZE AVA2_WRITE_SIZE
 #define AVA2_IIC_P_SIZE	64
-#define AVA2_IIC_SPEED_DEFAUL	1000000
 
 #define AVA2_GETS_OK 0
 #define AVA2_GETS_TIMEOUT -1
@@ -203,5 +204,7 @@ extern char *set_avalon2_fixed_speed(enum avalon2_fan_fixed *f);
 extern enum avalon2_fan_fixed opt_avalon2_fan_fixed;
 extern int opt_avalon2_overheat;
 extern int opt_avalon2_polling_delay;
+extern int opt_avalon2_aucspeed;
+extern int opt_avalon2_aucxferdelay;
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */

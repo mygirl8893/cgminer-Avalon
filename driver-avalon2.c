@@ -63,6 +63,9 @@ int opt_avalon2_polling_delay = AVALON2_DEFAULT_POLLING_DELAY;
 
 enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
 
+int opt_avalon2_aucspeed = AVA2_AVA4_AUCSPEED;
+int opt_avalon2_aucxferdelay = AVA2_AVA4_AUCXFERDELAY;
+
 #define UNPACK32(x, str)			\
 {						\
 	*((str) + 3) = (uint8_t) ((x)      );	\
@@ -409,12 +412,16 @@ static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_i
 
 	switch (iic_info->iic_op) {
 	case AVA2_IIC_INIT:
-		iic_pkg[0] = 8;	/* 4 bytes IIC header + 4 bytes xfer header */
+		iic_pkg[0] = 12;	/* 4 bytes IIC header + 4 bytes speed + 4 bytes xfer delay */
 		iic_pkg[3] = AVA2_IIC_INIT;
-		iic_pkg[4] = iic_info->iic_param.speed & 0xff;
-		iic_pkg[5] = (iic_info->iic_param.speed >> 8) & 0xff;
-		iic_pkg[6] = (iic_info->iic_param.speed >> 16) & 0xff;
-		iic_pkg[7] = iic_info->iic_param.speed >> 24;
+		iic_pkg[4] = iic_info->iic_param.aucParam[0] & 0xff;
+		iic_pkg[5] = (iic_info->iic_param.aucParam[0] >> 8) & 0xff;
+		iic_pkg[6] = (iic_info->iic_param.aucParam[0] >> 16) & 0xff;
+		iic_pkg[7] = iic_info->iic_param.aucParam[0] >> 24;
+		iic_pkg[8] = iic_info->iic_param.aucParam[1] & 0xff;
+		iic_pkg[9] = (iic_info->iic_param.aucParam[1] >> 8) & 0xff;
+		iic_pkg[10] = (iic_info->iic_param.aucParam[1] >> 16) & 0xff;
+		iic_pkg[11] = iic_info->iic_param.aucParam[1] >> 24;
 		break;
 	case AVA2_IIC_XFER:
 		iic_pkg[0] = 8 + len + 1; /* len + 1 was for converter 39 bytes MM package to 40 bytes */
@@ -469,7 +476,8 @@ static int avalon2_iic_init(struct cgpu_info *avalon2)
 		return 1;
 
 	iic_info.iic_op = AVA2_IIC_INIT;
-	iic_info.iic_param.speed = AVA2_IIC_SPEED_DEFAUL;
+	iic_info.iic_param.aucParam[0] = opt_avalon2_aucspeed;
+	iic_info.iic_param.aucParam[1] = opt_avalon2_aucxferdelay;
 	avalon2_iic_init_pkg(wbuf, &iic_info, NULL, 0);
 
 	rlen = 12;		/* Version length: 12 (AUC-20140909) */
