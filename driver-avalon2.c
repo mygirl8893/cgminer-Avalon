@@ -270,7 +270,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, miner, modular_id;
+	uint32_t nonce, nonce2, ntime, miner, modular_id;
 	int pool_no;
 	uint8_t job_id[4];
 	int tmp;
@@ -298,12 +298,13 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 			memcpy(&miner, ar->data + 0, 4);
 			memcpy(&pool_no, ar->data + 4, 4);
 			memcpy(&nonce2, ar->data + 8, 4);
-			/* Calc time    ar->data + 12 */
+			memcpy(&ntime, ar->data + 12, 4);
 			memcpy(&nonce, ar->data + 16, 4);
 			memcpy(job_id, ar->data + 20, 4);
 
 			miner = be32toh(miner);
 			pool_no = be32toh(pool_no);
+			ntime = be32toh(ntime);
 			if (miner >= AVA2_DEFAULT_MINERS ||
 			    modular_id >= AVA2_DEFAULT_MINERS ||
 			    pool_no >= total_pools ||
@@ -316,8 +317,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 			nonce = be32toh(nonce);
 			nonce -= 0x180;
 
-			applog(LOG_DEBUG, "Avalon2: Found! %d: (%08x) (%08x)",
-			       pool_no, nonce2, nonce);
+			applog(LOG_DEBUG, "Avalon2: Found! %d: (%08x) (%08x) (%d)",
+			       pool_no, nonce2, nonce, ntime);
 
 			real_pool = pool = pools[pool_no];
 			if (job_idcmp(job_id, pool->swork.job_id)) {
@@ -334,7 +335,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 				}
 			}
 
-			submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce);
+			submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
 			break;
 		case AVA2_P_STATUS:
 			applog(LOG_DEBUG, "Avalon2: AVA2_P_STATUS");

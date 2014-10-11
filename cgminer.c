@@ -6862,7 +6862,7 @@ void set_target(unsigned char *dest_target, double diff)
 
 #if defined (USE_AVALON2) || defined (USE_HASHRATIO)
 bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
-			 uint32_t nonce2, uint32_t nonce)
+			 uint32_t nonce2, uint32_t nonce, uint32_t ntime)
 {
 	const int thr_id = thr->id;
 	struct cgpu_info *cgpu = thr->cgpu;
@@ -6875,6 +6875,10 @@ bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *r
 	cg_wunlock(&pool->data_lock);
 
 	gen_stratum_work(pool, work);
+	while (ntime--) {
+		roll_work(work);
+	}
+
 	work->pool = real_pool;
 
 	work->thr_id = thr_id;
