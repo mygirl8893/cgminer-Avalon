@@ -89,7 +89,6 @@
 #define AVA2_P_ACKSETDEVID	41
 
 #define AVA2_MODULE_BROADCAST	0
-#define AVA2_MODULE_IDNULL		(uint32_t)-1
 
 /* Avalon2/3 firmware prefix */
 #define AVA2_FW2_PREFIXSTR	"20"
@@ -131,7 +130,8 @@ struct avalon2_pkg {
 
 struct avalon2_info {
 	struct timeval last_stratum;
-	struct pool pool;
+	struct pool pool0;
+	struct pool pool1;
 	int pool_no;
 
 	int modulars[AVA2_DEFAULT_MODULARS];
@@ -150,6 +150,7 @@ struct avalon2_info {
 	int fan_pwm;
 	int fan_pct;
 	int temp_max;
+	int auc_temp;
 
 	int fan[2 * AVA2_DEFAULT_MODULARS];
 	int temp[2 * AVA2_DEFAULT_MODULARS];
@@ -162,7 +163,6 @@ struct avalon2_info {
 	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
 
 	int led_red[AVA2_DEFAULT_MODULARS];
-	uint32_t dev_cnt;
 };
 
 struct avalon2_iic_info {
@@ -173,9 +173,9 @@ struct avalon2_iic_info {
 	} iic_param;
 };
 
-struct avalon2_dev_info {
+struct avalon2_discover_info {
 	char mm_dna[AVA2_DNA_LEN];
-	uint32_t modular_id;
+	int modular_id;
 	char mm_version[16];
 };
 
