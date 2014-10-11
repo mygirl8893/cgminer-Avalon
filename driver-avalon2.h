@@ -150,6 +150,7 @@ struct avalon2_info {
 	int fan_pwm;
 	int fan_pct;
 	int temp_max;
+	int auc_temp;
 
 	int fan[2 * AVA2_DEFAULT_MODULARS];
 	int temp[2 * AVA2_DEFAULT_MODULARS];
