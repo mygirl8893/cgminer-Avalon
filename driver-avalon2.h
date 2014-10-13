@@ -21,7 +21,7 @@
 #define AVA2_RESET_FAULT_DECISECONDS	10
 #define AVA2_IO_SPEED		115200
 
-#define AVA2_DEFAULT_MODULARS	4
+#define AVA2_DEFAULT_MODULARS	10
 
 #define AVA2_PWM_MAX	0x3FF
 #define AVA2_DEFAULT_FAN_PWM	15 /* % */
@@ -175,9 +175,8 @@ struct avalon2_iic_info {
 	} iic_param;
 };
 
-struct avalon2_discover_info {
+struct avalon2_dev_info {
 	char mm_dna[AVA2_DNA_LEN];
-	int modular_id;
 	char mm_version[16];
 };
 

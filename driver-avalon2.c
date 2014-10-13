@@ -53,7 +53,6 @@ int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_MIN;
 int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
 static int avalon2_fan_min = get_fan_pwm(AVA2_DEFAULT_FAN_MIN);
 static int avalon2_fan_max = get_fan_pwm(AVA2_DEFAULT_FAN_MAX);
-static struct avalon2_iic_info avalon2_iic;
 
 int opt_avalon2_voltage_min;
 int opt_avalon2_voltage_max;
@@ -65,6 +64,10 @@ enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
 
 int opt_avalon2_aucspeed = AVA2_AVA4_AUCSPEED;
 int opt_avalon2_aucxferdelay = AVA2_AVA4_AUCXFERDELAY;
+
+static int avalon2_dev_add(struct cgpu_info *avalon2, struct avalon2_dev_info *dev_info, uint32_t index);
+static int avalon2_dev_del(struct cgpu_info *avalon2, uint32_t index);
+static struct avalon2_dev_info *avalon2_checkdevs(struct cgpu_info *avalon2, uint32_t index);
 
 #define UNPACK32(x, str)			\
 {						\
@@ -596,6 +599,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	unsigned char target[32];
 	int job_id_len, n2size;
 	unsigned short crc;
+	struct avalon2_dev_info *pdevinfo = NULL;
 
 	/* Send out the first stratum message STATIC */
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %d, %d, %d, %d, %d",
@@ -722,16 +726,23 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	}
 
 	avalon2_iic_getinfo(avalon2);
+
+	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++)
+		if (!info->enable[i]) {
+			pdevinfo = avalon2_checkdevs(avalon2, i);
+			if (pdevinfo)
+				avalon2_dev_add(avalon2, pdevinfo, i);
+		}
 }
 
 static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct avalon2_info *info;
 	int ackdetect;
-	int err, amount;
-	int tmp, i, j, modular[AVA2_DEFAULT_MODULARS] = {};
-	char mm_version[AVA2_DEFAULT_MODULARS][16];
-	char mm_dna[AVA2_DEFAULT_MODULARS][AVA2_DNA_LEN];
+	int err;
+	int tmp, i, modular[AVA2_DEFAULT_MODULARS] = {};
+	struct avalon2_dev_info dev_info[AVA2_DEFAULT_MODULARS];
+	struct avalon2_dev_info *pdevinfo = NULL;
 
 	struct cgpu_info *avalon2 = usb_alloc_cgpu(&avalon2_drv, 1);
 	struct avalon2_pkg detect_pkg;
@@ -764,38 +775,24 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 			continue;
 
 		modular[i] = 1;
-		memcpy(mm_version[i], ret_pkg.data, 15);
-		mm_version[i][15] = '\0';
+		memcpy(dev_info[i].mm_version, ret_pkg.data, 15);
+		dev_info[i].mm_version[15] = '\0';
+		memcpy(dev_info[i].mm_dna, ret_pkg.data + 15, AVA2_DNA_LEN);
 	}
 
 	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (modular[i])
 			continue;
-		strcpy(mm_version[i], AVA2_MM_VERNULL);
 
-		/* Send out detect pkg */
-		applog(LOG_DEBUG, "Avalon2: AVA2_P_DISCOVER");
-		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
-		tmp = be32toh(i);
-		memcpy(detect_pkg.data + 28, &tmp, 4);
-		avalon2_init_pkg(&detect_pkg, AVA2_P_DISCOVER, 1, 1);
-		err = avalon2_iic_xfer_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
-		if (err != AVA2_SEND_OK) {
-			applog(LOG_DEBUG, "%s %d: Avalon2 AUC xfer data with err %d",
-			       avalon2->drv->name, avalon2->device_id, err);
-			break;
+		pdevinfo = avalon2_checkdevs(avalon2, i);
+		if (pdevinfo) {
+			modular[i] = 1;
+			memcpy(&dev_info[i], pdevinfo, sizeof(struct avalon2_dev_info));
+		} else {
+			modular[i] = 0;
+			memset(dev_info[i].mm_dna, '0', AVA2_DNA_LEN);
+			strcpy(dev_info[i].mm_version, AVA2_MM_VERNULL);
 		}
-
-		ackdetect = ret_pkg.type;
-		applog(LOG_DEBUG, "Avalon2 Discover ID[%d]: %d", i, ackdetect);
-		hexdump((uint8_t *)&ret_pkg, AVA2_READ_SIZE);
-		if (ackdetect != AVA2_P_ACKDISCOVER)
-			break;
-
-		modular[i] = 1;
-		memcpy(mm_dna[i], ret_pkg.data, AVA2_DNA_LEN);
-		memcpy(mm_version[i], ret_pkg.data + AVA2_DNA_LEN, 15);
-		mm_version[i][15] = '\0';
 	}
 
 	/* We have a real Avalon! */
@@ -817,33 +814,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 	info->temp_max = 0;
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
-		strcpy(info->mm_version[i], mm_version[i]);
-		info->modulars[i] = modular[i];	/* Enable modular */
-		info->enable[i] = modular[i];
-
-		info->dev_type[i] = AVA2_ID_AVAX;
-		memcpy(info->mm_dna[i], mm_dna, AVA2_DNA_LEN);
-
-		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2)) {
-			info->dev_type[i] = AVA2_ID_AVA2;
-			info->set_voltage = AVA2_DEFAULT_VOLTAGE_MIN;
-			info->set_frequency = AVA2_DEFAULT_FREQUENCY;
-		}
-		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW3_PREFIXSTR, 2)) {
-			info->dev_type[i] = AVA2_ID_AVA3;
-			info->set_voltage = AVA2_AVA3_VOLTAGE;
-			info->set_frequency = AVA2_AVA3_FREQUENCY;
-		}
-		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW35_PREFIXSTR, 2)) {
-			info->dev_type[i] = AVA2_ID_AVA3;
-			info->set_voltage = AVA2_AVA3_VOLTAGE;
-			info->set_frequency = AVA2_AVA3_FREQUENCY;
-		}
-		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW4_PREFIXSTR, 2)) {
-			info->dev_type[i] = AVA2_ID_AVA4;
-			info->set_voltage = AVA2_AVA4_VOLTAGE;
-			info->set_frequency = AVA2_AVA4_FREQUENCY;
-		}
+		avalon2_dev_add(avalon2, &dev_info[i], i);
 	}
 
 	if (!opt_avalon2_voltage_min)
@@ -870,15 +841,126 @@ static bool avalon2_prepare(struct thr_info *thr)
 	return true;
 }
 
+static int avalon2_dev_add(struct cgpu_info *avalon2, struct avalon2_dev_info *dev_info, uint32_t index)
+{
+	struct avalon2_info *info;
+
+	if (index >= AVA2_DEFAULT_MODULARS) {
+		applog(LOG_DEBUG, "Avalon2 add index %d too big!", index);
+		return 1;
+	}
+
+	info = avalon2->device_data;
+	if (!strcmp(dev_info->mm_version, AVA2_MM_VERNULL)) {
+		strcpy(info->mm_version[index], dev_info->mm_version);
+		info->modulars[index] = 1;  /* Enable modular */
+		info->enable[index] = 1;
+
+		memcpy(info->mm_dna[index], dev_info->mm_dna, AVA2_DNA_LEN);
+
+		if (!strncmp((char *)&(info->mm_version[index]), AVA2_FW2_PREFIXSTR, 2)) {
+			info->dev_type[index] = AVA2_ID_AVA2;
+			info->set_voltage = AVA2_DEFAULT_VOLTAGE_MIN;
+			info->set_frequency = AVA2_DEFAULT_FREQUENCY;
+		}
+		if (!strncmp((char *)&(info->mm_version[index]), AVA2_FW3_PREFIXSTR, 2)) {
+			info->dev_type[index] = AVA2_ID_AVA3;
+			info->set_voltage = AVA2_AVA3_VOLTAGE;
+			info->set_frequency = AVA2_AVA3_FREQUENCY;
+		}
+		if (!strncmp((char *)&(info->mm_version[index]), AVA2_FW35_PREFIXSTR, 2)) {
+			info->dev_type[index] = AVA2_ID_AVA3;
+
+			if (!info->set_voltage)
+				info->set_voltage = AVA2_AVA3_VOLTAGE;
+
+			if (!info->set_frequency)
+				info->set_frequency = AVA2_AVA3_FREQUENCY;
+		}
+		if (!strncmp((char *)&(info->mm_version[index]), AVA2_FW4_PREFIXSTR, 2)) {
+			info->dev_type[index] = AVA2_ID_AVA4;
+			if (!info->set_voltage)
+				info->set_voltage = AVA2_AVA4_VOLTAGE;
+
+			if (!info->set_frequency)
+				info->set_frequency = AVA2_AVA4_FREQUENCY;
+		}
+	} else {
+		info->modulars[index] = 0;
+		info->enable[index] = 0;
+
+		memset(info->mm_dna[index], '0', AVA2_DNA_LEN);
+		info->dev_type[index] = AVA2_ID_AVAX;
+	}
+
+    return 0;
+}
+
+static int avalon2_dev_del(struct cgpu_info *avalon2, uint32_t index)
+{
+	struct avalon2_info *info;
+
+	if (index >= AVA2_DEFAULT_MODULARS) {
+		applog(LOG_DEBUG, "Avalon2 del index %d too big!", index);
+		return 1;
+	}
+
+	info = avalon2->device_data;
+	strcpy(info->mm_version[index], AVA2_MM_VERNULL);
+	memset(info->mm_dna[index], '0', AVA2_DNA_LEN);
+	info->modulars[index] = 0;
+	info->enable[index] = 0;
+	info->dev_type[index] = AVA2_ID_AVAX;
+
+	applog(LOG_DEBUG, "Avalon2 dev del id %d", index);
+	return 0;
+}
+
+static struct avalon2_dev_info *avalon2_checkdevs(struct cgpu_info *avalon2, uint32_t index)
+{
+	static struct avalon2_dev_info ava2_dev;
+	struct avalon2_pkg chk_pkg;
+	struct avalon2_ret ret_pkg;
+	int err, tmp, ackdetect;
+
+	strcpy(ava2_dev.mm_version, AVA2_MM_VERNULL);
+	memset(ava2_dev.mm_dna, '0', AVA2_DNA_LEN);
+
+	/* Send out detect pkg */
+	applog(LOG_DEBUG, "Avalon2: AVA2_P_DISCOVER");
+	memset(chk_pkg.data, 0, AVA2_P_DATA_LEN);
+	tmp = be32toh(index);
+	memcpy(chk_pkg.data + 28, &tmp, 4);
+	avalon2_init_pkg(&chk_pkg, AVA2_P_DISCOVER, 1, 1);
+	err = avalon2_iic_xfer_pkg(avalon2, AVA2_MODULE_BROADCAST, &chk_pkg, &ret_pkg);
+	if (err != AVA2_SEND_OK) {
+		applog(LOG_DEBUG, "%s %d: Avalon2 AUC xfer data with err %d",
+			   avalon2->drv->name, avalon2->device_id, err);
+		return NULL;
+	}
+
+	ackdetect = ret_pkg.type;
+	applog(LOG_DEBUG, "Avalon2 Discover ID[%d]: %d", index, ackdetect);
+	hexdump((uint8_t *)&ret_pkg, AVA2_READ_SIZE);
+	if (ackdetect != AVA2_P_ACKDISCOVER)
+		return NULL;
+
+	memcpy(ava2_dev.mm_dna, ret_pkg.data, AVA2_DNA_LEN);
+	memcpy(ava2_dev.mm_version, ret_pkg.data + AVA2_DNA_LEN, 15);
+	ava2_dev.mm_version[15] = '\0';
+
+	return &ava2_dev;
+}
+
 static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalon2_info *info)
 {
-	struct avalon2_pkg send_pkg, discover_pkg;
+	static uint8_t errcnt[AVA2_DEFAULT_MODULARS];
+	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
-	int i, tmp, err, amount;
+	int i, tmp;
 
 	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
-			uint8_t result[AVA2_READ_SIZE];
 			int ret;
 
 			cgsleep_ms(opt_avalon2_polling_delay);
@@ -892,8 +974,16 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 			avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
 
 			ret = avalon2_iic_xfer_pkg(avalon2, i, &send_pkg, &ar);
-			if (ret == AVA2_SEND_OK)
+			if (ret == AVA2_SEND_OK) {
 				decode_pkg(thr, &ar);
+				errcnt[i] = 0;
+			} else {
+				if (errcnt[i] > 10) {
+					avalon2_dev_del(avalon2, i);
+					errcnt[i] = 0;
+				} else
+					errcnt[i]++;
+			}
 		}
 	}
 
