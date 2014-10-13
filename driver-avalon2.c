@@ -1073,15 +1073,18 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	struct avalon2_info *info = cgpu->device_data;
 	int i, j, a, b;
-	char buf[24];
+	char buf[40];
 	double hwp;
 	int minerindex, minercount;
+	char statbuf[AVA2_DEFAULT_MODULARS][200];
+
+	memset(statbuf, 0, sizeof(AVA2_DEFAULT_MODULARS*200));
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, "ID%d MM Version", i + 1);
-		root = api_add_string(root, buf, (char *)&(info->mm_version[i]), false);
+		sprintf(buf, "Ver[%s]", info->mm_version[i]);
+		strcat(statbuf[i], buf);
 	}
 
 	minerindex = 0;
@@ -1101,24 +1104,26 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		if (info->dev_type[i] == AVA2_ID_AVA4)
 			minercount = AVA2_AVA4_MINERS;
 
+		strcat(statbuf[i], " MW[");
 		for (j = minerindex; j < (minerindex + minercount); j++) {
-			sprintf(buf, "Match work count%02d", j+1);
-			root = api_add_int(root, buf, &(info->matching_work[j]), false);
+			sprintf(buf, " %d", info->matching_work[j]);
+			strcat(statbuf[i], buf);
 		}
+		strcat(statbuf[i], "]");
 		minerindex += AVA2_DEFAULT_MINERS;
 	}
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, "Local works%d", i + 1);
-		root = api_add_int(root, buf, &(info->local_works[i]), false);
+		sprintf(buf, " LW[%d]", info->local_works[i]);
+		strcat(statbuf[i], buf);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, "Hardware error works%d", i + 1);
-		root = api_add_int(root, buf, &(info->hw_works[i]), false);
+		sprintf(buf, " HW[%d]", info->hw_works[i]);
+		strcat(statbuf[i], buf);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
@@ -1127,44 +1132,51 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		b = info->local_works[i];
 		hwp = b ? ((double)a / (double)b) : 0;
 
-		sprintf(buf, "Device hardware error%d%%", i + 1);
-		root = api_add_percent(root, buf, &hwp, true);
+		sprintf(buf, " DH[%f%%]", hwp);
+		strcat(statbuf[i], buf);
 	}
-	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i+=2) {
 		if(info->dev_type[i/2] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, "Temperature%d", i + 1);
-		root = api_add_int(root, buf, &(info->temp[i]), false);
+		sprintf(buf, " Temp[%d %d]", info->temp[i], info->temp[i+1]);
+		strcat(statbuf[i/2], buf);
 	}
-	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i+=2) {
 		if(info->dev_type[i/2] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, "Fan%d", i + 1);
-		root = api_add_int(root, buf, &(info->fan[i]), false);
+		sprintf(buf, " Fan[%d %d]", info->fan[i], info->fan[i+1]);
+		strcat(statbuf[i/2], buf);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, "Voltage%d", i + 1);
-		root = api_add_int(root, buf, &(info->get_voltage[i]), false);
+		sprintf(buf, " Vol[%d]", info->get_voltage[i]);
+		strcat(statbuf[i], buf);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, "Frequency%d", i + 1);
-		root = api_add_int(root, buf, &(info->get_frequency[i]), false);
+		sprintf(buf, " Freq[%d]", info->get_frequency[i]);
+		strcat(statbuf[i], buf);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, "Power good %02x", i + 1);
-		root = api_add_int(root, buf, &(info->power_good[i]), false);
+		sprintf(buf, " PG[%d]", info->power_good[i]);
+		strcat(statbuf[i], buf);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, "Led %02x", i + 1);
-		root = api_add_int(root, buf, &(info->led_red[i]), false);
+		sprintf(buf, " Led[%d]", info->led_red[i]);
+		strcat(statbuf[i], buf);
+	}
+
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(info->dev_type[i] == AVA2_ID_AVAX)
+			continue;
+		sprintf(buf, "MM ID%d", i);
+		root = api_add_string(root, buf, statbuf[i], true);
 	}
 
 	sprintf(buf, "AUC Temp");
