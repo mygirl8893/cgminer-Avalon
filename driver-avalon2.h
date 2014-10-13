@@ -134,6 +134,7 @@ struct avalon2_info {
 	struct timeval last_stratum;
 	struct pool pool0;
 	struct pool pool1;
+	struct pool pool2;
 	int pool_no;
 
 	int modulars[AVA2_DEFAULT_MODULARS];
