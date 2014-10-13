@@ -304,6 +304,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 			memcpy(job_id, ar->data + 20, 4);
 
 			miner = be32toh(miner);
+			miner &= 0xffff;
 			pool_no = be32toh(pool_no);
 			ntime = be32toh(ntime);
 			if (miner >= AVA2_DEFAULT_MINERS ||
