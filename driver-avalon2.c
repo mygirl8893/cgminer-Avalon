@@ -275,7 +275,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, ntime, miner, modular_id;
+	uint32_t nonce, nonce2, ntime, miner, modular_id, chip_id;
 	int pool_no;
 	uint8_t job_id[4];
 	int tmp;
@@ -308,6 +308,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 			memcpy(job_id, ar->data + 20, 4);
 
 			miner = be32toh(miner);
+			chip_id = (miner >> 16) & 0xffff;
 			miner &= 0xffff;
 			pool_no = be32toh(pool_no);
 			ntime = be32toh(ntime);
@@ -317,14 +318,21 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 			    pool_no < 0) {
 				applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
 				break;
-			} else
+			} else {
 				info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner]++;
+				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][chip_id]++;
+			}
 			nonce2 = be32toh(nonce2);
 			nonce = be32toh(nonce);
 			nonce -= 0x180;
 
-			applog(LOG_DEBUG, "Avalon2: Found! %d: (%08x) (%08x) (%d)",
-			       pool_no, nonce2, nonce, ntime);
+			applog(LOG_DEBUG, "Avalon2: Found! %d: (%08x) (%08x) (%d) (%d-%d-%d,%d,%d,%d)",
+				pool_no, nonce2, nonce, ntime,
+				miner, info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner],
+				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][0],
+				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][1],
+				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][2],
+				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][3]);
 
 			real_pool = pool = pools[pool_no];
 			if (job_idcmp(job_id, pool->swork.job_id)) {
