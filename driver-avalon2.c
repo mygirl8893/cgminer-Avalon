@@ -1137,7 +1137,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		b = info->local_works[i];
 		hwp = b ? ((double)a / (double)b) : 0;
 
-		sprintf(buf, " DH[%f%%]", hwp);
+		sprintf(buf, " DH[%f%%]", hwp*100);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i+=2) {
