@@ -376,7 +376,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 			info->hw_works[modular_id] += info->hw_work[modular_id];
 
 			info->get_voltage[modular_id] = decode_voltage(info->get_voltage[modular_id]);
-			info->power_good[modular_id] = info->power_good[modular_id]  >> 24;
+			info->power_good[modular_id] = be32toh(info->power_good[modular_id]);
 
 			avalon2->temp = get_temp_max(info);
 			break;
