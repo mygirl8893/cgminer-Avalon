@@ -1083,7 +1083,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	int minerindex, minercount;
 	char statbuf[AVA2_DEFAULT_MODULARS][200];
 
-	memset(statbuf, 0, sizeof(AVA2_DEFAULT_MODULARS*200));
+	memset(statbuf, 0, AVA2_DEFAULT_MODULARS*200);
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
