@@ -864,12 +864,13 @@ static int avalon2_dev_add(struct cgpu_info *avalon2, struct avalon2_dev_info *d
 	struct avalon2_info *info;
 
 	if (index >= AVA2_DEFAULT_MODULARS) {
-		applog(LOG_DEBUG, "Avalon2 add index %d too big!", index);
+		applog(LOG_DEBUG, "Avalon2 dev add index %d too big!", index);
 		return 1;
 	}
 
+	applog(LOG_DEBUG, "Avalon2 dev add index %d", index);
 	info = avalon2->device_data;
-	if (!strcmp(dev_info->mm_version, AVA2_MM_VERNULL)) {
+	if (strcmp(dev_info->mm_version, AVA2_MM_VERNULL)) {
 		strcpy(info->mm_version[index], dev_info->mm_version);
 		info->modulars[index] = 1;  /* Enable modular */
 		info->enable[index] = 1;
