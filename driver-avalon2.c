@@ -924,6 +924,9 @@ static int avalon2_dev_del(struct cgpu_info *avalon2, uint32_t index)
 	}
 
 	info = avalon2->device_data;
+	if (!info->enable[index])
+		return 0;
+
 	strcpy(info->mm_version[index], AVA2_MM_VERNULL);
 	memset(info->mm_dna[index], '0', AVA2_DNA_LEN);
 	info->modulars[index] = 0;
