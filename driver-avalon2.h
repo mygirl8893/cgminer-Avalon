@@ -21,7 +21,7 @@
 #define AVA2_RESET_FAULT_DECISECONDS	10
 #define AVA2_IO_SPEED		115200
 
-#define AVA2_DEFAULT_MODULARS	10
+#define AVA2_DEFAULT_MODULARS	4
 
 #define AVA2_PWM_MAX	0x3FF
 #define AVA2_DEFAULT_FAN_PWM	15 /* % */
@@ -51,8 +51,8 @@
 #define AVA2_AVA4_MINERS	10
 #define AVA2_AVA4_VOLTAGE	7000 /* 0.666v */
 #define AVA2_AVA4_FREQUENCY	200  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
-#define AVA2_AVA4_AUCSPEED  1000000
-#define AVA2_AVA4_AUCXFERDELAY  4800
+#define AVA2_AVA4_AUCSPEED	1000000
+#define AVA2_AVA4_AUCXDELAY  4800
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -134,6 +134,7 @@ struct avalon2_info {
 	struct timeval last_stratum;
 	struct pool pool0;
 	struct pool pool1;
+	struct pool pool2;
 	int pool_no;
 
 	int modulars[AVA2_DEFAULT_MODULARS];
@@ -163,6 +164,7 @@ struct avalon2_info {
 	int local_work[AVA2_DEFAULT_MODULARS];
 	int hw_work[AVA2_DEFAULT_MODULARS];
 	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
+	int chipmatching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS][4];
 
 	int led_red[AVA2_DEFAULT_MODULARS];
 };
@@ -204,6 +206,6 @@ extern enum avalon2_fan_fixed opt_avalon2_fan_fixed;
 extern int opt_avalon2_overheat;
 extern int opt_avalon2_polling_delay;
 extern int opt_avalon2_aucspeed;
-extern int opt_avalon2_aucxferdelay;
+extern int opt_avalon2_aucxdelay;
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */
