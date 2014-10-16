@@ -593,7 +593,7 @@ static int avalon2_send_bc_pkgs(struct cgpu_info *avalon2, const struct avalon2_
 	do {
 		if (unlikely(avalon2->usbinfo.nodev))
 			return -1;
-		ret = avalon2_iic_xfer_pkg(avalon2, 0, pkg, NULL);
+		ret = avalon2_iic_xfer_pkg(avalon2, AVA2_MODULE_BROADCAST, pkg, NULL);
 	} while (ret != AVA2_SEND_OK);
 
 	return 0;
