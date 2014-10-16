@@ -418,7 +418,7 @@ out:
  #    INIT: clock_rate[4] + reserved[4] + payload[52]
  #    XFER: txSz[1]+rxSz[1]+options[1]+slaveAddr[1] + payload[56]
  */
-static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_info, uint8_t *buf, int len)
+static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_info, uint8_t *buf, int wlen, int rlen)
 {
 	memset(iic_pkg, 0, AVA2_IIC_P_SIZE);
 
@@ -436,12 +436,12 @@ static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_i
 		iic_pkg[11] = iic_info->iic_param.aucParam[1] >> 24;
 		break;
 	case AVA2_IIC_XFER:
-		iic_pkg[0] = 8 + len + 1; /* len + 1 was for converter 39 bytes MM package to 40 bytes */
+		iic_pkg[0] = 8 + wlen;
 		iic_pkg[3] = AVA2_IIC_XFER;
-		iic_pkg[4] = len + 1;
-		iic_pkg[5] = len + 1;
+		iic_pkg[4] = wlen;
+		iic_pkg[5] = rlen;
 		iic_pkg[7] = iic_info->iic_param.slave_addr;
-		memcpy(iic_pkg + 8, buf, len);
+		memcpy(iic_pkg + 8, buf, wlen);
 		break;
 	case AVA2_IIC_INFO:
 		iic_pkg[0] = 4;
@@ -490,9 +490,9 @@ static int avalon2_iic_init(struct cgpu_info *avalon2)
 	iic_info.iic_op = AVA2_IIC_INIT;
 	iic_info.iic_param.aucParam[0] = opt_avalon2_aucspeed;
 	iic_info.iic_param.aucParam[1] = opt_avalon2_aucxdelay;
-	avalon2_iic_init_pkg(wbuf, &iic_info, NULL, 0);
-
 	rlen = 12;		/* Version length: 12 (AUC-20140909) */
+	avalon2_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
+
 	memset(rbuf, 0, AVA2_IIC_P_SIZE);
 	err = avalon2_iic_xfer(avalon2, wbuf, AVA2_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
@@ -523,13 +523,13 @@ static int avalon2_iic_getinfo(struct cgpu_info *avalon2)
 		return 1;
 
 	iic_info.iic_op = AVA2_IIC_INFO;
-	avalon2_iic_init_pkg(wbuf, &iic_info, NULL, 0);
-
 	/* Device info: (9 bytes)
 	 * tempadc(2), reqRdIndex, reqWrIndex,
 	 * respRdIndex, respWrIndex, tx_flags, state
 	 * */
 	rlen = 7;
+	avalon2_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
+
 	memset(rbuf, 0, AVA2_IIC_P_SIZE);
 	err = avalon2_iic_xfer(avalon2, wbuf, AVA2_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
@@ -575,7 +575,7 @@ static int avalon2_iic_xfer_pkg(struct cgpu_info *avalon2, uint8_t slave_addr,
 	if (ret)
 		rlen = AVA2_READ_SIZE + 1;
 
-	avalon2_iic_init_pkg(wbuf, &iic_info, (uint8_t *)pkg, AVA2_WRITE_SIZE);
+	avalon2_iic_init_pkg(wbuf, &iic_info, (uint8_t *)pkg, AVA2_WRITE_SIZE + 1, rlen);
 	err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
 	if (err || rcnt != rlen)
 		return AVA2_SEND_ERROR;
