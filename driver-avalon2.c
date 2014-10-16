@@ -655,12 +655,13 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	if (avalon2_send_bc_pkgs(avalon2, &pkg))
 		return;
 
-	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s",
-	       pool->swork.job_id);
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
 
 	job_id_len = strlen(pool->swork.job_id);
 	crc = crc16((unsigned char *)pool->swork.job_id, job_id_len);
+	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID[%04x]: %s",
+	       crc, pool->swork.job_id);
+
 	pkg.data[0] = (crc & 0xff00) >> 8;
 	pkg.data[1] = crc & 0x00ff;
 	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
