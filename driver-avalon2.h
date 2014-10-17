@@ -50,7 +50,7 @@
 /* Avalon4 default values */
 #define AVA2_AVA4_MINERS	10
 #define AVA2_AVA4_VOLTAGE	7000 /* 0.666v */
-#define AVA2_AVA4_FREQUENCY	200  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
+#define AVA2_AVA4_FREQUENCY	200  /* MHz * 61.3 = MHs */
 #define AVA2_AVA4_AUCSPEED	1000000
 #define AVA2_AVA4_AUCXDELAY  4800
 
@@ -145,7 +145,7 @@ struct avalon2_info {
 	int dev_type[AVA2_DEFAULT_MODULARS];
 	bool enable[AVA2_DEFAULT_MODULARS];
 
-	int set_frequency;
+	int set_frequency[3];
 	int set_voltage;
 
 	int get_voltage[AVA2_DEFAULT_MODULARS];

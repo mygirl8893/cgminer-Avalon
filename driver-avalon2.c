@@ -46,8 +46,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 #define get_fan_pwm(v)	(AVA2_PWM_MAX - (v) * AVA2_PWM_MAX / 100)
 
-int opt_avalon2_freq_min;
-int opt_avalon2_freq_max;
+int opt_avalon2_freq[3] = {0, 0, 0};
 
 int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_MIN;
 int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
@@ -127,21 +126,52 @@ char *set_avalon2_fixed_speed(enum avalon2_fan_fixed *f)
 
 char *set_avalon2_freq(char *arg)
 {
-	int val1, val2, ret;
+	char *colon1, *colon2, *colon3;
+	int val1 = 0, val2 = 0, val3 = 0;
 
-	ret = sscanf(arg, "%d-%d", &val1, &val2);
-	if (ret < 1)
-		return "No values passed to avalon2-freq";
-	if (ret == 1)
-		val2 = val1;
+	if (!(*arg))
+		return NULL;
 
-	if (val1 < AVA2_DEFAULT_FREQUENCY_MIN || val1 > AVA2_DEFAULT_FREQUENCY_MAX ||
-	    val2 < AVA2_DEFAULT_FREQUENCY_MIN || val2 > AVA2_DEFAULT_FREQUENCY_MAX ||
-	    val2 < val1)
-		return "Invalid value passed to avalon2-freq";
+	colon1 = strchr(arg, ':');
+	if (colon1)
+		*(colon1++) = '\0';
 
-	opt_avalon2_freq_min = val1;
-	opt_avalon2_freq_max = val2;
+	if (*arg) {
+		val1 = atoi(arg);
+		if (val1 < AVA2_DEFAULT_FREQUENCY_MIN || val1 > AVA2_DEFAULT_FREQUENCY_MAX)
+			return "Invalid value1 passed to avalon2-freq";
+	}
+
+	if (colon1 && *colon1) {
+		colon2 = strchr(colon1, ':');
+		if (colon2)
+			*(colon2++) = '\0';
+
+		if (*colon1) {
+			val2 = atoi(colon1);
+			if (val2 < AVA2_DEFAULT_FREQUENCY_MIN || val2 > AVA2_DEFAULT_FREQUENCY_MAX)
+				return "Invalid value2 passed to avalon2-freq";
+		}
+
+		if (colon2 && *colon2) {
+			val3 = atoi(colon2);
+			if (val3 < AVA2_DEFAULT_FREQUENCY_MIN || val3 > AVA2_DEFAULT_FREQUENCY_MAX)
+				return "Invalid value3 passed to avalon2-freq";
+		}
+	}
+
+	if (!val1)
+		val3 = val2 = val1 = AVA2_AVA4_FREQUENCY;
+
+	if (!val2)
+		val3 = val2 = val1;
+
+	if (!val3)
+		val3 = val2;
+
+	opt_avalon2_freq[0] = val1;
+	opt_avalon2_freq[1] = val2;
+	opt_avalon2_freq[2] = val3;
 
 	return NULL;
 }
@@ -826,29 +856,34 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2)) {
 			info->dev_type[i] = AVA2_ID_AVA2;
 			info->set_voltage = AVA2_DEFAULT_VOLTAGE_MIN;
-			info->set_frequency = AVA2_DEFAULT_FREQUENCY;
+			info->set_frequency[0] = AVA2_DEFAULT_FREQUENCY;
 		}
 		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW3_PREFIXSTR, 2)) {
 			info->dev_type[i] = AVA2_ID_AVA3;
 			info->set_voltage = AVA2_AVA3_VOLTAGE;
-			info->set_frequency = AVA2_AVA3_FREQUENCY;
+			info->set_frequency[0] = AVA2_AVA3_FREQUENCY;
 		}
 		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW35_PREFIXSTR, 2)) {
 			info->dev_type[i] = AVA2_ID_AVA3;
 			info->set_voltage = AVA2_AVA3_VOLTAGE;
-			info->set_frequency = AVA2_AVA3_FREQUENCY;
+			info->set_frequency[0] = AVA2_AVA3_FREQUENCY;
 		}
 		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW4_PREFIXSTR, 2)) {
 			info->dev_type[i] = AVA2_ID_AVA4;
 			info->set_voltage = AVA2_AVA4_VOLTAGE;
-			info->set_frequency = AVA2_AVA4_FREQUENCY;
+			info->set_frequency[0] = AVA2_AVA4_FREQUENCY;
+			info->set_frequency[1] = AVA2_AVA4_FREQUENCY;
+			info->set_frequency[2] = AVA2_AVA4_FREQUENCY;
 		}
 	}
 
 	if (!opt_avalon2_voltage_min)
 		opt_avalon2_voltage_min = opt_avalon2_voltage_max = info->set_voltage;
-	if (!opt_avalon2_freq_min)
-		opt_avalon2_freq_min = opt_avalon2_freq_max = info->set_frequency;
+	if (!opt_avalon2_freq[0]) {
+		opt_avalon2_freq[0] = info->set_frequency[0];
+		opt_avalon2_freq[1] = info->set_frequency[1];
+		opt_avalon2_freq[2] = info->set_frequency[2];
+	}
 
 	return avalon2;
 }
@@ -1007,7 +1042,9 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	/* Configuer the parameter from outside */
 	adjust_fan(info);
 	info->set_voltage = opt_avalon2_voltage_min;
-	info->set_frequency = opt_avalon2_freq_min;
+	info->set_frequency[0] = opt_avalon2_freq[0];
+	info->set_frequency[1] = opt_avalon2_freq[1];
+	info->set_frequency[2] = opt_avalon2_freq[2];
 
 	/* Set the Fan, Voltage and Frequency */
 	memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
@@ -1024,7 +1061,8 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
-	tmp = be32toh(info->set_frequency);
+	tmp = info->set_frequency[0] | (info->set_frequency[1] << 10) | (info->set_frequency[2] << 20);
+	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 8, &tmp, 4);
 
 	/* Configure the nonce2 offset and range */
@@ -1199,7 +1237,8 @@ static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	int temp = get_current_temp_max(info);
 	float volts = (float)info->set_voltage / 10000;
 
-	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", info->set_frequency,
+	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", 
+		    (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9,
 		    temp, info->fan_pct, volts);
 }
 
