@@ -767,7 +767,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 		err = avalon2_iic_xfer_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
 		if (err != AVA2_SEND_OK) {
-			applog(LOG_DEBUG, "%s %d: Avalon2 failed AUC xfer data with err %d",
+			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
 			       avalon2->drv->name, avalon2->device_id, err);
 			continue;
 		}
@@ -794,7 +794,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 		avalon2_init_pkg(&detect_pkg, AVA2_P_DISCOVER, 1, 1);
 		err = avalon2_iic_xfer_pkg(avalon2, AVA2_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
 		if (err != AVA2_SEND_OK) {
-			applog(LOG_DEBUG, "%s %d: Avalon2 AUC xfer data with err %d",
+			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
 			       avalon2->drv->name, avalon2->device_id, err);
 			break;
 		}
@@ -876,6 +876,8 @@ static bool avalon2_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
+
+	cglock_init(&info->update_lock);
 
 	cglock_init(&info->pool0.data_lock);
 	cglock_init(&info->pool1.data_lock);
@@ -1004,14 +1006,18 @@ static void avalon2_update(struct cgpu_info *avalon2)
 		return;
 	}
 
-	cgtime(&info->last_stratum);
+	cg_rlock(&info->update_lock);
 	cg_rlock(&pool->data_lock);
+
+	cgtime(&info->last_stratum);
 	info->pool_no = pool->pool_no;
 	copy_pool_stratum(&info->pool2, &info->pool1);
 	copy_pool_stratum(&info->pool1, &info->pool0);
 	copy_pool_stratum(&info->pool0, pool);
 	avalon2_stratum_pkgs(avalon2, pool);
+
 	cg_runlock(&pool->data_lock);
+	cg_runlock(&info->update_lock);
 
 	/* Configuer the parameter from outside */
 	adjust_fan(info);
@@ -1073,7 +1079,10 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	if (tdiff(&current_stratum, &(info->last_stratum)) > (double)(3.0 * 60.0))
 		return 0;
 
+
+	cg_rlock(&info->update_lock);
 	polling(thr, avalon2, info);
+	cg_runlock(&info->update_lock);
 
 	h = 0;
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {

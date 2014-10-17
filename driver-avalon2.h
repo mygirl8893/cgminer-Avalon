@@ -131,6 +131,8 @@ struct avalon2_pkg {
 #define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
+	cglock_t update_lock;
+
 	struct timeval last_stratum;
 	struct pool pool0;
 	struct pool pool1;
