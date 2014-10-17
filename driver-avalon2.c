@@ -53,7 +53,6 @@ int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_MIN;
 int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
 static int avalon2_fan_min = get_fan_pwm(AVA2_DEFAULT_FAN_MIN);
 static int avalon2_fan_max = get_fan_pwm(AVA2_DEFAULT_FAN_MAX);
-static struct avalon2_iic_info avalon2_iic;
 
 int opt_avalon2_voltage_min;
 int opt_avalon2_voltage_max;
@@ -504,10 +503,6 @@ static int avalon2_iic_init(struct cgpu_info *avalon2)
 	return 0;
 }
 
-#define SERIESRESISTOR		10000
-#define THERMISTORNOMINAL 	10000
-#define BCOEFFICIENT 		3950
-#define TEMPERATURENOMINAL 	26
 static int avalon2_iic_getinfo(struct cgpu_info *avalon2)
 {
 	struct avalon2_iic_info iic_info;
@@ -516,7 +511,7 @@ static int avalon2_iic_getinfo(struct cgpu_info *avalon2)
 	uint8_t rbuf[AVA2_IIC_P_SIZE];
 	uint8_t *pdata = rbuf + 4;
 	int adc_val;
-	float auc_temp, resistance;
+	float div_vol;
 	struct avalon2_info *info = avalon2->device_data;
 
 	if (unlikely(avalon2->usbinfo.nodev))
@@ -545,17 +540,9 @@ static int avalon2_iic_getinfo(struct cgpu_info *avalon2)
 			pdata[6]);
 
 	adc_val = be16toh(pdata[0] << 8 | pdata[1]);
-	resistance = (1023.0 / adc_val) - 1;
-	resistance = SERIESRESISTOR / resistance;
+	div_vol = (1023.0 / adc_val) - 1;
 
-	auc_temp = resistance / THERMISTORNOMINAL;
-	auc_temp = log(auc_temp);
-	auc_temp /= BCOEFFICIENT;
-	auc_temp += 1.0 / (TEMPERATURENOMINAL + 273.15);
-	auc_temp = 1.0 / auc_temp;
-	auc_temp -= 273.15;
-
-	info->auc_temp = (int)auc_temp;
+	info->auc_temp = 3.3 * 10000 / div_vol;
 	return 0;
 }
 
@@ -601,7 +588,6 @@ static int avalon2_send_bc_pkgs(struct cgpu_info *avalon2, const struct avalon2_
 
 static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 {
-	struct avalon2_info *info = avalon2->device_data;
 	const int merkle_offset = 36;
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
@@ -741,8 +727,8 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 {
 	struct avalon2_info *info;
 	int ackdetect;
-	int err, amount;
-	int tmp, i, j, modular[AVA2_DEFAULT_MODULARS] = {};
+	int err;
+	int tmp, i, modular[AVA2_DEFAULT_MODULARS] = {};
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
 	char mm_dna[AVA2_DEFAULT_MODULARS][AVA2_DNA_LEN];
 
@@ -888,13 +874,12 @@ static bool avalon2_prepare(struct thr_info *thr)
 
 static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalon2_info *info)
 {
-	struct avalon2_pkg send_pkg, discover_pkg;
+	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
-	int i, tmp, err, amount;
+	int i, tmp;
 
 	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
-			uint8_t result[AVA2_READ_SIZE];
 			int ret;
 
 			cgsleep_ms(opt_avalon2_polling_delay);
@@ -1214,8 +1199,8 @@ static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	int temp = get_current_temp_max(info);
 	float volts = (float)info->set_voltage / 10000;
 
-	tailsprintf(buf, bufsiz, "%4dMhz %2dC/%2dC %3d%% %.3fV", info->set_frequency,
-		    info->auc_temp, temp, info->fan_pct, volts);
+	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", info->set_frequency,
+		    temp, info->fan_pct, volts);
 }
 
 struct device_drv avalon2_drv = {
