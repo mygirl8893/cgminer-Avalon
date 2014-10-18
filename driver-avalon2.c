@@ -293,7 +293,7 @@ static void adjust_fan(struct avalon2_info *info)
 	info->fan_pwm = get_fan_pwm(info->fan_pct);
 }
 
-static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
+static void decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 {
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
@@ -305,136 +305,130 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar)
 	unsigned int expected_crc;
 	unsigned int actual_crc;
 	uint32_t nonce, nonce2, ntime, miner, modular_id, chip_id;
-	int pool_no;
 	uint8_t job_id[4];
-	int tmp;
+	int pool_no, tmp;
 
-	int type = AVA2_GETS_ERROR;
-
-	if (ar->head[0] == AVA2_H1 && ar->head[1] == AVA2_H2) {
-		expected_crc = crc16(ar->data, AVA2_P_DATA_LEN);
-		actual_crc = (ar->crc[0] & 0xff) |
-			((ar->crc[1] & 0xff) << 8);
-
-		type = ar->type;
-		applog(LOG_DEBUG, "Avalon2: %d: expected crc(%04x), actual_crc(%04x)",
-		       type, expected_crc, actual_crc);
-		if (expected_crc != actual_crc)
-			goto out;
-
-		memcpy(&modular_id, ar->data + 28, 4);
-		modular_id = be32toh(modular_id);
-		applog(LOG_DEBUG, "Avalon2: decode modular id: %d", modular_id);
-
-		switch(type) {
-		case AVA2_P_NONCE:
-			applog(LOG_DEBUG, "Avalon2: AVA2_P_NONCE");
-			memcpy(&miner, ar->data + 0, 4);
-			memcpy(&pool_no, ar->data + 4, 4);
-			memcpy(&nonce2, ar->data + 8, 4);
-			memcpy(&ntime, ar->data + 12, 4);
-			memcpy(&nonce, ar->data + 16, 4);
-			memcpy(job_id, ar->data + 20, 4);
-
-			miner = be32toh(miner);
-			chip_id = (miner >> 16) & 0xffff;
-			miner &= 0xffff;
-			pool_no = be32toh(pool_no);
-			ntime = be32toh(ntime);
-			if (miner >= AVA2_DEFAULT_MINERS ||
-			    modular_id >= AVA2_DEFAULT_MINERS ||
-			    pool_no >= total_pools ||
-			    pool_no < 0) {
-				applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
-				break;
-			} else {
-				info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner]++;
-				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][chip_id]++;
-			}
-			nonce2 = be32toh(nonce2);
-			nonce = be32toh(nonce);
-			nonce -= 0x180;
-
-			applog(LOG_DEBUG, "Avalon2: Found! %d: (%08x) (%08x) (%d) (%d-%d-%d,%d,%d,%d)",
-				pool_no, nonce2, nonce, ntime,
-				miner, info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner],
-				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][0],
-				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][1],
-				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][2],
-				info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][3]);
-
-			real_pool = pool = pools[pool_no];
-			if (job_idcmp(job_id, pool->swork.job_id)) {
-				if (!job_idcmp(job_id, pool_stratum0->swork.job_id)) {
-					applog(LOG_DEBUG, "Avalon2: Match to previous stratum0! (%s)", pool_stratum0->swork.job_id);
-					pool = pool_stratum0;
-				} else if (!job_idcmp(job_id, pool_stratum1->swork.job_id)) {
-					applog(LOG_DEBUG, "Avalon2: Match to previous stratum1! (%s)", pool_stratum1->swork.job_id);
-					pool = pool_stratum1;
-				} else if (!job_idcmp(job_id, pool_stratum2->swork.job_id)) {
-					applog(LOG_DEBUG, "Avalon2: Match to previous stratum2! (%s)", pool_stratum2->swork.job_id);
-					pool = pool_stratum2;
-				} else {
-					applog(LOG_ERR, "Avalon2: Cannot match to any stratum! (%s)", pool->swork.job_id);
-					break;
-				}
-			}
-
-			submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
-			break;
-		case AVA2_P_STATUS:
-			applog(LOG_DEBUG, "Avalon2: AVA2_P_STATUS");
-			memcpy(&tmp, ar->data, 4);
-			tmp = be32toh(tmp);
-			info->temp[0 + modular_id * 2] = tmp >> 16;
-			info->temp[1 + modular_id * 2] = tmp & 0xffff;
-
-			memcpy(&tmp, ar->data + 4, 4);
-			tmp = be32toh(tmp);
-			info->fan[0 + modular_id * 2] = tmp >> 16;
-			info->fan[1 + modular_id * 2] = tmp & 0xffff;
-
-			memcpy(&(info->get_frequency[modular_id]), ar->data + 8, 4);
-			memcpy(&(info->get_voltage[modular_id]), ar->data + 12, 4);
-			memcpy(&(info->local_work[modular_id]), ar->data + 16, 4);
-			memcpy(&(info->hw_work[modular_id]), ar->data + 20, 4);
-			memcpy(&(info->power_good[modular_id]), ar->data + 24, 4);
-
-			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
-			if (info->dev_type[modular_id] == AVA2_ID_AVA3)
-				info->get_frequency[modular_id] = info->get_frequency[modular_id] * 768 / 65;
-			if (info->dev_type[modular_id] == AVA2_ID_AVA4)
-				info->get_frequency[modular_id] = info->get_frequency[modular_id] * 3968 / 65;
-			info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
-			info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
-			info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
-
-			info->local_works[modular_id] += info->local_work[modular_id];
-			info->hw_works[modular_id] += info->hw_work[modular_id];
-
-			info->get_voltage[modular_id] = decode_voltage(info->get_voltage[modular_id]);
-			info->power_good[modular_id] = be32toh(info->power_good[modular_id]);
-
-			avalon2->temp = get_temp_max(info);
-			break;
-		case AVA2_P_ACKDETECT:
-			applog(LOG_DEBUG, "Avalon2: AVA2_P_ACKDETECT");
-			break;
-		case AVA2_P_ACK:
-			applog(LOG_DEBUG, "Avalon2: AVA2_P_ACK");
-			break;
-		case AVA2_P_NAK:
-			applog(LOG_DEBUG, "Avalon2: AVA2_P_NAK");
-			break;
-		default:
-			applog(LOG_DEBUG, "Avalon2: Unknown response");
-			type = AVA2_GETS_ERROR;
-			break;
-		}
+	if (ar->head[0] != AVA2_H1 && ar->head[1] != AVA2_H2) {
+		applog(LOG_DEBUG, "Avalon2: H1 %02x, H2 %02x", ar->head[0], ar->head[1]);
+		hexdump(ar->data, 32);
 	}
 
-out:
-	return type;
+	expected_crc = crc16(ar->data, AVA2_P_DATA_LEN);
+	actual_crc = (ar->crc[0] & 0xff) | ((ar->crc[1] & 0xff) << 8);
+
+	applog(LOG_DEBUG, "Avalon2: %d: expected crc(%04x), actual_crc(%04x)",
+	       ar->type, expected_crc, actual_crc);
+	if (expected_crc != actual_crc)
+		return;
+
+	memcpy(&modular_id, ar->data + 28, 4);
+	modular_id = be32toh(modular_id);
+	applog(LOG_DEBUG, "Avalon2: decode modular id: %d", modular_id);
+
+	switch(ar->type) {
+	case AVA2_P_NONCE:
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_NONCE");
+		memcpy(&miner, ar->data + 0, 4);
+		memcpy(&pool_no, ar->data + 4, 4);
+		memcpy(&nonce2, ar->data + 8, 4);
+		memcpy(&ntime, ar->data + 12, 4);
+		memcpy(&nonce, ar->data + 16, 4);
+		memcpy(job_id, ar->data + 20, 4);
+
+		miner = be32toh(miner);
+		chip_id = (miner >> 16) & 0xffff;
+		miner &= 0xffff;
+		pool_no = be32toh(pool_no);
+		ntime = be32toh(ntime);
+		if (miner >= AVA2_DEFAULT_MINERS ||
+		    modular_id >= AVA2_DEFAULT_MINERS ||
+		    pool_no >= total_pools ||
+		    pool_no < 0) {
+			applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
+			break;
+		} else {
+			info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner]++;
+			info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][chip_id]++;
+		}
+		nonce2 = be32toh(nonce2);
+		nonce = be32toh(nonce);
+		nonce -= 0x180;
+
+		applog(LOG_DEBUG, "Avalon2: Found! %d: (%08x) (%08x) (%d) (%d-%d-%d,%d,%d,%d)",
+		       pool_no, nonce2, nonce, ntime,
+		       miner, info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner],
+		       info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][0],
+		       info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][1],
+		       info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][2],
+		       info->chipmatching_work[modular_id * AVA2_DEFAULT_MINERS + miner][3]);
+
+		real_pool = pool = pools[pool_no];
+		if (job_idcmp(job_id, pool->swork.job_id)) {
+			if (!job_idcmp(job_id, pool_stratum0->swork.job_id)) {
+				applog(LOG_DEBUG, "Avalon2: Match to previous stratum0! (%s)", pool_stratum0->swork.job_id);
+				pool = pool_stratum0;
+			} else if (!job_idcmp(job_id, pool_stratum1->swork.job_id)) {
+				applog(LOG_DEBUG, "Avalon2: Match to previous stratum1! (%s)", pool_stratum1->swork.job_id);
+				pool = pool_stratum1;
+			} else if (!job_idcmp(job_id, pool_stratum2->swork.job_id)) {
+				applog(LOG_DEBUG, "Avalon2: Match to previous stratum2! (%s)", pool_stratum2->swork.job_id);
+				pool = pool_stratum2;
+			} else {
+				applog(LOG_ERR, "Avalon2: Cannot match to any stratum! (%s)", pool->swork.job_id);
+				break;
+			}
+		}
+
+		submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
+		break;
+	case AVA2_P_STATUS:
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_STATUS");
+		memcpy(&tmp, ar->data, 4);
+		tmp = be32toh(tmp);
+		info->temp[0 + modular_id * 2] = tmp >> 16;
+		info->temp[1 + modular_id * 2] = tmp & 0xffff;
+
+		memcpy(&tmp, ar->data + 4, 4);
+		tmp = be32toh(tmp);
+		info->fan[0 + modular_id * 2] = tmp >> 16;
+		info->fan[1 + modular_id * 2] = tmp & 0xffff;
+
+		memcpy(&(info->get_frequency[modular_id]), ar->data + 8, 4);
+		memcpy(&(info->get_voltage[modular_id]), ar->data + 12, 4);
+		memcpy(&(info->local_work[modular_id]), ar->data + 16, 4);
+		memcpy(&(info->hw_work[modular_id]), ar->data + 20, 4);
+		memcpy(&(info->power_good[modular_id]), ar->data + 24, 4);
+
+		info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
+		if (info->dev_type[modular_id] == AVA2_ID_AVA3)
+			info->get_frequency[modular_id] = info->get_frequency[modular_id] * 768 / 65;
+		if (info->dev_type[modular_id] == AVA2_ID_AVA4)
+			info->get_frequency[modular_id] = info->get_frequency[modular_id] * 3968 / 65;
+		info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
+		info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
+		info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
+
+		info->local_works[modular_id] += info->local_work[modular_id];
+		info->hw_works[modular_id] += info->hw_work[modular_id];
+
+		info->get_voltage[modular_id] = decode_voltage(info->get_voltage[modular_id]);
+		info->power_good[modular_id] = be32toh(info->power_good[modular_id]);
+
+		avalon2->temp = get_temp_max(info);
+		break;
+	case AVA2_P_ACKDETECT:
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_ACKDETECT");
+		break;
+	case AVA2_P_ACK:
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_ACK");
+		break;
+	case AVA2_P_NAK:
+		applog(LOG_DEBUG, "Avalon2: AVA2_P_NAK");
+		break;
+	default:
+		applog(LOG_DEBUG, "Avalon2: Unknown response");
+		break;
+	}
 }
 
 /*
@@ -493,6 +487,8 @@ static int avalon2_iic_xfer(struct cgpu_info *avalon2,
 	err = usb_write(avalon2, (char *)wbuf, wlen, write, C_AVA2_WRITE);
 	if (err || *write != wlen)
 		applog(LOG_DEBUG, "Avalon2: AUC xfer %d, w(%d-%d)!", err, wlen, *write);
+
+	cgsleep_ms(opt_avalon2_aucxdelay / 4800);
 
 	rlen += 4; 		/* Add 4 bytes IIC header */
 	err = usb_read(avalon2, (char *)rbuf, rlen, read, C_AVA2_READ);
@@ -911,13 +907,12 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 {
 	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
-	int i, tmp;
+	int i, tmp, ret;
 
 	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
-			int ret;
-
 			cgsleep_ms(opt_avalon2_polling_delay);
+
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 
 			tmp = be32toh(info->led_red[i]); /* RED LED */
@@ -1178,7 +1173,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		b = info->local_works[i];
 		hwp = b ? ((double)a / (double)b) : 0;
 
-		sprintf(buf, " DH[%f%%]", hwp*100);
+		sprintf(buf, " DH[%.3f%%]", hwp * 100);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i+=2) {
@@ -1196,13 +1191,13 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, " Vol[%d]", info->get_voltage[i]);
+		sprintf(buf, " Vol[%.4f]", (float)info->get_voltage[i] / 10000);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
-		sprintf(buf, " Freq[%d]", info->get_frequency[i]);
+		sprintf(buf, " Freq[%.2f]", (float)info->get_frequency[i] / 1000);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
