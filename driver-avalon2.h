@@ -52,7 +52,7 @@
 #define AVA2_AVA4_VOLTAGE	7000 /* 0.666v */
 #define AVA2_AVA4_FREQUENCY	200  /* MHz * 61.3 = MHs */
 #define AVA2_AVA4_AUCSPEED	1000000
-#define AVA2_AVA4_AUCXDELAY  4800
+#define AVA2_AVA4_AUCXDELAY  	4800 /* 4800 = 1ms in AUC (11U14)  */
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'

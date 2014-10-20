@@ -488,7 +488,7 @@ static int avalon2_iic_xfer(struct cgpu_info *avalon2,
 	if (err || *write != wlen)
 		applog(LOG_DEBUG, "Avalon2: AUC xfer %d, w(%d-%d)!", err, wlen, *write);
 
-	cgsleep_ms(opt_avalon2_aucxdelay / 4800);
+	cgsleep_ms(opt_avalon2_aucxdelay / 4800 + 1);
 
 	rlen += 4; 		/* Add 4 bytes IIC header */
 	err = usb_read(avalon2, (char *)rbuf, rlen, read, C_AVA2_READ);
@@ -908,6 +908,12 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon2, struct avalo
 	struct avalon2_pkg send_pkg;
 	struct avalon2_ret ar;
 	int i, tmp, ret;
+
+	static int first = 1;
+	if (first) {
+		cgsleep_ms(400);
+		first = 0;
+	}
 
 	for (i = 1; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
