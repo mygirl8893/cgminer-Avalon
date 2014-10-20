@@ -593,7 +593,7 @@ static int avalon2_iic_xfer_pkg(struct cgpu_info *avalon2, uint8_t slave_addr,
 	err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
 	if (err == -7 && rcnt == 0 && rlen) {
 		applog(LOG_DEBUG, "Avalon2: IIC read again!");
-		avalon2_iic_init_pkg(wbuf, &iic_info, (uint8_t *)pkg, 0, rlen);
+		avalon2_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 		err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
 	}
 	if (err || rcnt != rlen)
