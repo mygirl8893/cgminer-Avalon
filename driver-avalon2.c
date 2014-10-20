@@ -464,7 +464,8 @@ static int avalon2_iic_init_pkg(uint8_t *iic_pkg, struct avalon2_iic_info *iic_i
 		iic_pkg[4] = wlen;
 		iic_pkg[5] = rlen;
 		iic_pkg[7] = iic_info->iic_param.slave_addr;
-		memcpy(iic_pkg + 8, buf, wlen);
+		if (buf && wlen)
+			memcpy(iic_pkg + 8, buf, wlen);
 		break;
 	case AVA2_IIC_INFO:
 		iic_pkg[0] = 4;
@@ -590,6 +591,11 @@ static int avalon2_iic_xfer_pkg(struct cgpu_info *avalon2, uint8_t slave_addr,
 
 	avalon2_iic_init_pkg(wbuf, &iic_info, (uint8_t *)pkg, AVA2_WRITE_SIZE + 1, rlen);
 	err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
+	if (err == -7 && rcnt == 0 && rlen) {
+		applog(LOG_DEBUG, "Avalon2: IIC read again!");
+		avalon2_iic_init_pkg(wbuf, &iic_info, (uint8_t *)pkg, 0, rlen);
+		err = avalon2_iic_xfer(avalon2, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
+	}
 	if (err || rcnt != rlen)
 		return AVA2_SEND_ERROR;
 
