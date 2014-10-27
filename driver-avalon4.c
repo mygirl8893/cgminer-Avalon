@@ -1166,6 +1166,40 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *setting, char *replybuf)
+{
+	int val;
+	struct avalon4_info *info;
+
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "led: module_id");
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "led") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing module_id setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 1 || val > AVA4_DEFAULT_MODULARS) {
+			sprintf(replybuf, "invalid module_id: %d, valid range 1-%d", val, AVA4_DEFAULT_MODULARS);
+			return replybuf;
+		}
+		val -= 1;
+
+		info = avalon4->device_data;
+		info->led_red[val] = !info->led_red[val];
+
+		applog(LOG_ERR, "Avalon4: Module:%d, LED: %s", val + 1, info->led_red[val] ? "on" : "off");
+		return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
 static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *avalon4)
 {
 	struct avalon4_info *info = avalon4->device_data;
@@ -1181,6 +1215,7 @@ struct device_drv avalon4_drv = {
 	.drv_id = DRIVER_avalon4,
 	.dname = "avalon4",
 	.name = "AV4",
+	.set_device = avalon4_set_device,
 	.get_api_stats = avalon4_api_stats,
 	.get_statline_before = avalon4_statline_before,
 	.drv_detect = avalon4_detect,
