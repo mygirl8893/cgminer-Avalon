@@ -238,16 +238,6 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 	return 1;
 }
 
-static inline int get_temp_max(struct avalon4_info *info)
-{
-	int i;
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->temp_max <= info->temp[i])
-			info->temp_max = info->temp[i];
-	}
-	return info->temp_max;
-}
-
 static inline int get_current_temp_max(struct avalon4_info *info)
 {
 	int i;
@@ -413,7 +403,7 @@ static void decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 		info->local_works[modular_id] += info->local_work[modular_id];
 		info->hw_works[modular_id] += info->hw_work[modular_id];
 
-		avalon4->temp = get_temp_max(info);
+		avalon4->temp = get_current_temp_max(info);
 		break;
 	case AVA4_P_ACKDETECT:
 		applog(LOG_DEBUG, "Avalon4: AVA4_P_ACKDETECT");
