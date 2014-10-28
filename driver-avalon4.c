@@ -836,7 +836,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	static uint8_t err_cnt[AVA4_DEFAULT_MODULARS];
 	struct avalon4_pkg send_pkg;
 	struct avalon4_ret ar;
-	int i, tmp, ret;
+	int i, j, tmp, ret;
 
 	static int first = 1;
 	if (first) {
@@ -865,7 +865,17 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				err_cnt[i]++;
 				if (err_cnt[i] >= 4) {
 					err_cnt[i] = 0;
+					info->dev_type[i] = AVA4_ID_AVAX;
 					info->enable[i] = 0;
+					info->local_works[i] = 0;
+					info->hw_works[i] = 0;
+					for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+						info->matching_work[i * AVA4_DEFAULT_MINERS + j] = 0;
+						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][0] = 0;
+						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][1] = 0;
+						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][2] = 0;
+						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][3] = 0;
+					}
 				}
 			}
 		}
