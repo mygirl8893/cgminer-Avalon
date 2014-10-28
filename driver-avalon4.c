@@ -46,7 +46,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 #define get_fan_pwm(v)	(AVA4_PWM_MAX - (v) * AVA4_PWM_MAX / 100)
 
-int opt_avalon4_freq[3] = {0, 0, 0};
+int opt_avalon4_freq[3] = {200, 200, 200};
 
 int opt_avalon4_fan_min = AVA4_DEFAULT_FAN_MIN;
 int opt_avalon4_fan_max = AVA4_DEFAULT_FAN_MAX;
@@ -486,7 +486,7 @@ static int avalon4_iic_xfer(struct cgpu_info *avalon4,
 	return err;
 }
 
-static int avalon4_iic_init(struct cgpu_info *avalon4)
+static int avalon4_auc_init(struct cgpu_info *avalon4)
 {
 	struct avalon4_iic_info iic_info;
 	int err, wlen, rlen;
@@ -513,9 +513,8 @@ static int avalon4_iic_init(struct cgpu_info *avalon4)
 	return 0;
 }
 
-static int avalon4_iic_getinfo(struct cgpu_info *avalon4)
+static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 {
-	/* TODO: get more info like IIC speed?, INIT? etc */
 	struct avalon4_iic_info iic_info;
 	int err, wlen, rlen;
 	uint8_t wbuf[AVA4_IIC_P_SIZE];
@@ -717,7 +716,7 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 			return;
 	}
 
-	avalon4_iic_getinfo(avalon4);
+	avalon4_auc_getinfo(avalon4);
 }
 
 static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
@@ -738,7 +737,7 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 		avalon4 = usb_free_cgpu(avalon4);
 		return NULL;
 	}
-	avalon4_iic_init(avalon4);
+	avalon4_auc_init(avalon4);
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		strcpy(mm_version[i], AVA4_MM_VERNULL);
@@ -788,7 +787,6 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		strcpy(info->mm_version[i], mm_version[i]);
-		info->modulars[i] = modular[i];	/* Enable modular */
 		info->enable[i] = modular[i];
 
 		info->dev_type[i] = AVA4_ID_AVAX;
@@ -846,7 +844,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	}
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->modulars[i] && info->enable[i]) {
+		if (info->enable[i]) {
 			cgsleep_ms(opt_avalon4_polling_delay);
 
 			memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
@@ -970,6 +968,8 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	cg_runlock(&pool->data_lock);
 	cg_runlock(&info->update_lock);
 
+	/* TODO: Detect new modules here */
+
 	/* Configuer the parameter from outside */
 	adjust_fan(info);
 	info->set_voltage = opt_avalon4_voltage_min;
@@ -1033,15 +1033,14 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	if (tdiff(&current_stratum, &(info->last_stratum)) > (double)(3.0 * 60.0))
 		return 0;
 
-
 	cg_rlock(&info->update_lock);
 	polling(thr, avalon4, info);
 	cg_runlock(&info->update_lock);
 
 	h = 0;
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++)
 		h += info->enable[i] ? (info->local_work[i] - info->hw_work[i]) : 0;
-	}
+
 	return h * 0xffffffff;
 }
 

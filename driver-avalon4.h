@@ -23,7 +23,7 @@
 #define AVA4_DEFAULT_FAN_MIN	20
 #define AVA4_DEFAULT_FAN_MAX	100
 
-#define AVALON4_TEMP_OVERHEAT	60
+#define AVALON4_TEMP_OVERHEAT	65
 #define AVALON4_DEFAULT_POLLING_DELAY	20 /* ms */
 
 #define AVA4_DEFAULT_VOLTAGE_MIN	5000
@@ -39,15 +39,16 @@
 #define AVA4_AUCSPEED		1000000
 #define AVA4_AUCXDELAY  	9600 /* 4800 = 1ms in AUC (11U14)  */
 
-/* Avalon4 protocol package type */
+/* Avalon4 protocol package type from MM protocol.h*/
+#define MM_VERSION_LEN	15
 #define AVA4_H1	'A'
 #define AVA4_H2	'V'
 
-#define AVA4_P_COINBASE_SIZE	(6 * 1024 + 32)
+#define AVA4_P_COINBASE_SIZE	(6 * 1024 + 64)
 #define AVA4_P_MERKLES_COUNT	30
 
 #define AVA4_P_COUNT	40
-#define AVA4_P_DATA_LEN	32
+#define AVA4_P_DATA_LEN 32
 
 #define AVA4_P_DETECT	10
 #define AVA4_P_STATIC	11
@@ -108,7 +109,6 @@ struct avalon4_info {
 	struct pool pool2;
 	int pool_no;
 
-	int modulars[AVA4_DEFAULT_MODULARS];
 	char mm_version[AVA4_DEFAULT_MODULARS][16];
 	char mm_dna[AVA4_DEFAULT_MODULARS][AVA4_DNA_LEN];
 	int dev_type[AVA4_DEFAULT_MODULARS];
