@@ -852,7 +852,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 			memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 
 			tmp = be32toh(info->led_red[i]); /* RED LED */
-			memcpy(send_pkg.data + 12, &tmp, 4);
+			memcpy(send_pkg.data, &tmp, 4);
 
 			tmp = be32toh(i); /* ID */
 			memcpy(send_pkg.data + 28, &tmp, 4);
