@@ -1177,12 +1177,11 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 			sprintf(replybuf, "invalid module_id: %d, valid range 1-%d", val, AVA4_DEFAULT_MODULARS);
 			return replybuf;
 		}
-		val -= 1;
 
 		info = avalon4->device_data;
 		info->led_red[val] = !info->led_red[val];
 
-		applog(LOG_ERR, "Avalon4: Module:%d, LED: %s", val + 1, info->led_red[val] ? "on" : "off");
+		applog(LOG_ERR, "Avalon4: Module:%d, LED: %s", val, info->led_red[val] ? "on" : "off");
 		return NULL;
 	}
 
