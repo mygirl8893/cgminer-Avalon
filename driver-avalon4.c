@@ -833,6 +833,7 @@ static bool avalon4_prepare(struct thr_info *thr)
 
 static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalon4_info *info)
 {
+	static uint8_t err_cnt[AVA4_DEFAULT_MODULARS];
 	struct avalon4_pkg send_pkg;
 	struct avalon4_ret ar;
 	int i, tmp, ret;
@@ -857,8 +858,16 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 			avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
 
 			ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
-			if (ret == AVA4_SEND_OK)
+			if (ret == AVA4_SEND_OK) {
+				err_cnt[i] = 0;
 				decode_pkg(thr, &ar);
+			} else {
+				err_cnt[i]++;
+				if (err_cnt[i] >= 4) {
+					err_cnt[i] = 0;
+					info->enable[i] = 0;
+				}
+			}
 		}
 	}
 
@@ -924,6 +933,9 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	uint32_t tmp, range, start;
 	struct work *work;
 	struct pool *pool;
+	struct avalon4_pkg detect_pkg;
+	struct avalon4_ret ret_pkg;
+	int i, err;
 
 	applog(LOG_DEBUG, "Avalon4: New stratum: restart: %d, update: %d",
 	       thr->work_restart, thr->work_update);
@@ -968,7 +980,38 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	cg_runlock(&pool->data_lock);
 	cg_runlock(&info->update_lock);
 
-	/* TODO: Detect new modules here */
+	/* Detect new modules here */
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->enable[i]) {
+			continue;
+		}
+
+		/* Send out detect pkg */
+		applog(LOG_DEBUG, "Avalon4: AVA4_P_DETECT");
+		memset(detect_pkg.data, 0, AVA4_P_DATA_LEN);
+		tmp = be32toh(i);
+		memcpy(detect_pkg.data + 28, &tmp, 4);
+		avalon4_init_pkg(&detect_pkg, AVA4_P_DETECT, 1, 1);
+		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
+		if (err != AVA4_SEND_OK) {
+			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
+					avalon4->drv->name, avalon4->device_id, err);
+			break;
+		}
+
+		applog(LOG_DEBUG, "Avalon4 Detect ID[%d]: %d", i, ret_pkg.type);
+		hexdump((uint8_t *)&ret_pkg, AVA4_READ_SIZE);
+		if (ret_pkg.type != AVA4_P_ACKDETECT)
+			break;
+
+		info->enable[i] = 1;
+		memcpy(info->mm_dna[i], ret_pkg.data, AVA4_DNA_LEN);
+		memcpy(info->mm_version[i], ret_pkg.data + AVA4_DNA_LEN, 15);
+		info->mm_version[i][15] = '\0';
+		if (!strncmp((char *)&(info->mm_version[i]), AVA4_FW4_PREFIXSTR, 2)) {
+			info->dev_type[i] = AVA4_ID_AVA4;
+		}
+	}
 
 	/* Configuer the parameter from outside */
 	adjust_fan(info);
