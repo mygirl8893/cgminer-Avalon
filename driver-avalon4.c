@@ -722,7 +722,6 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct avalon4_info *info;
-	int ackdetect;
 	int err;
 	int tmp, i, modular[AVA4_DEFAULT_MODULARS] = {0};
 	char mm_version[AVA4_DEFAULT_MODULARS][16];
@@ -749,16 +748,20 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 		memcpy(detect_pkg.data + 28, &tmp, 4);
 		avalon4_init_pkg(&detect_pkg, AVA4_P_DETECT, 1, 1);
 		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
+		if (err == AVA4_SEND_OK && ret_pkg.type != AVA4_P_ACKDETECT) {
+			i -= 1;
+			continue;
+		}
+
 		if (err != AVA4_SEND_OK) {
 			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
 			       avalon4->drv->name, avalon4->device_id, err);
 			break;
 		}
 
-		ackdetect = ret_pkg.type;
-		applog(LOG_DEBUG, "Avalon4 Detect ID[%d]: %d", i, ackdetect);
+		applog(LOG_DEBUG, "Avalon4 Detect ID[%d]: %d", i, ret_pkg.type);
 		hexdump((uint8_t *)&ret_pkg, AVA4_READ_SIZE);
-		if (ackdetect != AVA4_P_ACKDETECT)
+		if (ret_pkg.type != AVA4_P_ACKDETECT)
 			break;
 
 		modular[i] = 1;
@@ -992,17 +995,21 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 	/* Detect new modules here */
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->enable[i]) {
+		if (info->enable[i])
 			continue;
-		}
 
 		/* Send out detect pkg */
-		applog(LOG_DEBUG, "Avalon4: AVA4_P_DETECT");
+		applog(LOG_DEBUG, "Avalon4: NEW AVA4_P_DETECT");
 		memset(detect_pkg.data, 0, AVA4_P_DATA_LEN);
 		tmp = be32toh(i);
 		memcpy(detect_pkg.data + 28, &tmp, 4);
 		avalon4_init_pkg(&detect_pkg, AVA4_P_DETECT, 1, 1);
 		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
+		if (err == AVA4_SEND_OK && ret_pkg.type != AVA4_P_ACKDETECT) {
+			i -= 1;
+			continue;
+		}
+
 		if (err != AVA4_SEND_OK) {
 			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
 					avalon4->drv->name, avalon4->device_id, err);
