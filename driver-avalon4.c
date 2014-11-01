@@ -13,53 +13,28 @@
 
 #include "config.h"
 
-#include <limits.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <unistd.h>
-#ifndef WIN32
-  #include <termios.h>
-  #include <sys/stat.h>
-  #include <fcntl.h>
-  #ifndef O_CLOEXEC
-    #define O_CLOEXEC 0
-  #endif
-#else
-  #include <windows.h>
-  #include <io.h>
-#endif
-#include <math.h>
-
-#include "elist.h"
 #include "miner.h"
-#include "fpgautils.h"
 #include "driver-avalon4.h"
 #include "crc.h"
 #include "sha2.h"
 #include "hexdump.c"
 
-#define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
-ASSERT1(sizeof(uint32_t) == 4);
-
 #define get_fan_pwm(v)	(AVA4_PWM_MAX - (v) * AVA4_PWM_MAX / 100)
 
-int opt_avalon4_freq[3] = {200, 200, 200};
-
-int opt_avalon4_fan_min = AVA4_DEFAULT_FAN_MIN;
-int opt_avalon4_fan_max = AVA4_DEFAULT_FAN_MAX;
 static int avalon4_fan_min = get_fan_pwm(AVA4_DEFAULT_FAN_MIN);
 static int avalon4_fan_max = get_fan_pwm(AVA4_DEFAULT_FAN_MAX);
+
+int opt_avalon4_freq[3] = {200, 200, 200};
+int opt_avalon4_fan_min = AVA4_DEFAULT_FAN_MIN;
+int opt_avalon4_fan_max = AVA4_DEFAULT_FAN_MAX;
+
+enum avalon4_fan_fixed opt_avalon4_fan_fixed = FAN_AUTO;
 
 int opt_avalon4_voltage_min;
 int opt_avalon4_voltage_max;
 
 int opt_avalon4_overheat = AVALON4_TEMP_OVERHEAT;
 int opt_avalon4_polling_delay = AVALON4_DEFAULT_POLLING_DELAY;
-
-enum avalon4_fan_fixed opt_avalon4_fan_fixed = FAN_AUTO;
 
 int opt_avalon4_aucspeed = AVA4_AUCSPEED;
 int opt_avalon4_aucxdelay = AVA4_AUCXDELAY;
@@ -72,7 +47,7 @@ int opt_avalon4_aucxdelay = AVA4_AUCXDELAY;
 	*((str) + 0) = (uint8_t) ((x) >> 24);	\
 }
 
-static void sha256_prehash(const unsigned char *message, unsigned int len, unsigned char *digest)
+static inline void sha256_prehash(const unsigned char *message, unsigned int len, unsigned char *digest)
 {
 	sha256_ctx ctx;
 	int i;
@@ -538,7 +513,7 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 	memset(rbuf, 0, AVA4_IIC_P_SIZE);
 	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
-		applog(LOG_ERR, "Avalon4: Failed to get info from Avalon USB2IIC Converter");
+		applog(LOG_ERR, "Avalon4: AUC Failed to get info ");
 		return 1;
 	}
 
@@ -722,14 +697,14 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct avalon4_info *info;
-	int err;
-	int tmp, i, modular[AVA4_DEFAULT_MODULARS] = {0};
+	int err, tmp, i, modular[AVA4_DEFAULT_MODULARS] = {0};
 	char mm_version[AVA4_DEFAULT_MODULARS][16];
 	char mm_dna[AVA4_DEFAULT_MODULARS][AVA4_DNA_LEN];
 
-	struct cgpu_info *avalon4 = usb_alloc_cgpu(&avalon4_drv, 1);
 	struct avalon4_pkg detect_pkg;
 	struct avalon4_ret ret_pkg;
+
+	struct cgpu_info *avalon4 = usb_alloc_cgpu(&avalon4_drv, 1);
 
 	if (!usb_init(avalon4, dev, found)) {
 		applog(LOG_ERR, "Avalon4 failed usb_init");
@@ -752,7 +727,6 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 			i -= 1;
 			continue;
 		}
-
 		if (err != AVA4_SEND_OK) {
 			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
 			       avalon4->drv->name, avalon4->device_id, err);
@@ -761,8 +735,6 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 
 		applog(LOG_DEBUG, "Avalon4 Detect ID[%d]: %d", i, ret_pkg.type);
 		hexdump((uint8_t *)&ret_pkg, AVA4_READ_SIZE);
-		if (ret_pkg.type != AVA4_P_ACKDETECT)
-			break;
 
 		modular[i] = 1;
 		memcpy(mm_dna[i], ret_pkg.data, AVA4_DNA_LEN);
@@ -771,7 +743,7 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 	}
 
 	/* We have a real Avalon! */
-	avalon4->threads = AVA4_MINER_THREADS;
+	avalon4->threads = 1;
 	add_cgpu(avalon4);
 
 	update_usb_stats(avalon4);
@@ -789,12 +761,12 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 	info->temp_max = 0;
 
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
-		strcpy(info->mm_version[i], mm_version[i]);
 		info->enable[i] = modular[i];
-
 		info->dev_type[i] = AVA4_ID_AVAX;
+
 		memcpy(info->mm_dna[i], mm_dna, AVA4_DNA_LEN);
 
+		strcpy(info->mm_version[i], mm_version[i]);
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_FW4_PREFIXSTR, 2)) {
 			info->dev_type[i] = AVA4_ID_AVA4;
 			info->set_voltage = AVA4_DEFAULT_VOLTAGE;
@@ -848,7 +820,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	}
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->enable[i]) {
+		if (info->enable[i] && !thr->work_restart && !thr->work_update) {
 			cgsleep_ms(opt_avalon4_polling_delay);
 
 			memset(send_pkg.data, 0, AVA4_P_DATA_LEN);

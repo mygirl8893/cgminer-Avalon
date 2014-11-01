@@ -15,7 +15,6 @@
 
 #ifdef USE_AVALON4
 
-#define AVA4_MINER_THREADS	1
 #define AVA4_DEFAULT_MODULARS	64
 
 #define AVA4_PWM_MAX	0x3FF
