@@ -236,7 +236,7 @@ static inline uint32_t decode_voltage(uint32_t v)
 	return (0x78 - (rev8(v >> 8) >> 1)) * 125;
 }
 
-static void adjust_fan(struct avalon4_info *info)
+static inline void adjust_fan(struct avalon4_info *info)
 {
 	int t;
 
@@ -248,17 +248,13 @@ static void adjust_fan(struct avalon4_info *info)
 
 	t = get_current_temp_max(info);
 
-	/* TODO: Add options for temperature range and fan adjust function 42 ~ 48 */
-	if (t < 42) {
-		info->fan_pct = (42 - t) * (opt_avalon4_fan_max - opt_avalon4_fan_min) / 30 + opt_avalon4_fan_min;
-		if (info->fan_pct < opt_avalon4_fan_min)
-			info->fan_pct = opt_avalon4_fan_min;
-	} else if (t > 48) {
-		info->fan_pct = (t - 42) * (opt_avalon4_fan_max - opt_avalon4_fan_min) / 5 + (opt_avalon4_fan_min + opt_avalon4_fan_max) / 2;
-		if (info->fan_pct > opt_avalon4_fan_max)
-			info->fan_pct = opt_avalon4_fan_max;
-	} else
-		info->fan_pct = (t - 42) * (opt_avalon4_fan_max - opt_avalon4_fan_min) / 10 + opt_avalon4_fan_min;
+	/* TODO: Add options for temperature range and fan adjust function 40 ~ 50 */
+	if (t < 40)
+		info->fan_pct = opt_avalon4_fan_min;
+	else if (t > 50)
+		info->fan_pct = opt_avalon4_fan_max;
+	else
+		info->fan_pct = (t - 40) * (opt_avalon4_fan_max - opt_avalon4_fan_min) / 10 + opt_avalon4_fan_min;
 
 	info->fan_pwm = get_fan_pwm(info->fan_pct);
 }
