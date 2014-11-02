@@ -695,7 +695,7 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 	struct avalon4_info *info;
 	int err, tmp, i, modular[AVA4_DEFAULT_MODULARS] = {0};
 	char mm_version[AVA4_DEFAULT_MODULARS][16];
-	char mm_dna[AVA4_DEFAULT_MODULARS][AVA4_DNA_LEN];
+	char mm_dna[AVA4_DEFAULT_MODULARS][AVA4_DNA_LEN + 1];
 
 	struct avalon4_pkg detect_pkg;
 	struct avalon4_ret ret_pkg;
@@ -734,6 +734,7 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 
 		modular[i] = 1;
 		memcpy(mm_dna[i], ret_pkg.data, AVA4_DNA_LEN);
+		mm_dna[i][8] = '\0';
 		memcpy(mm_version[i], ret_pkg.data + AVA4_DNA_LEN, 15);
 		mm_version[i][15] = '\0';
 	}
@@ -1088,6 +1089,13 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, "Ver[%s]", info->mm_version[i]);
+		strcat(statbuf[i], buf);
+	}
+
+	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+		if(info->dev_type[i] == AVA4_ID_AVAX)
+			continue;
+		sprintf(buf, "DNS[%s]", info->mm_dna[i]);
 		strcat(statbuf[i], buf);
 	}
 
