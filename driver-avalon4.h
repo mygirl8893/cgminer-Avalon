@@ -35,7 +35,7 @@
 #define AVA4_DEFAULT_VOLTAGE	7875
 #define AVA4_DEFAULT_FREQUENCY	200
 
-#define AVA4_AUCSPEED		1000000
+#define AVA4_AUCSPEED		400000
 #define AVA4_AUCXDELAY  	9600 /* 4800 = 1ms in AUC (11U14)  */
 
 /* Avalon4 protocol package type from MM protocol.h*/

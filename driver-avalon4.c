@@ -1123,7 +1123,15 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
-		sprintf(buf, "DNS[%s]", info->mm_dna[i]);
+		sprintf(buf, " DNA[%02x%02x%02x%02x%02x%02x%02x%02x]",
+				info->mm_dna[i][0],
+				info->mm_dna[i][1],
+				info->mm_dna[i][2],
+				info->mm_dna[i][3],
+				info->mm_dna[i][4],
+				info->mm_dna[i][5],
+				info->mm_dna[i][6],
+				info->mm_dna[i][7]);
 		strcat(statbuf[i], buf);
 	}
 
