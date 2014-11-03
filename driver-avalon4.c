@@ -723,7 +723,7 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 	struct avalon4_info *info;
 	int err, tmp, i, modular[AVA4_DEFAULT_MODULARS] = {0};
 	char mm_version[AVA4_DEFAULT_MODULARS][16];
-	char mm_dna[AVA4_DEFAULT_MODULARS][AVA4_DNA_LEN + 1];
+	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_DNA_LEN + 1];
 
 	struct avalon4_pkg detect_pkg;
 	struct avalon4_ret ret_pkg;
@@ -789,7 +789,7 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 		info->enable[i] = modular[i];
 		info->dev_type[i] = AVA4_ID_AVAX;
 
-		memcpy(info->mm_dna[i], mm_dna, AVA4_DNA_LEN);
+		strcpy(info->mm_dna[i], mm_dna[i]);
 
 		strcpy(info->mm_version[i], mm_version[i]);
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_FW4_PREFIXSTR, 2)) {
@@ -1020,6 +1020,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 		info->enable[i] = 1;
 		memcpy(info->mm_dna[i], ret_pkg.data, AVA4_DNA_LEN);
+		info->mm_dna[i][8] = '\0';
 		memcpy(info->mm_version[i], ret_pkg.data + AVA4_DNA_LEN, 15);
 		info->mm_version[i][15] = '\0';
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_FW4_PREFIXSTR, 2)) {
@@ -1106,7 +1107,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	struct avalon4_info *info = cgpu->device_data;
 	int i, j, a, b;
-	char buf[40];
+	char buf[128];
 	double hwp;
 	int minerindex, minercount;
 	char statbuf[AVA4_DEFAULT_MODULARS][200];
