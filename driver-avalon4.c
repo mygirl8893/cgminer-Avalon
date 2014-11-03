@@ -421,9 +421,11 @@ static int avalon4_iic_init_pkg(uint8_t *iic_pkg, struct avalon4_iic_info *iic_i
 		if (buf && wlen)
 			memcpy(iic_pkg + 8, buf, wlen);
 		break;
+	case AVA4_IIC_RESET:
+	case AVA4_IIC_DEINIT:
 	case AVA4_IIC_INFO:
 		iic_pkg[0] = 4;
-		iic_pkg[3] = AVA4_IIC_INFO;
+		iic_pkg[3] = iic_info->iic_op;
 		break;
 
 	default:
@@ -467,6 +469,32 @@ static int avalon4_auc_init(struct cgpu_info *avalon4)
 	if (unlikely(avalon4->usbinfo.nodev))
 		return 1;
 
+
+	/* Reset */
+	iic_info.iic_op = AVA4_IIC_RESET;
+	rlen = 0;		/* Version length: 12 (AUC-20140909) */
+	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
+
+	memset(rbuf, 0, AVA4_IIC_P_SIZE);
+	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	if (err) {
+		applog(LOG_ERR, "Avalon4: Failed to reset Avalon USB2IIC Converter");
+		return 1;
+	}
+
+	/* Deinit */
+	iic_info.iic_op = AVA4_IIC_DEINIT;
+	rlen = 0;		/* Version length: 12 (AUC-20140909) */
+	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
+
+	memset(rbuf, 0, AVA4_IIC_P_SIZE);
+	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	if (err) {
+		applog(LOG_ERR, "Avalon4: Failed to deinit Avalon USB2IIC Converter");
+		return 1;
+	}
+
+	/* Init */
 	iic_info.iic_op = AVA4_IIC_INIT;
 	iic_info.iic_param.aucParam[0] = opt_avalon4_aucspeed;
 	iic_info.iic_param.aucParam[1] = opt_avalon4_aucxdelay;
