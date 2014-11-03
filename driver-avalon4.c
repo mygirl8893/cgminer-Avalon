@@ -858,10 +858,10 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 			avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
 
 			ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
-			if (ret == AVA4_SEND_OK) {
-				err_cnt[i] = 0;
+			if (ret == AVA4_SEND_OK)
 				decode_pkg(thr, &ar);
-			} else {
+
+			if (ret != AVA4_SEND_OK || !info->local_works[i]) {
 				err_cnt[i]++;
 				if (err_cnt[i] >= 4) {
 					err_cnt[i] = 0;
@@ -878,6 +878,9 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 					}
 				}
 			}
+
+			if (ret == AVA4_SEND_OK && info->local_works[i])
+				err_cnt[i] = 0;
 		}
 	}
 
