@@ -259,7 +259,7 @@ static inline void adjust_fan(struct avalon4_info *info)
 	info->fan_pwm = get_fan_pwm(info->fan_pct);
 }
 
-static void decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
+static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 {
 	struct cgpu_info *avalon4 = thr->cgpu;
 	struct avalon4_info *info = avalon4->device_data;
@@ -277,6 +277,7 @@ static void decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 	if (ar->head[0] != AVA4_H1 && ar->head[1] != AVA4_H2) {
 		applog(LOG_DEBUG, "Avalon4: H1 %02x, H2 %02x", ar->head[0], ar->head[1]);
 		hexdump(ar->data, 32);
+		return 1;
 	}
 
 	expected_crc = crc16(ar->data, AVA4_P_DATA_LEN);
@@ -285,7 +286,7 @@ static void decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 	applog(LOG_DEBUG, "Avalon4: %d: expected crc(%04x), actual_crc(%04x)",
 	       ar->type, expected_crc, actual_crc);
 	if (expected_crc != actual_crc)
-		return;
+		return 1;
 
 	memcpy(&modular_id, ar->data + 28, 4);
 	modular_id = be32toh(modular_id);
@@ -383,6 +384,7 @@ static void decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 		applog(LOG_DEBUG, "Avalon4: Unknown response");
 		break;
 	}
+	return 0;
 }
 
 /*
@@ -836,7 +838,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	static uint8_t err_cnt[AVA4_DEFAULT_MODULARS];
 	struct avalon4_pkg send_pkg;
 	struct avalon4_ret ar;
-	int i, j, tmp, ret;
+	int i, j, tmp, ret, decode_err;
 
 	static int first = 1;
 	if (first) {
@@ -859,9 +861,9 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 
 			ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
 			if (ret == AVA4_SEND_OK)
-				decode_pkg(thr, &ar);
+				decode_err =  decode_pkg(thr, &ar);
 
-			if (ret != AVA4_SEND_OK || !info->local_works[i]) {
+			if (ret != AVA4_SEND_OK || !info->local_works[i] || decode_err) {
 				err_cnt[i]++;
 				if (err_cnt[i] >= 4) {
 					err_cnt[i] = 0;
@@ -879,7 +881,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				}
 			}
 
-			if (ret == AVA4_SEND_OK && info->local_works[i])
+			if (ret == AVA4_SEND_OK && info->local_works[i] && !decode_err)
 				err_cnt[i] = 0;
 		}
 	}
