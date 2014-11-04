@@ -800,7 +800,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	}
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->enable[i] && !thr->work_restart && !thr->work_update) {
+		if (info->enable[i]) {
 			cgsleep_ms(opt_avalon4_polling_delay);
 
 			memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
@@ -816,7 +816,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 			if (ret == AVA4_SEND_OK)
 				decode_err =  decode_pkg(thr, &ar);
 
-			if (ret != AVA4_SEND_OK || !info->local_works[i] || decode_err) {
+			if (ret != AVA4_SEND_OK || decode_err) {
 				err_cnt[i]++;
 				if (err_cnt[i] >= 4) {
 					err_cnt[i] = 0;
@@ -831,6 +831,8 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][2] = 0;
 						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][3] = 0;
 					}
+					applog(LOG_ERR, "%s %d: Module detached ID[%d]",
+					       avalon4->drv->name, avalon4->device_id, i);
 				}
 			}
 
@@ -960,11 +962,12 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		memcpy(detect_pkg.data + 28, &tmp, 4);
 		avalon4_init_pkg(&detect_pkg, AVA4_P_DETECT, 1, 1);
 		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
-		if (err == AVA4_SEND_OK && ret_pkg.type != AVA4_P_ACKDETECT) {
-			i -= 1;
-			applog(LOG_DEBUG, "%s %d: AUC xfer data with type %d",
-					avalon4->drv->name, avalon4->device_id, ret_pkg.type);
-			continue;
+		if (err == AVA4_SEND_OK) {
+			if (decode_pkg(thr, &ret_pkg)) {
+				applog(LOG_DEBUG, "%s %d: AUC xfer data with type %d",
+				       avalon4->drv->name, avalon4->device_id, ret_pkg.type);
+				continue;
+			}
 		}
 
 		if (err != AVA4_SEND_OK) {
@@ -974,7 +977,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		}
 
 		applog(LOG_DEBUG, "Avalon4 Detect ID[%d]: %d", i, ret_pkg.type);
-		hexdump((uint8_t *)&ret_pkg, AVA4_READ_SIZE);
+		/* FIXME: ? */
 		if (ret_pkg.type != AVA4_P_ACKDETECT)
 			break;
 
@@ -983,9 +986,11 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		info->mm_dna[i][8] = '\0';
 		memcpy(info->mm_version[i], ret_pkg.data + AVA4_DNA_LEN, 15);
 		info->mm_version[i][15] = '\0';
-		if (!strncmp((char *)&(info->mm_version[i]), AVA4_FW4_PREFIXSTR, 2)) {
+		if (!strncmp((char *)&(info->mm_version[i]), AVA4_FW4_PREFIXSTR, 2))
 			info->dev_type[i] = AVA4_ID_AVA4;
-		}
+
+		applog(LOG_ERR, "%s %d: New module detected ID[%d]",
+		       avalon4->drv->name, avalon4->device_id, i);
 	}
 
 	/* Configuer the parameter from outside */
@@ -1226,10 +1231,17 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	struct avalon4_info *info = avalon4->device_data;
 	int temp = get_current_temp_max(info);
 	float volts = (float)info->set_voltage / 10000;
+	int i, count = 0;
 
-	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", 
+	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->enable[i])
+			count++;
+	}
+
+	tailsprintf(buf, bufsiz, "%2d %.3fV %4dMhz %2dC %3d%%",
+		    count, volts,
 		    (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9,
-		    temp, info->fan_pct, volts);
+		    temp, info->fan_pct);
 }
 
 struct device_drv avalon4_drv = {
