@@ -836,7 +836,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				}
 			}
 
-			if (ret == AVA4_SEND_OK && info->local_works[i] && !decode_err)
+			if (ret == AVA4_SEND_OK && !decode_err)
 				err_cnt[i] = 0;
 		}
 	}
