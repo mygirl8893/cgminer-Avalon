@@ -722,14 +722,8 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 
 static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
+	int i;
 	struct avalon4_info *info;
-	int err, tmp, i, modular[AVA4_DEFAULT_MODULARS] = {0};
-	char mm_version[AVA4_DEFAULT_MODULARS][16];
-	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_DNA_LEN + 1];
-
-	struct avalon4_pkg detect_pkg;
-	struct avalon4_ret ret_pkg;
-
 	struct cgpu_info *avalon4 = usb_alloc_cgpu(&avalon4_drv, 1);
 
 	if (!usb_init(avalon4, dev, found)) {
@@ -737,37 +731,9 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 		avalon4 = usb_free_cgpu(avalon4);
 		return NULL;
 	}
-	avalon4_auc_init(avalon4);
 
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		strcpy(mm_version[i], AVA4_MM_VERNULL);
-
-		/* Send out detect pkg */
-		applog(LOG_DEBUG, "Avalon4: AVA4_P_DETECT");
-		memset(detect_pkg.data, 0, AVA4_P_DATA_LEN);
-		tmp = be32toh(i);
-		memcpy(detect_pkg.data + 28, &tmp, 4);
-		avalon4_init_pkg(&detect_pkg, AVA4_P_DETECT, 1, 1);
-		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
-		if (err == AVA4_SEND_OK && ret_pkg.type != AVA4_P_ACKDETECT) {
-			i -= 1;
-			continue;
-		}
-		if (err != AVA4_SEND_OK) {
-			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
-			       avalon4->drv->name, avalon4->device_id, err);
-			break;
-		}
-
-		applog(LOG_DEBUG, "Avalon4 Detect ID[%d]: %d", i, ret_pkg.type);
-		hexdump((uint8_t *)&ret_pkg, AVA4_READ_SIZE);
-
-		modular[i] = 1;
-		memcpy(mm_dna[i], ret_pkg.data, AVA4_DNA_LEN);
-		mm_dna[i][8] = '\0';
-		memcpy(mm_version[i], ret_pkg.data + AVA4_DNA_LEN, 15);
-		mm_version[i][15] = '\0';
-	}
+	if (avalon4_auc_init(avalon4) && avalon4_auc_init(avalon4))
+		return NULL;
 
 	/* We have a real Avalon! */
 	avalon4->threads = 1;
@@ -783,24 +749,11 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 		quit(1, "Failed to calloc avalon4_info");
 
 	info = avalon4->device_data;
-
 	info->fan_pwm = get_fan_pwm(AVA4_DEFAULT_FAN_PWM);
 	info->temp_max = 0;
-
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
-		info->enable[i] = modular[i];
+		info->enable[i] = 0;
 		info->dev_type[i] = AVA4_ID_AVAX;
-
-		strcpy(info->mm_dna[i], mm_dna[i]);
-
-		strcpy(info->mm_version[i], mm_version[i]);
-		if (!strncmp((char *)&(info->mm_version[i]), AVA4_FW4_PREFIXSTR, 2)) {
-			info->dev_type[i] = AVA4_ID_AVA4;
-			info->set_voltage = AVA4_DEFAULT_VOLTAGE;
-			info->set_frequency[0] = AVA4_DEFAULT_FREQUENCY;
-			info->set_frequency[1] = AVA4_DEFAULT_FREQUENCY;
-			info->set_frequency[2] = AVA4_DEFAULT_FREQUENCY;
-		}
 	}
 
 	if (!opt_avalon4_voltage_min)
@@ -1001,7 +954,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 			continue;
 
 		/* Send out detect pkg */
-		applog(LOG_DEBUG, "Avalon4: NEW AVA4_P_DETECT");
+		applog(LOG_DEBUG, "Avalon4: NEW AVA4_P_DETECT %d", i);
 		memset(detect_pkg.data, 0, AVA4_P_DATA_LEN);
 		tmp = be32toh(i);
 		memcpy(detect_pkg.data + 28, &tmp, 4);
@@ -1009,6 +962,8 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
 		if (err == AVA4_SEND_OK && ret_pkg.type != AVA4_P_ACKDETECT) {
 			i -= 1;
+			applog(LOG_DEBUG, "%s %d: AUC xfer data with type %d",
+					avalon4->drv->name, avalon4->device_id, ret_pkg.type);
 			continue;
 		}
 
