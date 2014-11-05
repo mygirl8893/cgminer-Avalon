@@ -839,7 +839,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][2] = 0;
 					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][3] = 0;
 				}
-				applog(LOG_ERR, "%s %d: Module detached ID[%d]",
+				applog(LOG_NOTICE, "%s %d: Module detached! ID[%d]",
 				       avalon4->drv->name, avalon4->device_id, i);
 			}
 		}
@@ -997,7 +997,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM4_PREFIXSTR, 2))
 			info->dev_type[i] = AVA4_ID_AVA4;
 
-		applog(LOG_ERR, "%s %d: New module detected ID[%d]",
+		applog(LOG_NOTICE, "%s %d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 	}
 
