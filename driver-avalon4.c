@@ -739,7 +739,7 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	if (avalon4_auc_init(avalon4, auc_ver) && avalon4_auc_init(avalon4, auc_ver))
 		return NULL;
 
-	/* We have a Avalon4 AUC connected */
+	/* We have an Avalon4 AUC connected */
 	avalon4->threads = 1;
 	add_cgpu(avalon4);
 
@@ -801,7 +801,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 
 	static int first = 1;
 	if (first) {
-		cgsleep_ms(400);
+		cgsleep_ms(500);
 		first = 0;
 	}
 
