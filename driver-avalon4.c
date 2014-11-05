@@ -23,21 +23,21 @@
 
 static int avalon4_fan_min = get_fan_pwm(AVA4_DEFAULT_FAN_MIN);
 static int avalon4_fan_max = get_fan_pwm(AVA4_DEFAULT_FAN_MAX);
-
-int opt_avalon4_freq[3] = {200, 200, 200};
 int opt_avalon4_fan_min = AVA4_DEFAULT_FAN_MIN;
 int opt_avalon4_fan_max = AVA4_DEFAULT_FAN_MAX;
-
 enum avalon4_fan_fixed opt_avalon4_fan_fixed = FAN_AUTO;
 
-int opt_avalon4_voltage_min;
-int opt_avalon4_voltage_max;
+int opt_avalon4_voltage_min = AVA4_DEFAULT_VOLTAGE;
+int opt_avalon4_voltage_max = AVA4_DEFAULT_VOLTAGE;
+int opt_avalon4_freq[3] = {AVA4_DEFAULT_FREQUENCY,
+			   AVA4_DEFAULT_FREQUENCY,
+			   AVA4_DEFAULT_FREQUENCY};
 
-int opt_avalon4_overheat = AVALON4_TEMP_OVERHEAT;
-int opt_avalon4_polling_delay = AVALON4_DEFAULT_POLLING_DELAY;
+int opt_avalon4_overheat = AVA4_TEMP_OVERHEAT;
+int opt_avalon4_polling_delay = AVA4_DEFAULT_POLLING_DELAY;
 
-int opt_avalon4_aucspeed = AVA4_AUCSPEED;
-int opt_avalon4_aucxdelay = AVA4_AUCXDELAY;
+int opt_avalon4_aucspeed = AVA4_AUC_SPEED;
+int opt_avalon4_aucxdelay = AVA4_AUC_XDELAY;
 
 #define UNPACK32(x, str)			\
 {						\
@@ -399,7 +399,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
  */
 static int avalon4_iic_init_pkg(uint8_t *iic_pkg, struct avalon4_iic_info *iic_info, uint8_t *buf, int wlen, int rlen)
 {
-	memset(iic_pkg, 0, AVA4_IIC_P_SIZE);
+	memset(iic_pkg, 0, AVA4_AUC_P_SIZE);
 
 	switch (iic_info->iic_op) {
 	case AVA4_IIC_INIT:
@@ -461,24 +461,23 @@ static int avalon4_iic_xfer(struct cgpu_info *avalon4,
 	return err;
 }
 
-static int avalon4_auc_init(struct cgpu_info *avalon4)
+static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 {
 	struct avalon4_iic_info iic_info;
 	int err, wlen, rlen;
-	uint8_t wbuf[AVA4_IIC_P_SIZE];
-	uint8_t rbuf[AVA4_IIC_P_SIZE];
+	uint8_t wbuf[AVA4_AUC_P_SIZE];
+	uint8_t rbuf[AVA4_AUC_P_SIZE];
 
 	if (unlikely(avalon4->usbinfo.nodev))
 		return 1;
 
-
 	/* Reset */
 	iic_info.iic_op = AVA4_IIC_RESET;
-	rlen = 0;		/* Version length: 12 (AUC-20140909) */
+	rlen = 0;
 	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 
-	memset(rbuf, 0, AVA4_IIC_P_SIZE);
-	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	memset(rbuf, 0, AVA4_AUC_P_SIZE);
+	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
 		applog(LOG_ERR, "Avalon4: Failed to reset Avalon USB2IIC Converter");
 		return 1;
@@ -486,11 +485,11 @@ static int avalon4_auc_init(struct cgpu_info *avalon4)
 
 	/* Deinit */
 	iic_info.iic_op = AVA4_IIC_DEINIT;
-	rlen = 0;		/* Version length: 12 (AUC-20140909) */
+	rlen = 0;
 	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 
-	memset(rbuf, 0, AVA4_IIC_P_SIZE);
-	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	memset(rbuf, 0, AVA4_AUC_P_SIZE);
+	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
 		applog(LOG_ERR, "Avalon4: Failed to deinit Avalon USB2IIC Converter");
 		return 1;
@@ -500,17 +499,20 @@ static int avalon4_auc_init(struct cgpu_info *avalon4)
 	iic_info.iic_op = AVA4_IIC_INIT;
 	iic_info.iic_param.aucParam[0] = opt_avalon4_aucspeed;
 	iic_info.iic_param.aucParam[1] = opt_avalon4_aucxdelay;
-	rlen = 12;		/* Version length: 12 (AUC-20140909) */
+	rlen = AVA4_AUC_VER_LEN;
 	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 
-	memset(rbuf, 0, AVA4_IIC_P_SIZE);
-	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	memset(rbuf, 0, AVA4_AUC_P_SIZE);
+	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
 		applog(LOG_ERR, "Avalon4: Failed to init Avalon USB2IIC Converter");
 		return 1;
 	}
 
-	applog(LOG_DEBUG, "Avalon4: USB2IIC Converter versioin: %s", rbuf + 4);
+	memcpy(ver, rbuf + 4, AVA4_AUC_VER_LEN);
+	ver[AVA4_AUC_VER_LEN] = '\0';
+
+	applog(LOG_DEBUG, "Avalon4: USB2IIC Converter versioin: %s!", ver);
 	return 0;
 }
 
@@ -518,8 +520,8 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 {
 	struct avalon4_iic_info iic_info;
 	int err, wlen, rlen;
-	uint8_t wbuf[AVA4_IIC_P_SIZE];
-	uint8_t rbuf[AVA4_IIC_P_SIZE];
+	uint8_t wbuf[AVA4_AUC_P_SIZE];
+	uint8_t rbuf[AVA4_AUC_P_SIZE];
 	uint8_t *pdata = rbuf + 4;
 	int adc_val;
 	float div_vol;
@@ -536,8 +538,8 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 	rlen = 7;
 	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 
-	memset(rbuf, 0, AVA4_IIC_P_SIZE);
-	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_IIC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	memset(rbuf, 0, AVA4_AUC_P_SIZE);
+	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
 		applog(LOG_ERR, "Avalon4: AUC Failed to get info ");
 		return 1;
@@ -562,8 +564,8 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 {
 	struct avalon4_iic_info iic_info;
 	int err, wcnt, rcnt, rlen = 0;
-	uint8_t wbuf[AVA4_IIC_P_SIZE];
-	uint8_t rbuf[AVA4_IIC_P_SIZE];
+	uint8_t wbuf[AVA4_AUC_P_SIZE];
+	uint8_t rbuf[AVA4_AUC_P_SIZE];
 
 	if (unlikely(avalon4->usbinfo.nodev))
 		return AVA4_SEND_ERROR;
@@ -725,6 +727,7 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 	int i;
 	struct avalon4_info *info;
 	struct cgpu_info *avalon4 = usb_alloc_cgpu(&avalon4_drv, 1);
+	char auc_ver[AVA4_AUC_VER_LEN];
 
 	if (!usb_init(avalon4, dev, found)) {
 		applog(LOG_ERR, "Avalon4 failed usb_init");
@@ -732,15 +735,15 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 		return NULL;
 	}
 
-	if (avalon4_auc_init(avalon4) && avalon4_auc_init(avalon4))
+	/* We try twice on AUC init */
+	if (avalon4_auc_init(avalon4, auc_ver) && avalon4_auc_init(avalon4, auc_ver))
 		return NULL;
 
-	/* We have a real Avalon! */
+	/* We have a Avalon4 AUC connected */
 	avalon4->threads = 1;
 	add_cgpu(avalon4);
 
 	update_usb_stats(avalon4);
-
 	applog(LOG_INFO, "%s%d: Found at %s", avalon4->drv->name, avalon4->device_id,
 	       avalon4->device_path);
 
@@ -749,20 +752,23 @@ static struct cgpu_info *avalon4_detect_one(struct libusb_device *dev, struct us
 		quit(1, "Failed to calloc avalon4_info");
 
 	info = avalon4->device_data;
-	info->fan_pwm = get_fan_pwm(AVA4_DEFAULT_FAN_PWM);
+	memcpy(info->auc_version, auc_ver, AVA4_AUC_VER_LEN);
+	info->auc_version[AVA4_AUC_VER_LEN] = '\0';
+	info->auc_speed = opt_avalon4_aucspeed;
+	info->auc_xdelay = opt_avalon4_aucxdelay;
+
+	info->fan_pwm = get_fan_pwm(AVA4_DEFAULT_FAN_MIN);
 	info->temp_max = 0;
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		info->enable[i] = 0;
 		info->dev_type[i] = AVA4_ID_AVAX;
 	}
 
-	if (!opt_avalon4_voltage_min)
-		opt_avalon4_voltage_min = opt_avalon4_voltage_max = info->set_voltage;
-	if (!opt_avalon4_freq[0]) {
-		opt_avalon4_freq[0] = info->set_frequency[0];
-		opt_avalon4_freq[1] = info->set_frequency[1];
-		opt_avalon4_freq[2] = info->set_frequency[2];
-	}
+	info->set_voltage = opt_avalon4_voltage_min;
+
+	info->set_frequency[0] = opt_avalon4_freq[0];
+	info->set_frequency[1] = opt_avalon4_freq[1];
+	info->set_frequency[2] = opt_avalon4_freq[2];
 
 	return avalon4;
 }
@@ -800,45 +806,46 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	}
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->enable[i]) {
-			cgsleep_ms(opt_avalon4_polling_delay);
+		if (!info->enable[i])
+			continue;
 
-			memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
+		cgsleep_ms(opt_avalon4_polling_delay);
 
-			tmp = be32toh(info->led_red[i]); /* RED LED */
-			memcpy(send_pkg.data, &tmp, 4);
+		memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 
-			tmp = be32toh(i); /* ID */
-			memcpy(send_pkg.data + 28, &tmp, 4);
-			avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
+		tmp = be32toh(info->led_red[i]); /* RED LED */
+		memcpy(send_pkg.data, &tmp, 4);
 
-			ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
-			if (ret == AVA4_SEND_OK)
-				decode_err =  decode_pkg(thr, &ar);
+		tmp = be32toh(i); /* ID */
+		memcpy(send_pkg.data + 28, &tmp, 4);
+		avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
 
-			if (ret != AVA4_SEND_OK || decode_err) {
-				err_cnt[i]++;
-				if (err_cnt[i] >= 4) {
-					err_cnt[i] = 0;
-					info->dev_type[i] = AVA4_ID_AVAX;
-					info->enable[i] = 0;
-					info->local_works[i] = 0;
-					info->hw_works[i] = 0;
-					for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-						info->matching_work[i * AVA4_DEFAULT_MINERS + j] = 0;
-						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][0] = 0;
-						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][1] = 0;
-						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][2] = 0;
-						info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][3] = 0;
-					}
-					applog(LOG_ERR, "%s %d: Module detached ID[%d]",
-					       avalon4->drv->name, avalon4->device_id, i);
-				}
-			}
+		ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
+		if (ret == AVA4_SEND_OK)
+			decode_err =  decode_pkg(thr, &ar);
 
-			if (ret == AVA4_SEND_OK && !decode_err)
+		if (ret != AVA4_SEND_OK || decode_err) {
+			err_cnt[i]++;
+			if (err_cnt[i] >= 4) {
 				err_cnt[i] = 0;
+				info->dev_type[i] = AVA4_ID_AVAX;
+				info->enable[i] = 0;
+				info->local_works[i] = 0;
+				info->hw_works[i] = 0;
+				for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+					info->matching_work[i * AVA4_DEFAULT_MINERS + j] = 0;
+					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][0] = 0;
+					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][1] = 0;
+					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][2] = 0;
+					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][3] = 0;
+				}
+				applog(LOG_ERR, "%s %d: Module detached ID[%d]",
+				       avalon4->drv->name, avalon4->device_id, i);
+			}
 		}
+
+		if (ret == AVA4_SEND_OK && !decode_err)
+			err_cnt[i] = 0;
 	}
 
 	return 0;
@@ -937,7 +944,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		return;
 	}
 
-	cg_rlock(&info->update_lock);
+	cg_wlock(&info->update_lock);
 	cg_rlock(&pool->data_lock);
 
 	cgtime(&info->last_stratum);
@@ -948,7 +955,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	avalon4_stratum_pkgs(avalon4, pool);
 
 	cg_runlock(&pool->data_lock);
-	cg_runlock(&info->update_lock);
+	cg_wunlock(&info->update_lock);
 
 	/* Detect new modules here */
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -956,7 +963,8 @@ static void avalon4_update(struct cgpu_info *avalon4)
 			continue;
 
 		/* Send out detect pkg */
-		applog(LOG_DEBUG, "Avalon4: NEW AVA4_P_DETECT %d", i);
+		applog(LOG_DEBUG, "%s %d: AVA4_P_DETECT ID[%d]",
+		       avalon4->drv->name, avalon4->device_id, i);
 		memset(detect_pkg.data, 0, AVA4_P_DATA_LEN);
 		tmp = be32toh(i);
 		memcpy(detect_pkg.data + 28, &tmp, 4);
@@ -976,17 +984,17 @@ static void avalon4_update(struct cgpu_info *avalon4)
 			break;
 		}
 
-		applog(LOG_DEBUG, "Avalon4 Detect ID[%d]: %d", i, ret_pkg.type);
-		/* FIXME: ? */
+		applog(LOG_DEBUG, "%s %d: Module detect ID[%d]: %d",
+		       avalon4->drv->name, avalon4->device_id, i, ret_pkg.type);
 		if (ret_pkg.type != AVA4_P_ACKDETECT)
 			break;
 
 		info->enable[i] = 1;
-		memcpy(info->mm_dna[i], ret_pkg.data, AVA4_DNA_LEN);
-		info->mm_dna[i][8] = '\0';
-		memcpy(info->mm_version[i], ret_pkg.data + AVA4_DNA_LEN, 15);
-		info->mm_version[i][15] = '\0';
-		if (!strncmp((char *)&(info->mm_version[i]), AVA4_FW4_PREFIXSTR, 2))
+		memcpy(info->mm_dna[i], ret_pkg.data, AVA4_MM_DNA_LEN);
+		info->mm_dna[i][AVA4_MM_DNA_LEN] = '\0';
+		memcpy(info->mm_version[i], ret_pkg.data + AVA4_MM_DNA_LEN, AVA4_MM_VER_LEN);
+		info->mm_version[i][AVA4_MM_VER_LEN] = '\0';
+		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM4_PREFIXSTR, 2))
 			info->dev_type[i] = AVA4_ID_AVA4;
 
 		applog(LOG_ERR, "%s %d: New module detected ID[%d]",
@@ -1187,7 +1195,16 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		root = api_add_string(root, buf, statbuf[i], true);
 	}
 
-	sprintf(buf, "AUC Temp");
+	sprintf(buf, "AUC VER");
+	root = api_add_string(root, buf, info->auc_version, true);
+
+	sprintf(buf, "AUC I2C Speed");
+	root = api_add_int(root, buf, &(info->auc_speed), false);
+
+	sprintf(buf, "AUC I2C XDelay");
+	root = api_add_int(root, buf, &(info->auc_xdelay), false);
+
+	sprintf(buf, "AUC ADC");
 	root = api_add_int(root, buf, &(info->auc_temp), false);
 
 	return root;

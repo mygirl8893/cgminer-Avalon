@@ -18,28 +18,31 @@
 #define AVA4_DEFAULT_MODULARS	64
 
 #define AVA4_PWM_MAX	0x3FF
-#define AVA4_DEFAULT_FAN_PWM	30 /* % */
-#define AVA4_DEFAULT_FAN_MIN	20
+#define AVA4_DEFAULT_FAN_MIN	20 /* % */
 #define AVA4_DEFAULT_FAN_MAX	100
 
-#define AVALON4_TEMP_OVERHEAT	65
-#define AVALON4_DEFAULT_POLLING_DELAY	20 /* ms */
+#define AVA4_TEMP_OVERHEAT	65
+#define AVA4_DEFAULT_POLLING_DELAY	20 /* ms */
 
-#define AVA4_DEFAULT_VOLTAGE_MIN	5000
-#define AVA4_DEFAULT_VOLTAGE_MAX	11000
+#define AVA4_DEFAULT_VOLTAGE_MIN	4000
+#define AVA4_DEFAULT_VOLTAGE_MAX	12000
 
 #define AVA4_DEFAULT_FREQUENCY_MIN	200
 #define AVA4_DEFAULT_FREQUENCY_MAX	1000
 
 #define AVA4_DEFAULT_MINERS	10
-#define AVA4_DEFAULT_VOLTAGE	7875
+#define AVA4_DEFAULT_VOLTAGE	7125
 #define AVA4_DEFAULT_FREQUENCY	200
 
-#define AVA4_AUCSPEED		400000
-#define AVA4_AUCXDELAY  	9600 /* 4800 = 1ms in AUC (11U14)  */
+#define AVA4_AUC_VER_LEN	12	/* Version length: 12 (AUC-YYYYMMDD) */
+#define AVA4_AUC_SPEED		400000
+#define AVA4_AUC_XDELAY  	9600	/* 4800 = 1ms in AUC (11U14)  */
+#define AVA4_AUC_P_SIZE		64
+
 
 /* Avalon4 protocol package type from MM protocol.h*/
-#define MM_VERSION_LEN	15
+#define AVA4_MM_VER_LEN	15
+#define AVA4_MM_DNA_LEN	8
 #define AVA4_H1	'A'
 #define AVA4_H2	'V'
 
@@ -69,7 +72,7 @@
 #define AVA4_MODULE_BROADCAST	0
 /* Endof Avalon4 protocol package type */
 
-#define AVA4_FW4_PREFIXSTR	"40"
+#define AVA4_MM4_PREFIXSTR	"40"
 #define AVA4_MM_VERNULL		"NONE"
 
 #define AVA4_ID_AVA4		3222
@@ -80,8 +83,6 @@
 #define AVA4_IIC_DEINIT		0xa2
 #define AVA4_IIC_XFER		0xa5
 #define AVA4_IIC_INFO		0xa6
-
-#define AVA4_DNA_LEN		8
 
 enum avalon4_fan_fixed {
 	FAN_FIXED,
@@ -108,8 +109,12 @@ struct avalon4_info {
 	struct pool pool2;
 	int pool_no;
 
-	char mm_version[AVA4_DEFAULT_MODULARS][16];
-	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_DNA_LEN + 1];
+	char auc_version[AVA4_AUC_VER_LEN];
+	int auc_speed;
+	int auc_xdelay;
+
+	char mm_version[AVA4_DEFAULT_MODULARS][AVA4_MM_VER_LEN + 1];
+	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_MM_DNA_LEN + 1];
 	int dev_type[AVA4_DEFAULT_MODULARS];
 	bool enable[AVA4_DEFAULT_MODULARS];
 
@@ -149,8 +154,6 @@ struct avalon4_iic_info {
 
 #define AVA4_WRITE_SIZE (sizeof(struct avalon4_pkg))
 #define AVA4_READ_SIZE AVA4_WRITE_SIZE
-
-#define AVA4_IIC_P_SIZE	64
 
 #define AVA4_SEND_OK 0
 #define AVA4_SEND_ERROR -1
