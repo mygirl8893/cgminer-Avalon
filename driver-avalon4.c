@@ -512,7 +512,7 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 	memcpy(ver, rbuf + 4, AVA4_AUC_VER_LEN);
 	ver[AVA4_AUC_VER_LEN] = '\0';
 
-	applog(LOG_DEBUG, "Avalon4: USB2IIC Converter versioin: %s!", ver);
+	applog(LOG_DEBUG, "Avalon4: USB2IIC Converter version: %s!", ver);
 	return 0;
 }
 
@@ -566,6 +566,9 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 	int err, wcnt, rcnt, rlen = 0;
 	uint8_t wbuf[AVA4_AUC_P_SIZE];
 	uint8_t rbuf[AVA4_AUC_P_SIZE];
+	static err_cnt = 0;
+
+	struct avalon4_info *info = avalon4->device_data;
 
 	if (unlikely(avalon4->usbinfo.nodev))
 		return AVA4_SEND_ERROR;
@@ -582,12 +585,16 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 		err = avalon4_iic_xfer(avalon4, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
 		applog(LOG_DEBUG, "Avalon4: IIC read again!(err:%d)", err);
 	}
-	if (err || rcnt != rlen)
+	if (err || rcnt != rlen) {
+		if (err_cnt++ == 10)
+			avalon4_auc_init(avalon4, info->auc_version);
 		return AVA4_SEND_ERROR;
+	}
 
 	if (ret)
 		memcpy((char *)ret, rbuf + 4, AVA4_READ_SIZE);
 
+	err_cnt = 0;
 	return AVA4_SEND_OK;
 }
 
