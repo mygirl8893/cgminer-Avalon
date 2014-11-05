@@ -109,7 +109,7 @@ struct avalon4_info {
 	struct pool pool2;
 	int pool_no;
 
-	char auc_version[AVA4_AUC_VER_LEN];
+	char auc_version[AVA4_AUC_VER_LEN + 1];
 	int auc_speed;
 	int auc_xdelay;
 

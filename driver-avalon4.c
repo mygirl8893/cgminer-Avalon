@@ -101,7 +101,7 @@ char *set_avalon4_fixed_speed(enum avalon4_fan_fixed *f)
 
 char *set_avalon4_freq(char *arg)
 {
-	char *colon1, *colon2, *colon3;
+	char *colon1, *colon2;
 	int val1 = 0, val2 = 0, val3 = 0;
 
 	if (!(*arg))
