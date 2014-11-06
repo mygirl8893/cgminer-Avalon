@@ -566,7 +566,7 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 	int err, wcnt, rcnt, rlen = 0;
 	uint8_t wbuf[AVA4_AUC_P_SIZE];
 	uint8_t rbuf[AVA4_AUC_P_SIZE];
-	static err_cnt = 0;
+	static uint8_t err_cnt = 0;
 
 	struct avalon4_info *info = avalon4->device_data;
 
