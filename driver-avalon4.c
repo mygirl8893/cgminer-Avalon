@@ -808,7 +808,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 
 	static int first = 1;
 	if (first) {
-		cgsleep_ms(500);
+		cgsleep_ms(300);
 		first = 0;
 	}
 
@@ -1256,7 +1256,43 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 		info = avalon4->device_data;
 		info->led_red[val] = !info->led_red[val];
 
-		applog(LOG_ERR, "Avalon4: Module:%d, LED: %s", val, info->led_red[val] ? "on" : "off");
+		applog(LOG_NOTICE, "Avalon4: Module:%d, LED: %s", val, info->led_red[val] ? "on" : "off");
+		return NULL;
+	}
+
+	if (strcasecmp(option, "voltage") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing voltage value");
+			return replybuf;
+		}
+
+		if (set_avalon4_voltage(setting)) {
+			sprintf(replybuf, "invalid voltage value, valid range %d-%d",
+				AVA4_DEFAULT_VOLTAGE_MIN, AVA4_DEFAULT_VOLTAGE_MAX);
+			return replybuf;
+		}
+
+		applog(LOG_NOTICE, "%s %d: Update voltage to %s",
+		       avalon4->drv->name, avalon4->device_id, setting);
+
+		return NULL;
+	}
+
+	if (strcasecmp(option, "frequency") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing frequency value");
+			return replybuf;
+		}
+
+		if (set_avalon4_freq(setting)) {
+			sprintf(replybuf, "invalid frequency value, valid range %d-%d",
+				AVA4_DEFAULT_FREQUENCY_MIN, AVA4_DEFAULT_FREQUENCY_MAX);
+			return replybuf;
+		}
+
+		applog(LOG_NOTICE, "%s %d: Update frequency to %s",
+		       avalon4->drv->name, avalon4->device_id, setting);
+
 		return NULL;
 	}
 
