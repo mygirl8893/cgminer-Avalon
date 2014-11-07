@@ -1290,8 +1290,9 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 			return replybuf;
 		}
 
-		applog(LOG_NOTICE, "%s %d: Update frequency to %s",
-		       avalon4->drv->name, avalon4->device_id, setting);
+		applog(LOG_NOTICE, "%s %d: Update frequency to %d",
+		       avalon4->drv->name, avalon4->device_id,
+		       (opt_avalon4_freq[0] * 4 + opt_avalon4_freq[1] * 4 + opt_avalon4_freq[2]) / 9);
 
 		return NULL;
 	}
