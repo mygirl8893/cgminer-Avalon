@@ -1043,6 +1043,10 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	/* Package the data */
 	avalon4_init_pkg(&send_pkg, AVA4_P_SET, 1, 1);
 	avalon4_send_bc_pkgs(avalon4, &send_pkg);
+
+	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
+	avalon4_init_pkg(&send_pkg, AVA4_P_FINISH, 1, 1);
+	avalon4_send_bc_pkgs(avalon4, &send_pkg);
 }
 
 static int64_t avalon4_scanhash(struct thr_info *thr)

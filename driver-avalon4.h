@@ -40,7 +40,8 @@
 #define AVA4_AUC_P_SIZE		64
 
 
-/* Avalon4 protocol package type from MM protocol.h*/
+/* Avalon4 protocol package type from MM protocol.h
+ * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
 #define AVA4_MM_VER_LEN	15
 #define AVA4_MM_DNA_LEN	8
 #define AVA4_H1	'C'
