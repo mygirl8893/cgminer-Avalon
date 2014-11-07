@@ -943,65 +943,12 @@ static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 	cg_wunlock(&pool_stratum->data_lock);
 }
 
-static void avalon4_update(struct cgpu_info *avalon4)
+static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, int addr)
 {
 	struct avalon4_info *info = avalon4->device_data;
-	struct thr_info *thr = avalon4->thr[0];
 	struct avalon4_pkg send_pkg;
 	uint32_t tmp, range, start;
-	struct work *work;
-	struct pool *pool;
 
-	applog(LOG_DEBUG, "Avalon4: New stratum: restart: %d, update: %d",
-	       thr->work_restart, thr->work_update);
-	thr->work_update = false;
-	thr->work_restart = false;
-
-	/* Step 1: Make sure pool is ready */
-	work = get_work(thr, thr->id);
-	discard_work(work); /* Don't leak memory */
-
-	/* Step 2: MM protocl check */
-	pool = current_pool();
-	if (!pool->has_stratum)
-		quit(1, "Avalon4: MM have to use stratum pool");
-
-	if (pool->coinbase_len > AVA4_P_COINBASE_SIZE) {
-		applog(LOG_INFO, "Avalon4: MM pool coinbase length(%d) is more than %d",
-		       pool->coinbase_len, AVA4_P_COINBASE_SIZE);
-		if ((pool->coinbase_len - pool->nonce2_offset + 64) > AVA4_P_COINBASE_SIZE) {
-			applog(LOG_ERR, "Avalon4: MM pool modified coinbase length(%d) is more than %d",
-			       pool->coinbase_len - pool->nonce2_offset + 64, AVA4_P_COINBASE_SIZE);
-			return;
-		}
-	}
-	if (pool->merkles > AVA4_P_MERKLES_COUNT) {
-		applog(LOG_ERR, "Avalon4: MM merkles have to less then %d", AVA4_P_MERKLES_COUNT);
-		return;
-	}
-	if (pool->n2size < 3) {
-		applog(LOG_ERR, "Avalon4: MM nonce2 size have to >= 3 (%d)", pool->n2size);
-		return;
-	}
-
-	/* Step 3: Send out stratum pkgs */
-	cg_wlock(&info->update_lock);
-	cg_rlock(&pool->data_lock);
-
-	cgtime(&info->last_stratum);
-	info->pool_no = pool->pool_no;
-	copy_pool_stratum(&info->pool2, &info->pool1);
-	copy_pool_stratum(&info->pool1, &info->pool0);
-	copy_pool_stratum(&info->pool0, pool);
-	avalon4_stratum_pkgs(avalon4, pool);
-
-	cg_runlock(&pool->data_lock);
-	cg_wunlock(&info->update_lock);
-
-	/* Step 4: Try to detect new modules */
-	detect_modules(avalon4);
-
-	/* Step 5: Configuer the parameter from outside */
 	adjust_fan(info);
 	info->set_voltage = opt_avalon4_voltage_min;
 	info->set_frequency[0] = opt_avalon4_freq[0];
@@ -1042,11 +989,80 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 	/* Package the data */
 	avalon4_init_pkg(&send_pkg, AVA4_P_SET, 1, 1);
-	avalon4_send_bc_pkgs(avalon4, &send_pkg);
+	if (!addr)
+		avalon4_send_bc_pkgs(avalon4, &send_pkg);
+}
+
+static void avalon4_stratum_finish(struct cgpu_info *avalon4)
+{
+	struct avalon4_pkg send_pkg;
 
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 	avalon4_init_pkg(&send_pkg, AVA4_P_FINISH, 1, 1);
 	avalon4_send_bc_pkgs(avalon4, &send_pkg);
+}
+
+static void avalon4_update(struct cgpu_info *avalon4)
+{
+	struct avalon4_info *info = avalon4->device_data;
+	struct thr_info *thr = avalon4->thr[0];
+	struct work *work;
+	struct pool *pool;
+	int coinbase_len_posthash, coinbase_len_prehash;
+
+	applog(LOG_DEBUG, "Avalon4: New stratum: restart: %d, update: %d",
+	       thr->work_restart, thr->work_update);
+	thr->work_update = false;
+	thr->work_restart = false;
+
+	/* Step 1: Make sure pool is ready */
+	work = get_work(thr, thr->id);
+	discard_work(work); /* Don't leak memory */
+
+	/* Step 2: MM protocol check */
+	pool = current_pool();
+	if (!pool->has_stratum)
+		quit(1, "Avalon4: MM have to use stratum pool");
+
+	coinbase_len_prehash = pool->nonce2_offset - (pool->nonce2_offset % SHA256_BLOCK_SIZE);
+	coinbase_len_posthash = pool->coinbase_len - coinbase_len_prehash;
+
+	if (coinbase_len_posthash + SHA256_BLOCK_SIZE > AVA4_P_COINBASE_SIZE) {
+		applog(LOG_ERR, "Avalon4: MM pool modified coinbase length(%d) is more than %d",
+		       coinbase_len_posthash + SHA256_BLOCK_SIZE, AVA4_P_COINBASE_SIZE);
+		return;
+	}
+	if (pool->merkles > AVA4_P_MERKLES_COUNT) {
+		applog(LOG_ERR, "Avalon4: MM merkles have to less then %d", AVA4_P_MERKLES_COUNT);
+		return;
+	}
+	if (pool->n2size < 3) {
+		applog(LOG_ERR, "Avalon4: MM nonce2 size have to >= 3 (%d)", pool->n2size);
+		return;
+	}
+
+	/* Step 3: Send out stratum pkgs */
+	cg_wlock(&info->update_lock);
+	cg_rlock(&pool->data_lock);
+
+	cgtime(&info->last_stratum);
+	info->pool_no = pool->pool_no;
+	copy_pool_stratum(&info->pool2, &info->pool1);
+	copy_pool_stratum(&info->pool1, &info->pool0);
+	copy_pool_stratum(&info->pool0, pool);
+	avalon4_stratum_pkgs(avalon4, pool);
+
+	cg_runlock(&pool->data_lock);
+	cg_wunlock(&info->update_lock);
+
+	/* Step 4: Try to detect new modules */
+	detect_modules(avalon4);
+
+	/* Step 5: Configuer the parameter from outside */
+	avalon4_stratum_set(avalon4, pool, 0);
+
+	/* Step 6: Send out finish pkg */
+	avalon4_stratum_finish(avalon4);
 }
 
 static int64_t avalon4_scanhash(struct thr_info *thr)
