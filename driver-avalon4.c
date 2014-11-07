@@ -25,7 +25,6 @@ static int avalon4_fan_min = get_fan_pwm(AVA4_DEFAULT_FAN_MIN);
 static int avalon4_fan_max = get_fan_pwm(AVA4_DEFAULT_FAN_MAX);
 int opt_avalon4_fan_min = AVA4_DEFAULT_FAN_MIN;
 int opt_avalon4_fan_max = AVA4_DEFAULT_FAN_MAX;
-enum avalon4_fan_fixed opt_avalon4_fan_fixed = FAN_AUTO;
 
 int opt_avalon4_voltage_min = AVA4_DEFAULT_VOLTAGE;
 int opt_avalon4_voltage_max = AVA4_DEFAULT_VOLTAGE;
@@ -90,12 +89,6 @@ char *set_avalon4_fan(char *arg)
 	avalon4_fan_min = get_fan_pwm(val1);
 	avalon4_fan_max = get_fan_pwm(val2);
 
-	return NULL;
-}
-
-char *set_avalon4_fixed_speed(enum avalon4_fan_fixed *f)
-{
-	*f = FAN_FIXED;
 	return NULL;
 }
 
@@ -238,15 +231,7 @@ static inline uint32_t decode_voltage(uint32_t v)
 
 static inline void adjust_fan(struct avalon4_info *info)
 {
-	int t;
-
-	if (opt_avalon4_fan_fixed == FAN_FIXED) {
-		info->fan_pct = opt_avalon4_fan_min;
-		info->fan_pwm = get_fan_pwm(info->fan_pct);
-		return;
-	}
-
-	t = get_current_temp_max(info);
+	int t = get_current_temp_max(info);
 
 	/* TODO: Add options for temperature range and fan adjust function 40 ~ 50 */
 	if (t < 40)
@@ -1237,8 +1222,28 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 	struct avalon4_info *info;
 
 	if (strcasecmp(option, "help") == 0) {
-		sprintf(replybuf, "led: module_id");
+		sprintf(replybuf, "led|fan|voltage|frequency|pdelay");
 		return replybuf;
+	}
+
+	if (strcasecmp(option, "pdelay") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing polling delay setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 1 || val > 65535) {
+			sprintf(replybuf, "invalid polling delay: %d, valid range 1-65535", val);
+			return replybuf;
+		}
+
+		opt_avalon4_polling_delay = val;
+
+		applog(LOG_NOTICE, "%s %d: Update polling delay to: %d",
+		       avalon4->drv->name, avalon4->device_id, val);
+
+		return NULL;
 	}
 
 	if (strcasecmp(option, "led") == 0) {
@@ -1256,7 +1261,29 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 		info = avalon4->device_data;
 		info->led_red[val] = !info->led_red[val];
 
-		applog(LOG_NOTICE, "Avalon4: Module:%d, LED: %s", val, info->led_red[val] ? "on" : "off");
+		applog(LOG_NOTICE, "%s %d: Module:%d, LED: %s",
+		       avalon4->drv->name, avalon4->device_id,
+		       val, info->led_red[val] ? "on" : "off");
+
+		return NULL;
+	}
+
+	if (strcasecmp(option, "fan") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing fan value");
+			return replybuf;
+		}
+
+		if (set_avalon4_fan(setting)) {
+			sprintf(replybuf, "invalid fan value, valid range %d-%d",
+				AVA4_DEFAULT_FAN_MIN, AVA4_DEFAULT_FAN_MAX);
+			return replybuf;
+		}
+
+		applog(LOG_NOTICE, "%s %d: Update fan to %d-%d",
+		       avalon4->drv->name, avalon4->device_id,
+		       opt_avalon4_fan_min, opt_avalon4_fan_max);
+
 		return NULL;
 	}
 

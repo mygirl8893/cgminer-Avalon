@@ -84,11 +84,6 @@
 #define AVA4_IIC_XFER		0xa5
 #define AVA4_IIC_INFO		0xa6
 
-enum avalon4_fan_fixed {
-	FAN_FIXED,
-	FAN_AUTO,
-};
-
 struct avalon4_pkg {
 	uint8_t head[2];
 	uint8_t type;
@@ -161,8 +156,6 @@ struct avalon4_iic_info {
 extern char *set_avalon4_fan(char *arg);
 extern char *set_avalon4_freq(char *arg);
 extern char *set_avalon4_voltage(char *arg);
-extern char *set_avalon4_fixed_speed(enum avalon4_fan_fixed *f);
-extern enum avalon4_fan_fixed opt_avalon4_fan_fixed;
 extern int opt_avalon4_overheat;
 extern int opt_avalon4_polling_delay;
 extern int opt_avalon4_aucspeed;
