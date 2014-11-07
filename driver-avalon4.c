@@ -273,10 +273,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 	if (expected_crc != actual_crc)
 		return 1;
 
-	memcpy(&modular_id, ar->data + 28, 4);
-	modular_id = be32toh(modular_id);
-	applog(LOG_DEBUG, "Avalon4: decode modular id: %d", modular_id);
-
 	switch(ar->type) {
 	case AVA4_P_NONCE:
 		applog(LOG_DEBUG, "Avalon4: AVA4_P_NONCE");
@@ -784,12 +780,65 @@ static bool avalon4_prepare(struct thr_info *thr)
 	return true;
 }
 
+static void detect_modules(struct cgpu_info *avalon4)
+{
+	struct avalon4_info *info = avalon4->device_data;
+	struct thr_info *thr = avalon4->thr[0];
+
+	struct avalon4_pkg detect_pkg;
+	struct avalon4_ret ret_pkg;
+	uint32_t tmp;
+	int i, err;
+
+	/* Detect new modules here */
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->enable[i])
+			continue;
+
+		/* Send out detect pkg */
+		applog(LOG_DEBUG, "%s %d: AVA4_P_DETECT ID[%d]",
+		       avalon4->drv->name, avalon4->device_id, i);
+		memset(detect_pkg.data, 0, AVA4_P_DATA_LEN);
+		avalon4_init_pkg(&detect_pkg, AVA4_P_DETECT, 1, 1);
+		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
+		if (err == AVA4_SEND_OK) {
+			if (decode_pkg(thr, &ret_pkg)) {
+				applog(LOG_DEBUG, "%s %d: AUC xfer data with type %d",
+				       avalon4->drv->name, avalon4->device_id, ret_pkg.type);
+				continue;
+			}
+		}
+
+		if (err != AVA4_SEND_OK) {
+			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
+					avalon4->drv->name, avalon4->device_id, err);
+			break;
+		}
+
+		applog(LOG_DEBUG, "%s %d: Module detect ID[%d]: %d",
+		       avalon4->drv->name, avalon4->device_id, i, ret_pkg.type);
+		if (ret_pkg.type != AVA4_P_ACKDETECT)
+			break;
+
+		info->enable[i] = 1;
+		memcpy(info->mm_dna[i], ret_pkg.data, AVA4_MM_DNA_LEN);
+		info->mm_dna[i][AVA4_MM_DNA_LEN] = '\0';
+		memcpy(info->mm_version[i], ret_pkg.data + AVA4_MM_DNA_LEN, AVA4_MM_VER_LEN);
+		info->mm_version[i][AVA4_MM_VER_LEN] = '\0';
+		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM4_PREFIXSTR, 2))
+			info->dev_type[i] = AVA4_ID_AVA4;
+
+		applog(LOG_NOTICE, "%s %d: New module detect! ID[%d]",
+		       avalon4->drv->name, avalon4->device_id, i);
+	}
+}
+
 static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalon4_info *info)
 {
 	static uint8_t err_cnt[AVA4_DEFAULT_MODULARS];
 	struct avalon4_pkg send_pkg;
 	struct avalon4_ret ar;
-	int i, j, tmp, ret, decode_err;
+	int i, j, tmp, ret, decode_err, do_polling = 0;
 
 	static int first = 1;
 	if (first) {
@@ -801,15 +850,12 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 		if (!info->enable[i])
 			continue;
 
+		do_polling = 1;
 		cgsleep_ms(opt_avalon4_polling_delay);
 
 		memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
-
 		tmp = be32toh(info->led_red[i]); /* RED LED */
 		memcpy(send_pkg.data, &tmp, 4);
-
-		tmp = be32toh(i); /* ID */
-		memcpy(send_pkg.data + 28, &tmp, 4);
 		avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
 
 		ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
@@ -839,6 +885,9 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 		if (ret == AVA4_SEND_OK && !decode_err)
 			err_cnt[i] = 0;
 	}
+
+	if (!do_polling)
+		detect_modules(avalon4);
 
 	return 0;
 }
@@ -892,61 +941,6 @@ static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 	memcpy(pool_stratum->ntime, pool->ntime, sizeof(pool_stratum->ntime));
 	memcpy(pool_stratum->header_bin, pool->header_bin, sizeof(pool_stratum->header_bin));
 	cg_wunlock(&pool_stratum->data_lock);
-}
-
-static void detect_modules(struct cgpu_info *avalon4)
-{
-	struct avalon4_info *info = avalon4->device_data;
-	struct thr_info *thr = avalon4->thr[0];
-
-	struct avalon4_pkg detect_pkg;
-	struct avalon4_ret ret_pkg;
-	uint32_t tmp;
-	int i, err;
-
-	/* Detect new modules here */
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->enable[i])
-			continue;
-
-		/* Send out detect pkg */
-		applog(LOG_DEBUG, "%s %d: AVA4_P_DETECT ID[%d]",
-		       avalon4->drv->name, avalon4->device_id, i);
-		memset(detect_pkg.data, 0, AVA4_P_DATA_LEN);
-		tmp = be32toh(i);
-		memcpy(detect_pkg.data + 28, &tmp, 4);
-		avalon4_init_pkg(&detect_pkg, AVA4_P_DETECT, 1, 1);
-		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
-		if (err == AVA4_SEND_OK) {
-			if (decode_pkg(thr, &ret_pkg)) {
-				applog(LOG_DEBUG, "%s %d: AUC xfer data with type %d",
-				       avalon4->drv->name, avalon4->device_id, ret_pkg.type);
-				continue;
-			}
-		}
-
-		if (err != AVA4_SEND_OK) {
-			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
-					avalon4->drv->name, avalon4->device_id, err);
-			break;
-		}
-
-		applog(LOG_DEBUG, "%s %d: Module detect ID[%d]: %d",
-		       avalon4->drv->name, avalon4->device_id, i, ret_pkg.type);
-		if (ret_pkg.type != AVA4_P_ACKDETECT)
-			break;
-
-		info->enable[i] = 1;
-		memcpy(info->mm_dna[i], ret_pkg.data, AVA4_MM_DNA_LEN);
-		info->mm_dna[i][AVA4_MM_DNA_LEN] = '\0';
-		memcpy(info->mm_version[i], ret_pkg.data + AVA4_MM_DNA_LEN, AVA4_MM_VER_LEN);
-		info->mm_version[i][AVA4_MM_VER_LEN] = '\0';
-		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM4_PREFIXSTR, 2))
-			info->dev_type[i] = AVA4_ID_AVA4;
-
-		applog(LOG_NOTICE, "%s %d: New module detect! ID[%d]",
-		       avalon4->drv->name, avalon4->device_id, i);
-	}
 }
 
 static void avalon4_update(struct cgpu_info *avalon4)
@@ -1091,7 +1085,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	int minerindex, minercount;
 	char statbuf[AVA4_DEFAULT_MODULARS][200];
 
-	memset(statbuf, 0, AVA4_DEFAULT_MODULARS*200);
+	memset(statbuf, 0, AVA4_DEFAULT_MODULARS * 200);
 
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
