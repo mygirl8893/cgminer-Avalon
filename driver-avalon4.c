@@ -744,6 +744,7 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	info->auc_speed = opt_avalon4_aucspeed;
 	info->auc_xdelay = opt_avalon4_aucxdelay;
 
+	info->fan_pct = AVA4_DEFAULT_FAN_MIN;
 	info->fan_pwm = get_fan_pwm(AVA4_DEFAULT_FAN_MIN);
 	info->temp_max = 0;
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
