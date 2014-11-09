@@ -244,7 +244,7 @@ static inline void adjust_fan(struct avalon4_info *info)
 	info->fan_pwm = get_fan_pwm(info->fan_pct);
 }
 
-static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
+static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_id)
 {
 	struct cgpu_info *avalon4 = thr->cgpu;
 	struct avalon4_info *info = avalon4->device_data;
@@ -255,7 +255,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, ntime, miner, modular_id, chip_id;
+	uint32_t nonce, nonce2, ntime, miner, chip_id;
 	uint8_t job_id[4];
 	int pool_no, tmp;
 
@@ -267,11 +267,11 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 
 	expected_crc = crc16(ar->data, AVA4_P_DATA_LEN);
 	actual_crc = (ar->crc[0] & 0xff) | ((ar->crc[1] & 0xff) << 8);
-
-	applog(LOG_DEBUG, "Avalon4: %d: expected crc(%04x), actual_crc(%04x)",
-	       ar->type, expected_crc, actual_crc);
-	if (expected_crc != actual_crc)
+	if (expected_crc != actual_crc) {
+		applog(LOG_DEBUG, "Avalon4: %02x: expected crc(%04x), actual_crc(%04x)",
+		       ar->type, expected_crc, actual_crc);
 		return 1;
+	}
 
 	switch(ar->type) {
 	case AVA4_P_NONCE:
@@ -289,10 +289,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 		pool_no = be32toh(pool_no);
 		ntime = be32toh(ntime);
 		if (miner >= AVA4_DEFAULT_MINERS ||
-		    modular_id >= AVA4_DEFAULT_MINERS ||
-		    pool_no >= total_pools ||
-		    pool_no < 0) {
-			applog(LOG_DEBUG, "Avalon4: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
+		    pool_no >= total_pools || pool_no < 0) {
+			applog(LOG_DEBUG, "Avalon4: Wrong miner/pool_no %d/%d", miner, pool_no);
 			break;
 		} else {
 			info->matching_work[modular_id * AVA4_DEFAULT_MINERS + miner]++;
@@ -331,6 +329,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar)
 		break;
 	case AVA4_P_STATUS:
 		applog(LOG_DEBUG, "Avalon4: AVA4_P_STATUS");
+		hexdump(ar->data, 32);
 		memcpy(&tmp, ar->data, 4);
 		tmp = be32toh(tmp);
 		info->temp[modular_id] = tmp;
@@ -799,10 +798,12 @@ static void detect_modules(struct cgpu_info *avalon4)
 		applog(LOG_DEBUG, "%s %d: AVA4_P_DETECT ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 		memset(detect_pkg.data, 0, AVA4_P_DATA_LEN);
+		tmp = be32toh(i); /* ID */
+		memcpy(detect_pkg.data + 28, &tmp, 4);
 		avalon4_init_pkg(&detect_pkg, AVA4_P_DETECT, 1, 1);
 		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
 		if (err == AVA4_SEND_OK) {
-			if (decode_pkg(thr, &ret_pkg)) {
+			if (decode_pkg(thr, &ret_pkg, AVA4_MODULE_BROADCAST)) {
 				applog(LOG_DEBUG, "%s %d: AUC xfer data with type %d",
 				       avalon4->drv->name, avalon4->device_id, ret_pkg.type);
 				continue;
@@ -842,7 +843,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 
 	static int first = 1;
 	if (first) {
-		cgsleep_ms(300);
+		cgsleep_ms(500);
 		first = 0;
 	}
 
@@ -860,7 +861,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 
 		ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
 		if (ret == AVA4_SEND_OK)
-			decode_err =  decode_pkg(thr, &ar);
+			decode_err =  decode_pkg(thr, &ar, i);
 
 		if (ret != AVA4_SEND_OK || decode_err) {
 			err_cnt[i]++;
@@ -989,7 +990,7 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 
 	/* Package the data */
 	avalon4_init_pkg(&send_pkg, AVA4_P_SET, 1, 1);
-	if (!addr)
+	if (addr == AVA4_MODULE_BROADCAST)
 		avalon4_send_bc_pkgs(avalon4, &send_pkg);
 }
 
@@ -1089,7 +1090,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	cg_runlock(&info->update_lock);
 
 	h = 0;
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++)
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++)
 		h += info->enable[i] ? (info->local_work[i] - info->hw_work[i]) : 0;
 
 	return h * 0xffffffff;
@@ -1107,14 +1108,14 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 	memset(statbuf, 0, AVA4_DEFAULT_MODULARS * 200);
 
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, "Ver[%s]", info->mm_version[i]);
 		strcat(statbuf[i], buf);
 	}
 
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, " DNA[%02x%02x%02x%02x%02x%02x%02x%02x]",
@@ -1131,7 +1132,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 	minerindex = 0;
 	minercount = 0;
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->dev_type[i] == AVA4_ID_AVAX) {
 			minerindex += AVA4_DEFAULT_MINERS;
 			continue;
@@ -1149,19 +1150,19 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		minerindex += AVA4_DEFAULT_MINERS;
 	}
 
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, " LW[%d]", info->local_works[i]);
 		strcat(statbuf[i], buf);
 	}
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, " HW[%d]", info->hw_works[i]);
 		strcat(statbuf[i], buf);
 	}
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		a = info->hw_works[i];
@@ -1171,44 +1172,44 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, " DH[%.3f%%]", hwp * 100);
 		strcat(statbuf[i], buf);
 	}
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, " Temp[%d]", info->temp[i]);
 		strcat(statbuf[i], buf);
 	}
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, " Fan[%d]", info->fan[i]);
 		strcat(statbuf[i], buf);
 	}
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, " Vol[%.4f]", (float)info->get_voltage[i] / 10000);
 		strcat(statbuf[i], buf);
 	}
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, " Freq[%.2f]", (float)info->get_frequency[i] / 1000);
 		strcat(statbuf[i], buf);
 	}
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, " PG[%d]", info->power_good[i]);
 		strcat(statbuf[i], buf);
 	}
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, " Led[%d]", info->led_red[i]);
 		strcat(statbuf[i], buf);
 	}
 
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
 		sprintf(buf, "MM ID%d", i);
