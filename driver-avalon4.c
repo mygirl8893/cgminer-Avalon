@@ -770,8 +770,9 @@ static bool avalon4_prepare(struct thr_info *thr)
 	struct cgpu_info *avalon4 = thr->cgpu;
 	struct avalon4_info *info = avalon4->device_data;
 
-	cglock_init(&info->update_lock);
+	cgtime(&(info->last_fan));
 
+	cglock_init(&info->update_lock);
 	cglock_init(&info->pool0.data_lock);
 	cglock_init(&info->pool1.data_lock);
 	cglock_init(&info->pool2.data_lock);
@@ -840,11 +841,19 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	struct avalon4_pkg send_pkg;
 	struct avalon4_ret ar;
 	int i, j, tmp, ret, decode_err, do_polling = 0;
+	struct timeval current_fan;
+	int do_adjust_fan = 0;
 
 	static int first = 1;
 	if (first) {
-		cgsleep_ms(500);
+		cgsleep_ms(300);
 		first = 0;
+	}
+
+	cgtime(&current_fan);
+	if (tdiff(&current_fan, &(info->last_fan)) > 10.0) {
+		cgtime(&info->last_fan);
+		do_adjust_fan = 1;
 	}
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -855,17 +864,17 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 		cgsleep_ms(opt_avalon4_polling_delay);
 
 		memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
-		/* RED LED */
+		/* Red LED */
 		tmp = be32toh(info->led_red[i]);
 		memcpy(send_pkg.data, &tmp, 4);
 
-#if 0
-		/* Adjust Fan */
-		info->fan_pwm = get_fan_pwm(AVA4_DEFAULT_FAN_MAX - 1);
-		info->fan_pwm |= 0x80000000;
-		tmp = be32toh(info->fan_pwm);
-		memcpy(send_pkg.data + 4, &tmp, 4);
-#endif
+		/* Adjust fan every 10 seconds*/
+		if (do_adjust_fan) {
+			adjust_fan(info);
+			info->fan_pwm |= 0x80000000;
+			tmp = be32toh(info->fan_pwm);
+			memcpy(send_pkg.data + 4, &tmp, 4);
+		}
 
 		avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
 		ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
@@ -959,7 +968,6 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	struct avalon4_pkg send_pkg;
 	uint32_t tmp, range, start;
 
-	adjust_fan(info);
 	info->set_voltage = opt_avalon4_voltage_min;
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
@@ -967,9 +975,6 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 
 	/* Set the Fan, Voltage and Frequency */
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
-
-	tmp = be32toh(info->fan_pwm);
-	memcpy(send_pkg.data, &tmp, 4);
 
 	applog(LOG_INFO, "Avalon4: Temp max: %d, Cut off temp: %d",
 	       get_current_temp_max(info), opt_avalon4_overheat);

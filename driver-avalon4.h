@@ -31,7 +31,7 @@
 #define AVA4_DEFAULT_FREQUENCY_MAX	1000
 
 #define AVA4_DEFAULT_MINERS	10
-#define AVA4_DEFAULT_VOLTAGE	6750
+#define AVA4_DEFAULT_VOLTAGE	6875
 #define AVA4_DEFAULT_FREQUENCY	200
 
 #define AVA4_AUC_VER_LEN	12	/* Version length: 12 (AUC-YYYYMMDD) */
@@ -108,6 +108,7 @@ struct avalon4_pkg {
 struct avalon4_info {
 	cglock_t update_lock;
 
+	struct timeval last_fan;
 	struct timeval last_stratum;
 	struct pool pool0;
 	struct pool pool1;
