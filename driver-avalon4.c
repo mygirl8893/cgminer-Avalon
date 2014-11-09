@@ -855,10 +855,19 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 		cgsleep_ms(opt_avalon4_polling_delay);
 
 		memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
-		tmp = be32toh(info->led_red[i]); /* RED LED */
+		/* RED LED */
+		tmp = be32toh(info->led_red[i]);
 		memcpy(send_pkg.data, &tmp, 4);
-		avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
 
+#if 0
+		/* Adjust Fan */
+		info->fan_pwm = get_fan_pwm(AVA4_DEFAULT_FAN_MAX - 1);
+		info->fan_pwm |= 0x80000000;
+		tmp = be32toh(info->fan_pwm);
+		memcpy(send_pkg.data + 4, &tmp, 4);
+#endif
+
+		avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
 		ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
 		if (ret == AVA4_SEND_OK)
 			decode_err =  decode_pkg(thr, &ar, i);
@@ -1060,7 +1069,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	detect_modules(avalon4);
 
 	/* Step 5: Configuer the parameter from outside */
-	avalon4_stratum_set(avalon4, pool, 0);
+	avalon4_stratum_set(avalon4, pool, AVA4_MODULE_BROADCAST);
 
 	/* Step 6: Send out finish pkg */
 	avalon4_stratum_finish(avalon4);
