@@ -451,6 +451,11 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 	if (unlikely(avalon4->usbinfo.nodev))
 		return 1;
 
+	/* Try to clean the AUC buffer */
+	err = usb_read(avalon4, (char *)rbuf, AVA4_AUC_P_SIZE, &rlen, C_AVA4_READ);
+	applog(LOG_DEBUG, "Avalon4: AUC usb_read %d, %d!", err, rlen);
+	hexdump(rbuf, AVA4_AUC_P_SIZE);
+
 	/* Reset */
 	iic_info.iic_op = AVA4_IIC_RESET;
 	rlen = 0;
@@ -488,6 +493,8 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 		applog(LOG_ERR, "Avalon4: Failed to init Avalon USB2IIC Converter");
 		return 1;
 	}
+
+	hexdump(rbuf, AVA4_AUC_P_SIZE);
 
 	memcpy(ver, rbuf + 4, AVA4_AUC_VER_LEN);
 	ver[AVA4_AUC_VER_LEN] = '\0';
@@ -546,7 +553,6 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 	int err, wcnt, rcnt, rlen = 0;
 	uint8_t wbuf[AVA4_AUC_P_SIZE];
 	uint8_t rbuf[AVA4_AUC_P_SIZE];
-	static uint8_t err_cnt = 0;
 
 	struct avalon4_info *info = avalon4->device_data;
 
@@ -566,15 +572,19 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 		applog(LOG_DEBUG, "Avalon4: IIC read again!(err:%d)", err);
 	}
 	if (err || rcnt != rlen) {
-		if (err_cnt++ == 10)
+		if (info->xfer_err_cnt++ == 10) {
+			applog(LOG_DEBUG, "Avalon4: AUC xfer_err_cnt reach");
+
+			cgsleep_ms(5 * 1000); /* Wait MM reset */
 			avalon4_auc_init(avalon4, info->auc_version);
+		}
 		return AVA4_SEND_ERROR;
 	}
 
 	if (ret)
 		memcpy((char *)ret, rbuf + 4, AVA4_READ_SIZE);
 
-	err_cnt = 0;
+	info->xfer_err_cnt = 0;
 	return AVA4_SEND_OK;
 }
 
@@ -744,6 +754,8 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	info->auc_speed = opt_avalon4_aucspeed;
 	info->auc_xdelay = opt_avalon4_aucxdelay;
 
+	info->polling_first = 1;
+
 	info->fan_pct = AVA4_DEFAULT_FAN_MIN;
 	info->fan_pwm = get_fan_pwm(AVA4_DEFAULT_FAN_MIN);
 	info->temp_max = 0;
@@ -806,14 +818,14 @@ static void detect_modules(struct cgpu_info *avalon4)
 		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
 		if (err == AVA4_SEND_OK) {
 			if (decode_pkg(thr, &ret_pkg, AVA4_MODULE_BROADCAST)) {
-				applog(LOG_DEBUG, "%s %d: AUC xfer data with type %d",
-				       avalon4->drv->name, avalon4->device_id, ret_pkg.type);
+				applog(LOG_DEBUG, "%s %d: Should be AVA4_P_ACKDETECT(%d), but %d",
+				       avalon4->drv->name, avalon4->device_id, AVA4_P_ACKDETECT, ret_pkg.type);
 				continue;
 			}
 		}
 
 		if (err != AVA4_SEND_OK) {
-			applog(LOG_DEBUG, "%s %d: Failed AUC xfer data with err %d",
+			applog(LOG_DEBUG, "%s %d: AVA4_P_DETECT: Failed AUC xfer data with err %d",
 					avalon4->drv->name, avalon4->device_id, err);
 			break;
 		}
@@ -838,17 +850,15 @@ static void detect_modules(struct cgpu_info *avalon4)
 
 static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalon4_info *info)
 {
-	static uint8_t err_cnt[AVA4_DEFAULT_MODULARS];
 	struct avalon4_pkg send_pkg;
 	struct avalon4_ret ar;
 	int i, j, tmp, ret, decode_err, do_polling = 0;
 	struct timeval current_fan;
 	int do_adjust_fan = 0;
 
-	static int first = 1;
-	if (first) {
+	if (info->polling_first) {
 		cgsleep_ms(300);
-		first = 0;
+		info->polling_first = 0;
 	}
 
 	cgtime(&current_fan);
@@ -883,9 +893,9 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 			decode_err =  decode_pkg(thr, &ar, i);
 
 		if (ret != AVA4_SEND_OK || decode_err) {
-			err_cnt[i]++;
-			if (err_cnt[i] >= 4) {
-				err_cnt[i] = 0;
+			info->polling_err_cnt[i]++;
+			if (info->polling_err_cnt[i] >= 4) {
+				info->polling_err_cnt[i] = 0;
 				info->dev_type[i] = AVA4_ID_AVAX;
 				info->enable[i] = 0;
 				info->local_works[i] = 0;
@@ -903,7 +913,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 		}
 
 		if (ret == AVA4_SEND_OK && !decode_err)
-			err_cnt[i] = 0;
+			info->polling_err_cnt[i] = 0;
 	}
 
 	if (!do_polling)

@@ -108,6 +108,10 @@ struct avalon4_pkg {
 struct avalon4_info {
 	cglock_t update_lock;
 
+	int polling_first;
+	uint8_t polling_err_cnt[AVA4_DEFAULT_MODULARS];
+	int xfer_err_cnt;
+
 	struct timeval last_fan;
 	struct timeval last_stratum;
 	struct pool pool0;
