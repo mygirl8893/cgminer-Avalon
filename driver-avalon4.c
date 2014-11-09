@@ -293,20 +293,20 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 			applog(LOG_DEBUG, "Avalon4: Wrong miner/pool_no %d/%d", miner, pool_no);
 			break;
 		} else {
-			info->matching_work[modular_id * AVA4_DEFAULT_MINERS + miner]++;
-			info->chipmatching_work[modular_id * AVA4_DEFAULT_MINERS + miner][chip_id]++;
+			info->matching_work[modular_id][miner]++;
+			info->chipmatching_work[modular_id][miner][chip_id]++;
 		}
 		nonce2 = be32toh(nonce2);
 		nonce = be32toh(nonce);
 		nonce -= 0x4000;
 
-		applog(LOG_DEBUG, "Avalon4: Found! %d: (%08x) (%08x) (%d) (%d-%d-%d,%d,%d,%d)",
+		applog(LOG_DEBUG, "Avalon4: Found! %d - (%08x) (%08x) (%d) [%d - %d:(%d,%d,%d,%d)]",
 		       pool_no, nonce2, nonce, ntime,
-		       miner, info->matching_work[modular_id * AVA4_DEFAULT_MINERS + miner],
-		       info->chipmatching_work[modular_id * AVA4_DEFAULT_MINERS + miner][0],
-		       info->chipmatching_work[modular_id * AVA4_DEFAULT_MINERS + miner][1],
-		       info->chipmatching_work[modular_id * AVA4_DEFAULT_MINERS + miner][2],
-		       info->chipmatching_work[modular_id * AVA4_DEFAULT_MINERS + miner][3]);
+		       miner, info->matching_work[modular_id][miner],
+		       info->chipmatching_work[modular_id][miner][0],
+		       info->chipmatching_work[modular_id][miner][1],
+		       info->chipmatching_work[modular_id][miner][2],
+		       info->chipmatching_work[modular_id][miner][3]);
 
 		real_pool = pool = pools[pool_no];
 		if (job_idcmp(job_id, pool->swork.job_id)) {
@@ -872,11 +872,11 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				info->local_works[i] = 0;
 				info->hw_works[i] = 0;
 				for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-					info->matching_work[i * AVA4_DEFAULT_MINERS + j] = 0;
-					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][0] = 0;
-					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][1] = 0;
-					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][2] = 0;
-					info->chipmatching_work[i * AVA4_DEFAULT_MINERS + j][3] = 0;
+					info->matching_work[i][j] = 0;
+					info->chipmatching_work[i][j][0] = 0;
+					info->chipmatching_work[i][j][1] = 0;
+					info->chipmatching_work[i][j][2] = 0;
+					info->chipmatching_work[i][j][3] = 0;
 				}
 				applog(LOG_NOTICE, "%s %d: Module detached! ID[%d]",
 				       avalon4->drv->name, avalon4->device_id, i);
@@ -1100,11 +1100,10 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon4_info *info = cgpu->device_data;
-	int i, j, a, b;
-	char buf[128];
+	int i, j, a, b, minercount;
 	double hwp;
-	int minerindex, minercount;
-	char statbuf[AVA4_DEFAULT_MODULARS][200];
+	char buf[256];
+	char statbuf[AVA4_DEFAULT_MODULARS][512];
 
 	memset(statbuf, 0, AVA4_DEFAULT_MODULARS * 200);
 
@@ -1130,24 +1129,20 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		strcat(statbuf[i], buf);
 	}
 
-	minerindex = 0;
-	minercount = 0;
+	minercount = AVA4_DEFAULT_MINERS;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->dev_type[i] == AVA4_ID_AVAX) {
-			minerindex += AVA4_DEFAULT_MINERS;
+		if (info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
-		}
 
 		if (info->dev_type[i] == AVA4_ID_AVA4)
 			minercount = AVA4_DEFAULT_MINERS;
 
 		strcat(statbuf[i], " MW[");
-		for (j = minerindex; j < (minerindex + minercount); j++) {
-			sprintf(buf, " %d", info->matching_work[j]);
+		for (j = 0; j < minercount; j++) {
+			sprintf(buf, "%d ", info->matching_work[i][j]);
 			strcat(statbuf[i], buf);
 		}
-		strcat(statbuf[i], "]");
-		minerindex += AVA4_DEFAULT_MINERS;
+		statbuf[i][strlen(statbuf[i]) - 1] = ']';
 	}
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -1350,7 +1345,7 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	float volts = (float)info->set_voltage / 10000;
 	int i, count = 0;
 
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->enable[i])
 			count++;
 	}
