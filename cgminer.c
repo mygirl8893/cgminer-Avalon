@@ -235,9 +235,10 @@ static char *opt_set_avalon2_fan;
 static char *opt_set_avalon2_voltage;
 #endif
 #ifdef USE_AVALON4
-static char *opt_set_avalon4_freq;
+static char *opt_set_avalon4_temp;
 static char *opt_set_avalon4_fan;
 static char *opt_set_avalon4_voltage;
+static char *opt_set_avalon4_freq;
 #endif
 #ifdef USE_BLOCKERUPTER
 int opt_bet_clk = 0;
@@ -1184,7 +1185,10 @@ static struct opt_table opt_config_table[] = {
 		     "Set Avalon4 core voltage, in millivolts, step: 125"),
 	OPT_WITH_CBARG("--avalon4-fan",
 		     set_avalon4_fan, NULL, &opt_set_avalon4_fan,
-		     "Set Avalon4 target fan speed"),
+		     "Set Avalon4 target fan speed range"),
+	OPT_WITH_CBARG("--avalon4-temp",
+		     set_avalon4_temp, NULL, &opt_set_avalon4_temp,
+		     "Set Avalon4 target temp range"),
 	OPT_WITH_ARG("--avalon4-cutoff",
 		     set_int_0_to_100, opt_show_intval, &opt_avalon4_overheat,
 		     "Set Avalon4 overheat cut off temperature"),

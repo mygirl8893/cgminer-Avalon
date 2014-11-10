@@ -21,8 +21,9 @@
 
 #define get_fan_pwm(v)	(AVA4_PWM_MAX - (v) * AVA4_PWM_MAX / 100)
 
-static int avalon4_fan_min = get_fan_pwm(AVA4_DEFAULT_FAN_MIN);
-static int avalon4_fan_max = get_fan_pwm(AVA4_DEFAULT_FAN_MAX);
+int opt_avalon4_temp_min = AVA4_DEFAULT_TEMP_MIN;
+int opt_avalon4_temp_max = AVA4_DEFAULT_TEMP_OVERHEAT;
+
 int opt_avalon4_fan_min = AVA4_DEFAULT_FAN_MIN;
 int opt_avalon4_fan_max = AVA4_DEFAULT_FAN_MAX;
 
@@ -73,6 +74,27 @@ static inline uint8_t rev8(uint8_t d)
 	return out;
 }
 
+char *set_avalon4_temp(char *arg)
+{
+	int val1, val2, ret;
+
+	ret = sscanf(arg, "%d-%d", &val1, &val2);
+	if (ret < 1)
+		return "No values passed to avalon4-temp";
+	if (ret == 1)
+		val2 = val1;
+
+	if (val1 < AVA4_DEFAULT_TEMP_MIN || val1 > AVA4_DEFAULT_TEMP_OVERHEAT ||
+	    val2 < AVA4_DEFAULT_TEMP_MIN || val2 > AVA4_DEFAULT_TEMP_OVERHEAT ||
+	    val2 < val1)
+		return "Invalid value passed to avalon4-temp";
+
+	opt_avalon4_temp_min = val1;
+	opt_avalon4_temp_max = val2;
+
+	return NULL;
+}
+
 char *set_avalon4_fan(char *arg)
 {
 	int val1, val2, ret;
@@ -88,8 +110,6 @@ char *set_avalon4_fan(char *arg)
 
 	opt_avalon4_fan_min = val1;
 	opt_avalon4_fan_max = val2;
-	avalon4_fan_min = get_fan_pwm(val1);
-	avalon4_fan_max = get_fan_pwm(val2);
 
 	return NULL;
 }
@@ -231,19 +251,32 @@ static inline uint32_t decode_voltage(uint32_t v)
 	return (0x78 - (rev8(v >> 8) >> 1)) * 125;
 }
 
-static inline void adjust_fan(struct avalon4_info *info)
+static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 {
-	int t = get_current_temp_max(info);
+	uint32_t pwm;
+	int t = info->temp[id];
 
 	/* TODO: Add options for temperature range and fan adjust function 40 ~ 50 */
-	if (t < 40)
-		info->fan_pct = opt_avalon4_fan_min;
-	else if (t > 50)
-		info->fan_pct = opt_avalon4_fan_max;
-	else
-		info->fan_pct = (t - 40) * (opt_avalon4_fan_max - opt_avalon4_fan_min) / 10 + opt_avalon4_fan_min;
+	if (t < opt_avalon4_temp_min)
+		info->fan_pct[id] = opt_avalon4_fan_min;
+	else if (t > opt_avalon4_temp_max)
+		info->fan_pct[id] = opt_avalon4_fan_max;
+	else {
+		if (t >= ((opt_avalon4_temp_max + opt_avalon4_temp_min) / 2))
+			info->fan_pct[id] += 2;
+		else
+			info->fan_pct[id] -= 2;
+	}
 
-	info->fan_pwm = get_fan_pwm(info->fan_pct);
+	if (info->fan_pct[id] < opt_avalon4_fan_min)
+		info->fan_pct[id] = opt_avalon4_fan_min;
+	if (info->fan_pct[id] > opt_avalon4_fan_max)
+		info->fan_pct[id] = opt_avalon4_fan_max;
+
+	pwm = get_fan_pwm(info->fan_pct[id]);
+	applog(LOG_NOTICE, "[%d], Adjust_fan: %dC-%d%%(%03x)", id, t, info->fan_pct[id], pwm);
+
+	return pwm;
 }
 
 static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_id)
@@ -435,7 +468,7 @@ static int avalon4_iic_xfer(struct cgpu_info *avalon4,
 
 	cgsleep_ms(opt_avalon4_aucxdelay / 4800 + 1);
 
-	rlen += 4; 		/* Add 4 bytes IIC header */
+	rlen += 4;		/* Add 4 bytes IIC header */
 	err = usb_read(avalon4, (char *)rbuf, rlen, read, C_AVA4_READ);
 	if (err || *read != rlen) {
 		applog(LOG_DEBUG, "Avalon4: AUC xfer %d, r(%d-%d)!", err, rlen - 4, *read);
@@ -756,12 +789,10 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 
 	info->polling_first = 1;
 
-	info->fan_pct = AVA4_DEFAULT_FAN_MIN;
-	info->fan_pwm = get_fan_pwm(AVA4_DEFAULT_FAN_MIN);
-	info->temp_max = 0;
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		info->enable[i] = 0;
 		info->dev_type[i] = AVA4_ID_AVAX;
+		info->fan_pct[i] = (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
 	}
 
 	info->set_voltage = opt_avalon4_voltage_min;
@@ -780,8 +811,11 @@ static inline void avalon4_detect(bool __maybe_unused hotplug)
 
 static bool avalon4_prepare(struct thr_info *thr)
 {
+	int i;
 	struct cgpu_info *avalon4 = thr->cgpu;
 	struct avalon4_info *info = avalon4->device_data;
+
+	info->polling_first = 1;
 
 	cgtime(&(info->last_fan));
 
@@ -789,6 +823,9 @@ static bool avalon4_prepare(struct thr_info *thr)
 	cglock_init(&info->pool0.data_lock);
 	cglock_init(&info->pool1.data_lock);
 	cglock_init(&info->pool2.data_lock);
+
+	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++)
+		info->fan_pct[i] = (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
 
 	return true;
 }
@@ -855,6 +892,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	int i, j, tmp, ret, decode_err, do_polling = 0;
 	struct timeval current_fan;
 	int do_adjust_fan = 0;
+	uint32_t fan_pwm;
 
 	if (info->polling_first) {
 		cgsleep_ms(300);
@@ -862,7 +900,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	}
 
 	cgtime(&current_fan);
-	if (tdiff(&current_fan, &(info->last_fan)) > 10.0) {
+	if (tdiff(&current_fan, &(info->last_fan)) > 5.0) {
 		cgtime(&info->last_fan);
 		do_adjust_fan = 1;
 	}
@@ -881,9 +919,9 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 
 		/* Adjust fan every 10 seconds*/
 		if (do_adjust_fan) {
-			adjust_fan(info);
-			info->fan_pwm |= 0x80000000;
-			tmp = be32toh(info->fan_pwm);
+			fan_pwm = adjust_fan(info, i);
+			fan_pwm |= 0x80000000;
+			tmp = be32toh(fan_pwm);
 			memcpy(send_pkg.data + 4, &tmp, 4);
 		}
 
@@ -1375,16 +1413,23 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	int temp = get_current_temp_max(info);
 	float volts = (float)info->set_voltage / 10000;
 	int i, count = 0;
+	int min = AVA4_DEFAULT_FAN_MAX, max = AVA4_DEFAULT_FAN_MIN;
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->enable[i])
-			count++;
+		if (!info->enable[i])
+			continue;
+
+		count++;
+		if (max <= info->fan_pct[i])
+			max = info->fan_pct[i];
+		if (min >= info->fan_pct[i])
+			min = info->fan_pct[i];
 	}
 
-	tailsprintf(buf, bufsiz, "%2dMMs %.3fV %4dMhz %2dC %3d%%",
+	tailsprintf(buf, bufsiz, "%2dMMs %.3fV %4dMhz %2dC %3d%%-%3d%%",
 		    count, volts,
 		    (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9,
-		    temp, info->fan_pct);
+		    temp, min, max);
 }
 
 struct device_drv avalon4_drv = {

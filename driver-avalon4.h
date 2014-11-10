@@ -15,15 +15,11 @@
 
 #ifdef USE_AVALON4
 
-#define AVA4_DEFAULT_MODULARS	64
-#define AVA4_DEFAULT_ASIC_COUNT	4
-
-#define AVA4_PWM_MAX	0x3FF
 #define AVA4_DEFAULT_FAN_MIN	10 /* % */
 #define AVA4_DEFAULT_FAN_MAX	100
 
+#define AVA4_DEFAULT_TEMP_MIN		25
 #define AVA4_DEFAULT_TEMP_OVERHEAT	65
-#define AVA4_DEFAULT_POLLING_DELAY	20 /* ms */
 
 #define AVA4_DEFAULT_VOLTAGE_MIN	4000
 #define AVA4_DEFAULT_VOLTAGE_MAX	9000
@@ -31,9 +27,15 @@
 #define AVA4_DEFAULT_FREQUENCY_MIN	100
 #define AVA4_DEFAULT_FREQUENCY_MAX	1000
 
+#define AVA4_DEFAULT_MODULARS	64
 #define AVA4_DEFAULT_MINERS	10
+#define AVA4_DEFAULT_ASIC_COUNT	4
+
 #define AVA4_DEFAULT_VOLTAGE	6875
 #define AVA4_DEFAULT_FREQUENCY	200
+#define AVA4_DEFAULT_POLLING_DELAY	20 /* ms */
+
+#define AVA4_PWM_MAX		0x3FF
 
 #define AVA4_AUC_VER_LEN	12	/* Version length: 12 (AUC-YYYYMMDD) */
 #define AVA4_AUC_SPEED		400000
@@ -110,39 +112,37 @@ struct avalon4_info {
 	cglock_t update_lock;
 
 	int polling_first;
-	uint8_t polling_err_cnt[AVA4_DEFAULT_MODULARS];
+	int polling_err_cnt[AVA4_DEFAULT_MODULARS];
 	int xfer_err_cnt;
 
-	struct timeval last_fan;
-	struct timeval last_stratum;
+	int pool_no;
 	struct pool pool0;
 	struct pool pool1;
 	struct pool pool2;
-	int pool_no;
+
+	struct timeval last_fan;
+	struct timeval last_stratum;
 
 	char auc_version[AVA4_AUC_VER_LEN + 1];
 	int auc_speed;
 	int auc_xdelay;
+	int auc_temp;
 
-	char mm_version[AVA4_DEFAULT_MODULARS][AVA4_MM_VER_LEN + 1];
-	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_MM_DNA_LEN + 1];
+	int set_voltage;
+	int set_frequency[3];
+
 	int dev_type[AVA4_DEFAULT_MODULARS];
 	bool enable[AVA4_DEFAULT_MODULARS];
 
-	int set_frequency[3];
-	int set_voltage;
-
+	char mm_version[AVA4_DEFAULT_MODULARS][AVA4_MM_VER_LEN + 1];
+	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_MM_DNA_LEN + 1];
 	int get_voltage[AVA4_DEFAULT_MODULARS];
 	int get_frequency[AVA4_DEFAULT_MODULARS];
 	int power_good[AVA4_DEFAULT_MODULARS];
-
-	int fan_pwm;
-	int fan_pct;
-	int temp_max;
-	int auc_temp;
-
+	int fan_pct[AVA4_DEFAULT_MODULARS];
 	int fan[AVA4_DEFAULT_MODULARS];
 	int temp[AVA4_DEFAULT_MODULARS];
+	int led_red[AVA4_DEFAULT_MODULARS];
 
 	int local_works[AVA4_DEFAULT_MODULARS];
 	int hw_works[AVA4_DEFAULT_MODULARS];
@@ -151,8 +151,6 @@ struct avalon4_info {
 	int hw_work[AVA4_DEFAULT_MODULARS];
 	int matching_work[AVA4_DEFAULT_MINERS][AVA4_DEFAULT_MODULARS];
 	int chipmatching_work[AVA4_DEFAULT_MINERS][AVA4_DEFAULT_MODULARS][4];
-
-	int led_red[AVA4_DEFAULT_MODULARS];
 };
 
 struct avalon4_iic_info {
@@ -170,6 +168,7 @@ struct avalon4_iic_info {
 #define AVA4_SEND_ERROR -1
 
 extern char *set_avalon4_fan(char *arg);
+extern char *set_avalon4_temp(char *arg);
 extern char *set_avalon4_freq(char *arg);
 extern char *set_avalon4_voltage(char *arg);
 extern int opt_avalon4_overheat;
