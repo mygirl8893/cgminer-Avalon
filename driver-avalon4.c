@@ -302,7 +302,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		nonce = be32toh(nonce);
 		nonce -= 0x4000;
 
-		applog(LOG_DEBUG, "Avalon4: Found! %d - (%08x) (%08x) (%d) [%d - %d:(%d,%d,%d,%d)]",
+		applog(LOG_DEBUG, "%s-%d: Found! P:%d - N2:%08x N:%08x NR:%d [M:%d - MW: %d(%d,%d,%d,%d)]",
+		       avalon4->drv->name, avalon4->device_id,
 		       pool_no, nonce2, nonce, ntime,
 		       miner, info->matching_work[modular_id][miner],
 		       info->chipmatching_work[modular_id][miner][0],
@@ -740,7 +741,7 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	add_cgpu(avalon4);
 
 	update_usb_stats(avalon4);
-	applog(LOG_INFO, "%s%d: Found at %s", avalon4->drv->name, avalon4->device_id,
+	applog(LOG_INFO, "%s-%d: Found at %s", avalon4->drv->name, avalon4->device_id,
 	       avalon4->device_path);
 
 	avalon4->device_data = calloc(sizeof(struct avalon4_info), 1);
@@ -1105,7 +1106,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	int i;
 
 	if (unlikely(avalon4->usbinfo.nodev)) {
-		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
+		applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
 		       avalon4->drv->name, avalon4->device_id);
 		return -1;
 	}
