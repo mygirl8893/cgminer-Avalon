@@ -16,12 +16,13 @@
 #ifdef USE_AVALON4
 
 #define AVA4_DEFAULT_MODULARS	64
+#define AVA4_DEFAULT_ASIC_COUNT	4
 
 #define AVA4_PWM_MAX	0x3FF
 #define AVA4_DEFAULT_FAN_MIN	10 /* % */
 #define AVA4_DEFAULT_FAN_MAX	100
 
-#define AVA4_TEMP_OVERHEAT	65
+#define AVA4_DEFAULT_TEMP_OVERHEAT	65
 #define AVA4_DEFAULT_POLLING_DELAY	20 /* ms */
 
 #define AVA4_DEFAULT_VOLTAGE_MIN	4000
@@ -175,5 +176,6 @@ extern int opt_avalon4_overheat;
 extern int opt_avalon4_polling_delay;
 extern int opt_avalon4_aucspeed;
 extern int opt_avalon4_aucxdelay;
+extern int opt_avalon4_ntime_offset;
 #endif /* USE_AVALON4 */
 #endif	/* _AVALON4_H_ */

@@ -32,11 +32,13 @@ int opt_avalon4_freq[3] = {AVA4_DEFAULT_FREQUENCY,
 			   AVA4_DEFAULT_FREQUENCY,
 			   AVA4_DEFAULT_FREQUENCY};
 
-int opt_avalon4_overheat = AVA4_TEMP_OVERHEAT;
+int opt_avalon4_overheat = AVA4_DEFAULT_TEMP_OVERHEAT;
 int opt_avalon4_polling_delay = AVA4_DEFAULT_POLLING_DELAY;
 
 int opt_avalon4_aucspeed = AVA4_AUC_SPEED;
 int opt_avalon4_aucxdelay = AVA4_AUC_XDELAY;
+
+int opt_avalon4_ntime_offset = AVA4_DEFAULT_ASIC_COUNT;
 
 #define UNPACK32(x, str)			\
 {						\
@@ -983,6 +985,12 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 
 	/* Set the Fan, Voltage and Frequency */
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
+
+	if (opt_avalon4_ntime_offset != AVA4_DEFAULT_ASIC_COUNT) {
+		tmp = opt_avalon4_ntime_offset | 0x80000000;
+		tmp = be32toh(tmp);
+		memcpy(send_pkg.data, &tmp, 4);
+	}
 
 	applog(LOG_INFO, "Avalon4: Temp max: %d, Cut off temp: %d",
 	       get_current_temp_max(info), opt_avalon4_overheat);
