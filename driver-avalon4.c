@@ -423,6 +423,9 @@ static int avalon4_iic_xfer(struct cgpu_info *avalon4,
 {
 	int err;
 
+	if (unlikely(avalon4->usbinfo.nodev))
+		return 1;
+
 	err = usb_write(avalon4, (char *)wbuf, wlen, write, C_AVA4_WRITE);
 	if (err || *write != wlen)
 		applog(LOG_DEBUG, "Avalon4: AUC xfer %d, w(%d-%d)!", err, wlen, *write);
@@ -514,9 +517,6 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 	float div_vol;
 	struct avalon4_info *info = avalon4->device_data;
 
-	if (unlikely(avalon4->usbinfo.nodev))
-		return 1;
-
 	iic_info.iic_op = AVA4_IIC_INFO;
 	/* Device info: (9 bytes)
 	 * tempadc(2), reqRdIndex, reqWrIndex,
@@ -555,9 +555,6 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 	uint8_t rbuf[AVA4_AUC_P_SIZE];
 
 	struct avalon4_info *info = avalon4->device_data;
-
-	if (unlikely(avalon4->usbinfo.nodev))
-		return AVA4_SEND_ERROR;
 
 	iic_info.iic_op = AVA4_IIC_XFER;
 	iic_info.iic_param.slave_addr = slave_addr;
