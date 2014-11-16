@@ -599,7 +599,7 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 
 	avalon4_iic_init_pkg(wbuf, &iic_info, (uint8_t *)pkg, AVA4_WRITE_SIZE, rlen);
 	err = avalon4_iic_xfer(avalon4, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
-	if (err == -7 && rcnt == 0 && rlen) {
+	if ((pkg->type != AVA4_P_DETECT) && err == -7 && !rcnt && rlen) {
 		avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 		err = avalon4_iic_xfer(avalon4, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
 		applog(LOG_DEBUG, "Avalon4: IIC read again!(err:%d)", err);
