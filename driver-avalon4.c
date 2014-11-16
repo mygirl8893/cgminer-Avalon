@@ -742,7 +742,7 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 
 	applog(LOG_DEBUG, "Avalon4: Pool stratum message HEADER: 4");
 	for (i = 0; i < 4; i++) {
-		memset(pkg.data, 0, AVA4_P_HEADER);
+		memset(pkg.data, 0, AVA4_P_DATA_LEN);
 		memcpy(pkg.data, pool->header_bin + i * 32, 32);
 		avalon4_init_pkg(&pkg, AVA4_P_HEADER, i + 1, 4);
 		if (avalon4_send_bc_pkgs(avalon4, &pkg))
