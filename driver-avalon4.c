@@ -274,7 +274,7 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 		info->fan_pct[id] = opt_avalon4_fan_max;
 
 	pwm = get_fan_pwm(info->fan_pct[id]);
-	applog(LOG_NOTICE, "[%d], Adjust_fan: %dC-%d%%(%03x)", id, t, info->fan_pct[id], pwm);
+	applog(LOG_DEBUG, "[%d], Adjust_fan: %dC-%d%%(%03x)", id, t, info->fan_pct[id], pwm);
 
 	return pwm;
 }
@@ -335,8 +335,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		nonce = be32toh(nonce);
 		nonce -= 0x4000;
 
-		applog(LOG_DEBUG, "%s-%d: Found! P:%d - N2:%08x N:%08x NR:%d [M:%d - MW: %d(%d,%d,%d,%d)]",
-		       avalon4->drv->name, avalon4->device_id,
+		applog(LOG_DEBUG, "%s-%d-%d: Found! P:%d - N2:%08x N:%08x NR:%d [M:%d - MW: %d(%d,%d,%d,%d)]",
+		       avalon4->drv->name, avalon4->device_id, modular_id,
 		       pool_no, nonce2, nonce, ntime,
 		       miner, info->matching_work[modular_id][miner],
 		       info->chipmatching_work[modular_id][miner][0],
@@ -792,10 +792,11 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		info->enable[i] = 0;
 		info->dev_type[i] = AVA4_ID_AVAX;
-		info->fan_pct[i] = (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
+		info->fan_pct[i] = (opt_avalon4_fan_max == opt_avalon4_fan_min) ?
+			opt_avalon4_fan_min :
+			(opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
+		info->set_voltage[i] = opt_avalon4_voltage_min;
 	}
-
-	info->set_voltage = opt_avalon4_voltage_min;
 
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
@@ -824,8 +825,11 @@ static bool avalon4_prepare(struct thr_info *thr)
 	cglock_init(&info->pool1.data_lock);
 	cglock_init(&info->pool2.data_lock);
 
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++)
-		info->fan_pct[i] = (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
+	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+		info->fan_pct[i] = (opt_avalon4_fan_max == opt_avalon4_fan_min) ?
+			opt_avalon4_fan_min :
+			(opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
+	}
 
 	return true;
 }
@@ -1017,11 +1021,9 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	struct avalon4_pkg send_pkg;
 	uint32_t tmp, range, start;
 
-	info->set_voltage = opt_avalon4_voltage_min;
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
 	info->set_frequency[2] = opt_avalon4_freq[2];
-
 	/* Set the Fan, Voltage and Frequency */
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 
@@ -1036,7 +1038,7 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	if (get_current_temp_max(info) >= opt_avalon4_overheat)
 		tmp = encode_voltage(0);
 	else
-		tmp = encode_voltage(info->set_voltage);
+		tmp = encode_voltage(info->set_voltage[addr]);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
@@ -1061,6 +1063,8 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	avalon4_init_pkg(&send_pkg, AVA4_P_SET, 1, 1);
 	if (addr == AVA4_MODULE_BROADCAST)
 		avalon4_send_bc_pkgs(avalon4, &send_pkg);
+	else
+		avalon4_iic_xfer_pkg(avalon4, addr, &send_pkg, NULL);
 }
 
 static void avalon4_stratum_finish(struct cgpu_info *avalon4)
@@ -1079,6 +1083,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct work *work;
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
+	int i;
 
 	applog(LOG_DEBUG, "Avalon4: New stratum: restart: %d, update: %d",
 	       thr->work_restart, thr->work_update);
@@ -1128,8 +1133,17 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	/* Step 4: Try to detect new modules */
 	detect_modules(avalon4);
 
-	/* Step 5: Configuer the parameter from outside */
+	/* Step 5: Configure the parameter from outside */
 	avalon4_stratum_set(avalon4, pool, AVA4_MODULE_BROADCAST);
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (!info->enable[i])
+			continue;
+
+		if (info->set_voltage[i] == info->set_voltage[0])
+			continue;
+
+		avalon4_stratum_set(avalon4, pool, i);
+	}
 
 	/* Step 6: Send out finish pkg */
 	avalon4_stratum_finish(avalon4);
@@ -1298,7 +1312,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *setting, char *replybuf)
 {
 	int val;
-	struct avalon4_info *info;
+	struct avalon4_info *info = avalon4->device_data;
 
 	if (strcasecmp(option, "help") == 0) {
 		sprintf(replybuf, "led|fan|voltage|frequency|pdelay");
@@ -1325,28 +1339,6 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 		return NULL;
 	}
 
-	if (strcasecmp(option, "led") == 0) {
-		if (!setting || !*setting) {
-			sprintf(replybuf, "missing module_id setting");
-			return replybuf;
-		}
-
-		val = atoi(setting);
-		if (val < 1 || val > AVA4_DEFAULT_MODULARS) {
-			sprintf(replybuf, "invalid module_id: %d, valid range 1-%d", val, AVA4_DEFAULT_MODULARS);
-			return replybuf;
-		}
-
-		info = avalon4->device_data;
-		info->led_red[val] = !info->led_red[val];
-
-		applog(LOG_NOTICE, "%s %d: Module:%d, LED: %s",
-		       avalon4->drv->name, avalon4->device_id,
-		       val, info->led_red[val] ? "on" : "off");
-
-		return NULL;
-	}
-
 	if (strcasecmp(option, "fan") == 0) {
 		if (!setting || !*setting) {
 			sprintf(replybuf, "missing fan value");
@@ -1362,24 +1354,6 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 		applog(LOG_NOTICE, "%s %d: Update fan to %d-%d",
 		       avalon4->drv->name, avalon4->device_id,
 		       opt_avalon4_fan_min, opt_avalon4_fan_max);
-
-		return NULL;
-	}
-
-	if (strcasecmp(option, "voltage") == 0) {
-		if (!setting || !*setting) {
-			sprintf(replybuf, "missing voltage value");
-			return replybuf;
-		}
-
-		if (set_avalon4_voltage(setting)) {
-			sprintf(replybuf, "invalid voltage value, valid range %d-%d",
-				AVA4_DEFAULT_VOLTAGE_MIN, AVA4_DEFAULT_VOLTAGE_MAX);
-			return replybuf;
-		}
-
-		applog(LOG_NOTICE, "%s %d: Update voltage to %s",
-		       avalon4->drv->name, avalon4->device_id, setting);
 
 		return NULL;
 	}
@@ -1403,6 +1377,60 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 		return NULL;
 	}
 
+	if (strcasecmp(option, "led") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing module_id setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 1 || val >= AVA4_DEFAULT_MODULARS) {
+			sprintf(replybuf, "invalid module_id: %d, valid range 1-%d", val, AVA4_DEFAULT_MODULARS);
+			return replybuf;
+		}
+
+		info->led_red[val] = !info->led_red[val];
+
+		applog(LOG_NOTICE, "%s %d: Module:%d, LED: %s",
+		       avalon4->drv->name, avalon4->device_id,
+		       val, info->led_red[val] ? "on" : "off");
+
+		return NULL;
+	}
+
+	if (strcasecmp(option, "voltage") == 0) {
+		int val_mod, val_volt, ret;
+
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing voltage value");
+			return replybuf;
+		}
+
+		ret = sscanf(setting, "%d-%d", &val_mod, &val_volt);
+		if (ret != 2) {
+			sprintf(replybuf, "invalid valtage parameter, format: moudleid-voltage");
+			return replybuf;
+		}
+
+		if (val_mod < 0 || val_mod >= AVA4_DEFAULT_MODULARS ||
+		    val_volt < AVA4_DEFAULT_VOLTAGE_MIN || val_volt > AVA4_DEFAULT_VOLTAGE_MAX) {
+			sprintf(replybuf, "invalid module_id or voltage value, valid module_id range %d-%d, valid voltage range %d-%d",
+				0, AVA4_DEFAULT_MODULARS,
+				AVA4_DEFAULT_VOLTAGE_MIN, AVA4_DEFAULT_VOLTAGE_MAX);
+			return replybuf;
+		}
+
+		if (val_mod == AVA4_MODULE_BROADCAST)
+			info->set_voltage[0] = val_volt;
+		else
+			info->set_voltage[val_mod] = val_volt;
+
+		applog(LOG_NOTICE, "%s %d: Update module[%d] voltage to %d",
+		       avalon4->drv->name, avalon4->device_id, val_mod, val_volt);
+
+		return NULL;
+	}
+
 	sprintf(replybuf, "Unknown option: %s", option);
 	return replybuf;
 }
@@ -1411,25 +1439,30 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 {
 	struct avalon4_info *info = avalon4->device_data;
 	int temp = get_current_temp_max(info);
-	float volts = (float)info->set_voltage / 10000;
+	int voltsmin = AVA4_DEFAULT_VOLTAGE_MAX, voltsmax = AVA4_DEFAULT_VOLTAGE_MIN;
 	int i, count = 0;
-	int min = AVA4_DEFAULT_FAN_MAX, max = AVA4_DEFAULT_FAN_MIN;
+	int fanmin = AVA4_DEFAULT_FAN_MAX, fanmax = AVA4_DEFAULT_FAN_MIN;
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
 			continue;
 
 		count++;
-		if (max <= info->fan_pct[i])
-			max = info->fan_pct[i];
-		if (min >= info->fan_pct[i])
-			min = info->fan_pct[i];
+		if (fanmax <= info->fan_pct[i])
+			fanmax = info->fan_pct[i];
+		if (fanmin >= info->fan_pct[i])
+			fanmin = info->fan_pct[i];
+
+		if (voltsmax <= info->get_voltage[i])
+			voltsmax = info->get_voltage[i];
+		if (voltsmin >= info->get_voltage[i])
+			voltsmin = info->get_voltage[i];
 	}
 
-	tailsprintf(buf, bufsiz, "%2dMMs %.3fV %4dMhz %2dC %3d%%-%3d%%",
-		    count, volts,
+	tailsprintf(buf, bufsiz, "%2dMMs %.4fV-%.4fV %4dMhz %2dC %3d%%-%3d%%",
+		    count, (float)voltsmin / 10000, (float)voltsmax / 10000,
 		    (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9,
-		    temp, min, max);
+		    temp, fanmin, fanmax);
 }
 
 struct device_drv avalon4_drv = {
