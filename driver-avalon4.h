@@ -130,6 +130,7 @@ struct avalon4_info {
 
 	int set_frequency[3];
 	int set_voltage[AVA4_DEFAULT_MODULARS];
+	int set_voltage_broadcat;
 
 	int dev_type[AVA4_DEFAULT_MODULARS];
 	bool enable[AVA4_DEFAULT_MODULARS];

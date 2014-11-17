@@ -789,6 +789,7 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 
 	info->polling_first = 1;
 
+	info->set_voltage_broadcat = 1;
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		info->enable[i] = 0;
 		info->dev_type[i] = AVA4_ID_AVAX;
@@ -824,6 +825,8 @@ static bool avalon4_prepare(struct thr_info *thr)
 	cglock_init(&info->pool0.data_lock);
 	cglock_init(&info->pool1.data_lock);
 	cglock_init(&info->pool2.data_lock);
+
+	info->set_voltage_broadcat = 1;
 
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		info->fan_pct[i] = (opt_avalon4_fan_max == opt_avalon4_fan_min) ?
@@ -1135,14 +1138,17 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 	/* Step 5: Configure the parameter from outside */
 	avalon4_stratum_set(avalon4, pool, AVA4_MODULE_BROADCAST);
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (!info->enable[i])
-			continue;
 
-		if (info->set_voltage[i] == info->set_voltage[0])
-			continue;
+	if (!info->set_voltage_broadcat) {
+		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+			if (!info->enable[i])
+				continue;
 
-		avalon4_stratum_set(avalon4, pool, i);
+			if (info->set_voltage[i] == info->set_voltage[0])
+				continue;
+
+			avalon4_stratum_set(avalon4, pool, i);
+		}
 	}
 
 	/* Step 6: Send out finish pkg */
@@ -1420,10 +1426,13 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 			return replybuf;
 		}
 
-		if (val_mod == AVA4_MODULE_BROADCAST)
+		if (val_mod == AVA4_MODULE_BROADCAST) {
 			info->set_voltage[0] = val_volt;
-		else
+			info->set_voltage_broadcat = 1;
+		} else {
 			info->set_voltage[val_mod] = val_volt;
+			info->set_voltage_broadcat = 0;
+		}
 
 		applog(LOG_NOTICE, "%s %d: Update module[%d] voltage to %d",
 		       avalon4->drv->name, avalon4->device_id, val_mod, val_volt);
