@@ -1218,22 +1218,6 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		strcat(statbuf[i], buf);
 	}
 
-	minercount = AVA4_DEFAULT_MINERS;
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->dev_type[i] == AVA4_ID_AVAX)
-			continue;
-
-		if (info->dev_type[i] == AVA4_ID_AVA4)
-			minercount = AVA4_DEFAULT_MINERS;
-
-		strcat(statbuf[i], " MW[");
-		for (j = 0; j < minercount; j++) {
-			sprintf(buf, "%d ", info->matching_work[i][j]);
-			strcat(statbuf[i], buf);
-		}
-		statbuf[i][strlen(statbuf[i]) - 1] = ']';
-	}
-
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->dev_type[i] == AVA4_ID_AVAX)
 			continue;
