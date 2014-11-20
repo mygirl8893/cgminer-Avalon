@@ -85,11 +85,13 @@
 #define AVA4_MODULE_BROADCAST	0
 /* Endof Avalon4 protocol package type */
 
-#define AVA4_MM4_PREFIXSTR	"40"
+#define AVA4_MM40_PREFIXSTR	"40"
+#define AVA4_MM41_PREFIXSTR	"41"
 #define AVA4_MM_VERNULL		"NONE"
 
-#define AVA4_ID_AVA4		3222
-#define AVA4_ID_AVAX		3200
+#define AVA4_ID_MM40		40
+#define AVA4_ID_MM41		41
+#define AVA4_ID_NULL		00
 
 #define AVA4_IIC_RESET		0xa0
 #define AVA4_IIC_INIT		0xa1
