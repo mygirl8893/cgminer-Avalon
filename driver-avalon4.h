@@ -89,9 +89,9 @@
 #define AVA4_MM41_PREFIXSTR	"41"
 #define AVA4_MM_VERNULL		"NONE"
 
-#define AVA4_ID_MM40		40
-#define AVA4_ID_MM41		41
-#define AVA4_ID_NULL		00
+#define AVA4_TYPE_MM40		40
+#define AVA4_TYPE_MM41		41
+#define AVA4_TYPE_NULL		00
 
 #define AVA4_IIC_RESET		0xa0
 #define AVA4_IIC_INIT		0xa1
@@ -134,7 +134,7 @@ struct avalon4_info {
 	int set_voltage[AVA4_DEFAULT_MODULARS];
 	int set_voltage_broadcat;
 
-	int dev_type[AVA4_DEFAULT_MODULARS];
+	int mod_type[AVA4_DEFAULT_MODULARS];
 	bool enable[AVA4_DEFAULT_MODULARS];
 
 	char mm_version[AVA4_DEFAULT_MODULARS][AVA4_MM_VER_LEN + 1];

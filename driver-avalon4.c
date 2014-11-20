@@ -219,14 +219,31 @@ static inline int get_current_temp_max(struct avalon4_info *info)
 }
 
 /* http://www.onsemi.com/pub_link/Collateral/ADP3208D.PDF */
-static inline uint32_t encode_voltage(uint32_t v)
+static uint32_t encode_voltage_adp3208d(uint32_t v)
 {
 	return rev8((0x78 - v / 125) << 1 | 1) << 8;
 }
 
-static inline uint32_t decode_voltage(uint32_t v)
+static uint32_t decode_voltage_adp3208d(uint32_t v)
 {
 	return (0x78 - (rev8(v >> 8) >> 1)) * 125;
+}
+
+/* http://www.onsemi.com/pub/Collateral/NCP5392P-D.PDF */
+static uint32_t encode_voltage_ncp5392p(uint32_t v)
+{
+	if (v == 0)
+		return 0xff00;
+
+	return rev8(((0x59 - (v - 5000) / 125) & 0xff) << 1 | 1) << 8;
+}
+
+static uint32_t decode_voltage_ncp5392p(uint32_t v)
+{
+	if (v == 0xff00)
+		return 0;
+
+	return (0x59 - (rev8(v >> 8) >> 1)) * 125 + 5000;
 }
 
 static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
@@ -265,9 +282,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, ntime, miner, chip_id;
+	uint32_t nonce, nonce2, ntime, miner, chip_id, volt, tmp;
 	uint8_t job_id[4];
-	int pool_no, tmp;
+	int pool_no;
 
 	if (ar->head[0] != AVA4_H1 && ar->head[1] != AVA4_H2) {
 		applog(LOG_DEBUG, "Avalon4: H1 %02x, H2 %02x", ar->head[0], ar->head[1]);
@@ -361,7 +378,12 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
 		info->power_good[modular_id] = be32toh(info->power_good[modular_id]);
 
-		info->get_voltage[modular_id] = decode_voltage(info->get_voltage[modular_id]);
+		volt = info->get_voltage[modular_id];
+		if (info->mod_type[modular_id] == AVA4_TYPE_MM40)
+			tmp = decode_voltage_adp3208d(volt);
+		if (info->mod_type[modular_id] == AVA4_TYPE_MM41)
+			tmp = decode_voltage_ncp5392p(volt);
+		info->get_voltage[modular_id] = tmp;
 
 		info->local_works[modular_id] += info->local_work[modular_id];
 		info->hw_works[modular_id] += info->hw_work[modular_id];
@@ -765,12 +787,16 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	info->polling_first = 1;
 
 	info->set_voltage_broadcat = 1;
+
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		info->enable[i] = 0;
-		info->dev_type[i] = AVA4_ID_NULL;
+		info->mod_type[i] = AVA4_TYPE_NULL;
 		info->fan_pct[i] = opt_avalon4_fan_min + (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
 		info->set_voltage[i] = opt_avalon4_voltage_min;
 	}
+
+	info->enable[0] = 1;
+	info->mod_type[0] = AVA4_TYPE_MM40;
 
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
@@ -855,9 +881,9 @@ static void detect_modules(struct cgpu_info *avalon4)
 		memcpy(info->mm_version[i], ret_pkg.data + AVA4_MM_DNA_LEN, AVA4_MM_VER_LEN);
 		info->mm_version[i][AVA4_MM_VER_LEN] = '\0';
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM40_PREFIXSTR, 2))
-			info->dev_type[i] = AVA4_ID_MM40;
+			info->mod_type[i] = AVA4_TYPE_MM40;
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM41_PREFIXSTR, 2))
-			info->dev_type[i] = AVA4_ID_MM41;
+			info->mod_type[i] = AVA4_TYPE_MM41;
 
 		applog(LOG_NOTICE, "%s %d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
@@ -913,7 +939,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 			info->polling_err_cnt[i]++;
 			if (info->polling_err_cnt[i] >= 4) {
 				info->polling_err_cnt[i] = 0;
-				info->dev_type[i] = AVA4_ID_NULL;
+				info->mod_type[i] = AVA4_TYPE_NULL;
 				info->enable[i] = 0;
 				info->local_works[i] = 0;
 				info->hw_works[i] = 0;
@@ -994,7 +1020,7 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 {
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
-	uint32_t tmp, range, start;
+	uint32_t tmp, range, start, volt;
 
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
@@ -1009,10 +1035,13 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 		memcpy(send_pkg.data, &tmp, 4);
 	}
 
+	volt = info->set_voltage[addr];
 	if (cutoff)
-		tmp = encode_voltage(0);
-	else
-		tmp = encode_voltage(info->set_voltage[addr]);
+		volt = 0;
+	if (info->mod_type[addr] == AVA4_TYPE_MM40)
+		tmp = encode_voltage_adp3208d(volt);
+	if (info->mod_type[addr] == AVA4_TYPE_MM41)
+		tmp = encode_voltage_ncp5392p(volt);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
@@ -1176,14 +1205,14 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	memset(statbuf, 0, AVA4_DEFAULT_MODULARS * 200);
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, "Ver[%s]", info->mm_version[i]);
 		strcat(statbuf[i], buf);
 	}
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, " DNA[%02x%02x%02x%02x%02x%02x%02x%02x]",
 				info->mm_dna[i][0],
@@ -1198,16 +1227,12 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	}
 
 #if 0
-	int minercount = AVA4_DEFAULT_MINERS;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->dev_type[i] == AVA4_ID_NULL)
+		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
-		if (info->dev_type[i] == AVA4_ID_MM40)
-			minercount = AVA4_DEFAULT_MINERS;
-
 		strcat(statbuf[i], " MW[");
-		for (j = 0; j < minercount; j++) {
+		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
 			sprintf(buf, "%d ", info->matching_work[i][j]);
 			strcat(statbuf[i], buf);
 		}
@@ -1216,19 +1241,19 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 #endif
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, " LW[%d]", info->local_works[i]);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, " HW[%d]", info->hw_works[i]);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		a = info->hw_works[i];
 		b = info->local_works[i];
@@ -1238,44 +1263,44 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, " Temp[%d]", info->temp[i]);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, " Fan[%d]", info->fan[i]);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, " Vol[%.4f]", (float)info->get_voltage[i] / 10000);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, " Freq[%.2f]", (float)info->get_frequency[i] / 1000);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, " PG[%d]", info->power_good[i]);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, " Led[%d]", info->led_red[i]);
 		strcat(statbuf[i], buf);
 	}
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->dev_type[i] == AVA4_ID_NULL)
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		sprintf(buf, "MM ID%d", i);
 		root = api_add_string(root, buf, statbuf[i], true);
