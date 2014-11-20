@@ -781,6 +781,16 @@ static char *set_int_32_to_63(const char *arg, int *i)
 	return set_int_range(arg, i, 32, 63);
 }
 
+static char *set_int_22_to_55(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 22, 55);
+}
+
+static char *set_int_42_to_65(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 42, 62);
+}
+
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
@@ -1177,20 +1187,20 @@ static struct opt_table opt_config_table[] = {
 		     "Set Avalon2 polling delay value (ms)"),
 #endif
 #ifdef USE_AVALON4
-	OPT_WITH_CBARG("--avalon4-freq",
-		     set_avalon4_freq, NULL, &opt_set_avalon4_freq,
-		     "Set frequency for Avalon4, 1 to 3 values, example: 410:400:390"),
 	OPT_WITH_CBARG("--avalon4-voltage",
 		     set_avalon4_voltage, NULL, &opt_set_avalon4_voltage,
 		     "Set Avalon4 core voltage, in millivolts, step: 125"),
+	OPT_WITH_CBARG("--avalon4-freq",
+		     set_avalon4_freq, NULL, &opt_set_avalon4_freq,
+		     "Set frequency for Avalon4, 1 to 3 values, example: 445:385:370"),
 	OPT_WITH_CBARG("--avalon4-fan",
 		     set_avalon4_fan, NULL, &opt_set_avalon4_fan,
 		     "Set Avalon4 target fan speed range"),
-	OPT_WITH_CBARG("--avalon4-temp",
-		     set_avalon4_temp, NULL, &opt_set_avalon4_temp,
-		     "Set Avalon4 target temp range"),
+	OPT_WITH_ARG("--avalon4-temp",
+		     set_int_22_to_55, opt_show_intval, &opt_avalon4_temp_target,
+		     "Set Avalon4 target temperature"),
 	OPT_WITH_ARG("--avalon4-cutoff",
-		     set_int_0_to_100, opt_show_intval, &opt_avalon4_overheat,
+		     set_int_42_to_65, opt_show_intval, &opt_avalon4_overheat,
 		     "Set Avalon4 overheat cut off temperature"),
 	OPT_WITH_ARG("--avalon4-polling-delay",
 		     set_int_1_to_65535, opt_show_intval, &opt_avalon4_polling_delay,

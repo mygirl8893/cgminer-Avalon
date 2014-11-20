@@ -18,7 +18,7 @@
 #define AVA4_DEFAULT_FAN_MIN	10 /* % */
 #define AVA4_DEFAULT_FAN_MAX	100
 
-#define AVA4_DEFAULT_TEMP_MIN		25
+#define AVA4_DEFAULT_TEMP_TARGET	42
 #define AVA4_DEFAULT_TEMP_OVERHEAT	65
 
 #define AVA4_DEFAULT_VOLTAGE_MIN	4000
@@ -174,6 +174,7 @@ extern char *set_avalon4_fan(char *arg);
 extern char *set_avalon4_temp(char *arg);
 extern char *set_avalon4_freq(char *arg);
 extern char *set_avalon4_voltage(char *arg);
+extern int opt_avalon4_temp_target;
 extern int opt_avalon4_overheat;
 extern int opt_avalon4_polling_delay;
 extern int opt_avalon4_aucspeed;

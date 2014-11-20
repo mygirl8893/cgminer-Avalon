@@ -21,8 +21,8 @@
 
 #define get_fan_pwm(v)	(AVA4_PWM_MAX - (v) * AVA4_PWM_MAX / 100)
 
-int opt_avalon4_temp_min = AVA4_DEFAULT_TEMP_MIN;
-int opt_avalon4_temp_max = AVA4_DEFAULT_TEMP_OVERHEAT;
+int opt_avalon4_temp_target = AVA4_DEFAULT_TEMP_TARGET;
+int opt_avalon4_overheat = AVA4_DEFAULT_TEMP_OVERHEAT;
 
 int opt_avalon4_fan_min = AVA4_DEFAULT_FAN_MIN;
 int opt_avalon4_fan_max = AVA4_DEFAULT_FAN_MAX;
@@ -33,7 +33,6 @@ int opt_avalon4_freq[3] = {AVA4_DEFAULT_FREQUENCY,
 			   AVA4_DEFAULT_FREQUENCY,
 			   AVA4_DEFAULT_FREQUENCY};
 
-int opt_avalon4_overheat = AVA4_DEFAULT_TEMP_OVERHEAT;
 int opt_avalon4_polling_delay = AVA4_DEFAULT_POLLING_DELAY;
 
 int opt_avalon4_aucspeed = AVA4_AUC_SPEED;
@@ -72,27 +71,6 @@ static inline uint8_t rev8(uint8_t d)
 		out |= (1 << (7 - i));
 
 	return out;
-}
-
-char *set_avalon4_temp(char *arg)
-{
-	int val1, val2, ret;
-
-	ret = sscanf(arg, "%d-%d", &val1, &val2);
-	if (ret < 1)
-		return "No values passed to avalon4-temp";
-	if (ret == 1)
-		val2 = val1;
-
-	if (val1 < AVA4_DEFAULT_TEMP_MIN || val1 > AVA4_DEFAULT_TEMP_OVERHEAT ||
-	    val2 < AVA4_DEFAULT_TEMP_MIN || val2 > AVA4_DEFAULT_TEMP_OVERHEAT ||
-	    val2 < val1)
-		return "Invalid value passed to avalon4-temp";
-
-	opt_avalon4_temp_min = val1;
-	opt_avalon4_temp_max = val2;
-
-	return NULL;
 }
 
 char *set_avalon4_fan(char *arg)
@@ -256,17 +234,14 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 	uint32_t pwm;
 	int t = info->temp[id];
 
-	/* TODO: Add options for temperature range and fan adjust function 40 ~ 50 */
-	if (t < opt_avalon4_temp_min)
+	if (t < opt_avalon4_temp_target - 10)
 		info->fan_pct[id] = opt_avalon4_fan_min;
-	else if (t > opt_avalon4_temp_max)
+	else if (t > opt_avalon4_temp_target + 10 || t > opt_avalon4_overheat - 3)
 		info->fan_pct[id] = opt_avalon4_fan_max;
-	else {
-		if (t >= ((opt_avalon4_temp_max + opt_avalon4_temp_min) / 2))
-			info->fan_pct[id] += 2;
-		else
-			info->fan_pct[id] -= 2;
-	}
+	else if (t > opt_avalon4_temp_target + 1)
+		info->fan_pct[id] += 2;
+	else if (t < opt_avalon4_temp_target - 1)
+		info->fan_pct[id] -= 2;
 
 	if (info->fan_pct[id] < opt_avalon4_fan_min)
 		info->fan_pct[id] = opt_avalon4_fan_min;
@@ -793,9 +768,7 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		info->enable[i] = 0;
 		info->dev_type[i] = AVA4_ID_NULL;
-		info->fan_pct[i] = (opt_avalon4_fan_max == opt_avalon4_fan_min) ?
-			opt_avalon4_fan_min :
-			(opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
+		info->fan_pct[i] = opt_avalon4_fan_min + (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
 		info->set_voltage[i] = opt_avalon4_voltage_min;
 	}
 
@@ -828,11 +801,8 @@ static bool avalon4_prepare(struct thr_info *thr)
 
 	info->set_voltage_broadcat = 1;
 
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
-		info->fan_pct[i] = (opt_avalon4_fan_max == opt_avalon4_fan_min) ?
-			opt_avalon4_fan_min :
-			(opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
-	}
+	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++)
+		info->fan_pct[i] = opt_avalon4_fan_min + (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
 
 	return true;
 }
@@ -1020,7 +990,7 @@ static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 	cg_wunlock(&pool_stratum->data_lock);
 }
 
-static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, int addr)
+static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, int addr, int cutoff)
 {
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
@@ -1029,7 +999,8 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
 	info->set_frequency[2] = opt_avalon4_freq[2];
-	/* Set the Fan, Voltage and Frequency */
+
+	/* Set the NTime, Voltage and Frequency */
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 
 	if (opt_avalon4_ntime_offset != AVA4_DEFAULT_ASIC_COUNT) {
@@ -1038,9 +1009,7 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 		memcpy(send_pkg.data, &tmp, 4);
 	}
 
-	applog(LOG_INFO, "Avalon4: Temp max: %d, Cut off temp: %d",
-	       get_current_temp_max(info), opt_avalon4_overheat);
-	if (get_current_temp_max(info) >= opt_avalon4_overheat)
+	if (cutoff)
 		tmp = encode_voltage(0);
 	else
 		tmp = encode_voltage(info->set_voltage[addr]);
@@ -1139,18 +1108,26 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	detect_modules(avalon4);
 
 	/* Step 5: Configure the parameter from outside */
-	avalon4_stratum_set(avalon4, pool, AVA4_MODULE_BROADCAST);
+	avalon4_stratum_set(avalon4, pool, AVA4_MODULE_BROADCAST, 0);
 
 	if (!info->set_voltage_broadcat) {
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 			if (!info->enable[i])
 				continue;
-
 			if (info->set_voltage[i] == info->set_voltage[0])
 				continue;
 
-			avalon4_stratum_set(avalon4, pool, i);
+			avalon4_stratum_set(avalon4, pool, i, 0);
 		}
+	}
+
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (!info->enable[i])
+			continue;
+		if (info->temp[i] < opt_avalon4_overheat)
+			continue;
+
+		avalon4_stratum_set(avalon4, pool, i, 1);
 	}
 
 	/* Step 6: Send out finish pkg */
