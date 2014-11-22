@@ -602,8 +602,8 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 		applog(LOG_DEBUG, "Avalon4: IIC read again!(err:%d)", err);
 	}
 	if (err || rcnt != rlen) {
-		if (info->xfer_err_cnt++ == 10) {
-			applog(LOG_DEBUG, "Avalon4: AUC xfer_err_cnt reach");
+		if (info->xfer_err_cnt++ == 100) {
+			applog(LOG_DEBUG, "Avalon4: AUC xfer_err_cnt reach err = %d, rcnt = %d, rlen = %d", err, rcnt, rlen);
 
 			cgsleep_ms(5 * 1000); /* Wait MM reset */
 			avalon4_auc_init(avalon4, info->auc_version);
