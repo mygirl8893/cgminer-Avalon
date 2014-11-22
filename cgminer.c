@@ -957,6 +957,7 @@ bool detect_stratum(struct pool *pool, char *url)
 {
 	bool ret = false;
 
+	check_extranonce_option(pool, url);
 	if (!extract_sockaddr(url, &pool->sockaddr_url, &pool->stratum_port))
 		goto out;
 
@@ -6852,6 +6853,7 @@ static void *longpoll_thread(void *userdata);
 static bool stratum_works(struct pool *pool)
 {
 	applog(LOG_INFO, "Testing pool %d stratum %s", pool->pool_no, pool->stratum_url);
+	check_extranonce_option(pool, pool->stratum_url);
 	if (!extract_sockaddr(pool->stratum_url, &pool->sockaddr_url, &pool->stratum_port))
 		return false;
 
@@ -6957,7 +6959,7 @@ retry_stratum:
 
 		if (!init) {
 			bool ret = initiate_stratum(pool) && auth_stratum(pool);
-
+			extranonce_subscribe_stratum(pool);
 			if (ret)
 				init_stratum_threads(pool);
 			else
