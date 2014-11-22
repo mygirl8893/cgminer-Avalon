@@ -130,6 +130,8 @@ struct avalon4_info {
 	int auc_xdelay;
 	int auc_temp;
 
+	int mm_count;
+
 	int set_frequency[3];
 	int set_voltage[AVA4_DEFAULT_MODULARS];
 	int set_voltage_broadcat;

@@ -1305,6 +1305,8 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, "MM ID%d", i);
 		root = api_add_string(root, buf, statbuf[i], true);
 	}
+	sprintf(buf, "MM Count");
+	root = api_add_int(root, buf, &(info->mm_count), false);
 
 	sprintf(buf, "AUC VER");
 	root = api_add_string(root, buf, info->auc_version, true);
@@ -1473,6 +1475,8 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		if (voltsmin >= info->get_voltage[i])
 			voltsmin = info->get_voltage[i];
 	}
+
+	info->mm_count = count;
 
 	tailsprintf(buf, bufsiz, "%2dMMs %.4fV-%.4fV %4dMhz %2dC %3d%%-%3d%%",
 		    count, (float)voltsmin / 10000, (float)voltsmax / 10000,
