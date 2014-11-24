@@ -154,8 +154,9 @@ struct avalon4_info {
 
 	int local_work[AVA4_DEFAULT_MODULARS];
 	int hw_work[AVA4_DEFAULT_MODULARS];
-	int matching_work[AVA4_DEFAULT_MINERS][AVA4_DEFAULT_MODULARS];
-	int chipmatching_work[AVA4_DEFAULT_MINERS][AVA4_DEFAULT_MODULARS][4];
+
+	int matching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
+	int chipmatching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS][4];
 };
 
 struct avalon4_iic_info {
