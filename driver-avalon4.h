@@ -187,6 +187,7 @@ extern char *set_avalon4_fan(char *arg);
 extern char *set_avalon4_temp(char *arg);
 extern char *set_avalon4_freq(char *arg);
 extern char *set_avalon4_voltage(char *arg);
+extern bool opt_avalon4_autov;
 extern int opt_avalon4_temp_target;
 extern int opt_avalon4_overheat;
 extern int opt_avalon4_polling_delay;

@@ -27,6 +27,7 @@ int opt_avalon4_overheat = AVA4_DEFAULT_TEMP_OVERHEAT;
 int opt_avalon4_fan_min = AVA4_DEFAULT_FAN_MIN;
 int opt_avalon4_fan_max = AVA4_DEFAULT_FAN_MAX;
 
+bool opt_avalon4_autov;
 int opt_avalon4_voltage_min = AVA4_DEFAULT_VOLTAGE;
 int opt_avalon4_voltage_max = AVA4_DEFAULT_VOLTAGE;
 int opt_avalon4_freq[3] = {AVA4_DEFAULT_FREQUENCY,
@@ -1206,7 +1207,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 			info->dh5[i] = info->rolling5h[i] / info->rolling5w[i] * 100;
 
-			if (1) {
+			if (opt_avalon4_autov) {
 				if ((int)(info->dh5[i] * 1000) > AVA4_DH_INC)
 					info->set_voltage[i] = info->set_voltage[0] + 125;
 				if ((int)(info->dh5[i] * 1000) < AVA4_DH_DEC && info->set_voltage[i] > info->set_voltage[0])
@@ -1217,6 +1218,16 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			info->hw5[i] = 0;
 		}
 	}
+
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->set_voltage[i] != info->set_voltage[0])
+			break;
+	}
+	if (i < AVA4_DEFAULT_MODULARS)
+		info->set_voltage_broadcat = 0;
+	else
+		info->set_voltage_broadcat = 1;
+
 
 	h = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++)
@@ -1346,27 +1357,20 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, "MM ID%d", i);
 		root = api_add_string(root, buf, statbuf[i], true);
 	}
-	sprintf(buf, "MM Count");
-	root = api_add_int(root, buf, &(info->mm_count), false);
 
-	sprintf(buf, "AUC VER");
-	root = api_add_string(root, buf, info->auc_version, true);
-
-	sprintf(buf, "AUC I2C Speed");
-	root = api_add_int(root, buf, &(info->auc_speed), false);
-
-	sprintf(buf, "AUC I2C XDelay");
-	root = api_add_int(root, buf, &(info->auc_xdelay), false);
-
-	sprintf(buf, "AUC ADC");
-	root = api_add_int(root, buf, &(info->auc_temp), false);
+	root = api_add_int(root, "MM Count", &(info->mm_count), true);
+	root = api_add_bool(root, "Automatic Voltage", &opt_avalon4_autov, true);
+	root = api_add_string(root, "AUC VER", info->auc_version, false);
+	root = api_add_int(root, "AUC I2C Speed", &(info->auc_speed), true);
+	root = api_add_int(root, "AUC I2C XDelay", &(info->auc_xdelay), true);
+	root = api_add_int(root, "AUC ADC", &(info->auc_temp), true);
 
 	return root;
 }
 
 static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *setting, char *replybuf)
 {
-	int val;
+	int val, i;
 	struct avalon4_info *info = avalon4->device_data;
 
 	if (strcasecmp(option, "help") == 0) {
@@ -1444,6 +1448,11 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 			return replybuf;
 		}
 
+		if (!info->enable[val]) {
+			sprintf(replybuf, "the current module was disabled %d", val);
+			return replybuf;
+		}
+
 		info->led_red[val] = !info->led_red[val];
 
 		applog(LOG_NOTICE, "%s %d: Module:%d, LED: %s",
@@ -1475,13 +1484,19 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 			return replybuf;
 		}
 
-		if (val_mod == AVA4_MODULE_BROADCAST) {
-			info->set_voltage[0] = val_volt;
-			info->set_voltage_broadcat = 1;
-		} else {
-			info->set_voltage[val_mod] = val_volt;
-			info->set_voltage_broadcat = 0;
+		if (!info->enable[val_mod]) {
+			sprintf(replybuf, "the current module was disabled %d", val_mod);
+			return replybuf;
 		}
+
+		info->set_voltage[val_mod] = val_volt;
+
+		if (val_mod == AVA4_MODULE_BROADCAST) {
+			for (i = 1; i < AVA4_DEFAULT_MODULARS; i++)
+				info->set_voltage[i] = val_volt;
+			info->set_voltage_broadcat = 1;
+		} else
+			info->set_voltage_broadcat = 0;
 
 		applog(LOG_NOTICE, "%s %d: Update module[%d] voltage to %d",
 		       avalon4->drv->name, avalon4->device_id, val_mod, val_volt);

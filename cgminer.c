@@ -1186,6 +1186,9 @@ static struct opt_table opt_config_table[] = {
 		     "Set Avalon2 polling delay value (ms)"),
 #endif
 #ifdef USE_AVALON4
+	OPT_WITHOUT_ARG("--avalon4-automatic-voltage",
+			opt_set_bool, &opt_avalon4_autov,
+			"Automatic adjust voltage base on module DH"),
 	OPT_WITH_CBARG("--avalon4-voltage",
 		     set_avalon4_voltage, NULL, &opt_set_avalon4_voltage,
 		     "Set Avalon4 core voltage, in millivolts, step: 125"),
