@@ -388,6 +388,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		info->local_works[modular_id] += info->local_work[modular_id];
 		info->hw_works[modular_id] += info->hw_work[modular_id];
 
+		info->lw5[modular_id] += info->local_work[modular_id];
+		info->hw5[modular_id] += info->hw_work[modular_id];
+
 		avalon4->temp = get_current_temp_max(info);
 		break;
 	case AVA4_P_ACKDETECT:
@@ -819,6 +822,7 @@ static bool avalon4_prepare(struct thr_info *thr)
 	info->polling_first = 1;
 
 	cgtime(&(info->last_fan));
+	cgtime(&(info->last_lw5));
 
 	cglock_init(&info->update_lock);
 	cglock_init(&info->pool0.data_lock);
@@ -1165,10 +1169,11 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 static int64_t avalon4_scanhash(struct thr_info *thr)
 {
-	struct timeval current_stratum;
 	struct cgpu_info *avalon4 = thr->cgpu;
 	struct avalon4_info *info = avalon4->device_data;
-	int64_t h;
+	struct timeval current;
+	double device_tdiff;
+	uint64_t h, hashes_done;
 	int i;
 
 	if (unlikely(avalon4->usbinfo.nodev)) {
@@ -1177,19 +1182,45 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		return -1;
 	}
 
+	cgtime(&current);
+
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
-	cgtime(&current_stratum);
-	if (tdiff(&current_stratum, &(info->last_stratum)) > (double)(3.0 * 60.0))
+	if (tdiff(&current, &(info->last_stratum)) > 180.0)
 		return 0;
 
 	cg_rlock(&info->update_lock);
 	polling(thr, avalon4, info);
 	cg_runlock(&info->update_lock);
 
+	device_tdiff = tdiff(&current, &(info->last_lw5));
+	if (device_tdiff >= 5.0) {
+		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+			if (!info->enable[i])
+				continue;
+
+			hashes_done = info->lw5[i] * 4295; /* 0xffffffff / 1000000 = 4294.967296, hash_done is mhs */
+			decay_time(&(info->rolling5w[i]), hashes_done, device_tdiff, 300.0);
+
+			hashes_done = info->hw5[i] * 4295; /* 0xffffffff / 1000000 = 4294.967296, hash_done is mhs */
+			decay_time(&(info->rolling5h[i]), hashes_done, device_tdiff, 300.0);
+
+			info->dh5[i] = info->rolling5h[i] / info->rolling5w[i] * 100;
+
+			if (1) {
+				if ((int)(info->dh5[i] * 1000) > AVA4_DH_INC)
+					info->set_voltage[i] = info->set_voltage[0] + 125;
+				if ((int)(info->dh5[i] * 1000) < AVA4_DH_DEC && info->set_voltage[i] > info->set_voltage[0])
+					info->set_voltage[i] = info->set_voltage[0];
+			}
+
+			info->lw5[i] = 0;
+			info->hw5[i] = 0;
+		}
+	}
+
 	h = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++)
 		h += info->enable[i] ? (info->local_work[i] - info->hw_work[i]) : 0;
-
 	return h * 0xffffffff;
 }
 
@@ -1253,11 +1284,23 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
+		sprintf(buf, " 5M[%.3f%%]", info->rolling5w[i] - info->rolling5h[i]);
+		strcat(statbuf[i], buf);
+	}
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
+			continue;
 		a = info->hw_works[i];
 		b = info->local_works[i];
 		hwp = b ? ((double)a / (double)b) : 0;
 
 		sprintf(buf, " DH[%.3f%%]", hwp * 100);
+		strcat(statbuf[i], buf);
+	}
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if(info->mod_type[i] == AVA4_TYPE_NULL)
+			continue;
+		sprintf(buf, " DH5[%.3f%%]", info->dh5[i]);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {

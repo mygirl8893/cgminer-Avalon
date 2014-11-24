@@ -35,6 +35,9 @@
 #define AVA4_DEFAULT_FREQUENCY	200
 #define AVA4_DEFAULT_POLLING_DELAY	20 /* ms */
 
+#define AVA4_DH_INC	3000	/* 3% * 1000 */
+#define AVA4_DH_DEC	50	/* 0.05% * 1000 */
+
 #define AVA4_PWM_MAX		0x3FF
 
 #define AVA4_AUC_VER_LEN	12	/* Version length: 12 (AUC-YYYYMMDD) */
@@ -154,6 +157,13 @@ struct avalon4_info {
 
 	int local_work[AVA4_DEFAULT_MODULARS];
 	int hw_work[AVA4_DEFAULT_MODULARS];
+
+	int lw5[AVA4_DEFAULT_MODULARS];
+	int hw5[AVA4_DEFAULT_MODULARS];
+	double dh5[AVA4_DEFAULT_MODULARS];
+	double rolling5w[AVA4_DEFAULT_MODULARS];
+	double rolling5h[AVA4_DEFAULT_MODULARS];
+	struct timeval last_lw5;
 
 	int matching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
 	int chipmatching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS][4];
