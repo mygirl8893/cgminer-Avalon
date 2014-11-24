@@ -235,7 +235,6 @@ static char *opt_set_avalon2_fan;
 static char *opt_set_avalon2_voltage;
 #endif
 #ifdef USE_AVALON4
-static char *opt_set_avalon4_temp;
 static char *opt_set_avalon4_fan;
 static char *opt_set_avalon4_voltage;
 static char *opt_set_avalon4_freq;

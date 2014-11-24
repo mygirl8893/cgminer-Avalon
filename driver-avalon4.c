@@ -1197,7 +1197,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon4_info *info = cgpu->device_data;
-	int i, j, a, b;
+	int i, a, b;
 	double hwp;
 	char buf[256];
 	char statbuf[AVA4_DEFAULT_MODULARS][512];
