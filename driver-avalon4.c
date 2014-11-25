@@ -832,7 +832,6 @@ static bool avalon4_prepare(struct thr_info *thr)
 	cglock_init(&info->pool2.data_lock);
 
 	info->set_voltage_broadcat = 1;
-	info->rolling5_first = true;
 
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++)
 		info->fan_pct[i] = opt_avalon4_fan_min + (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
@@ -1171,6 +1170,11 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	avalon4_stratum_finish(avalon4);
 }
 
+static inline void simple_decay_time(double *f, double fadd, double fsecs, double interval)
+{
+	*f = (interval * (*f) + fadd) / (interval + fsecs);
+}
+
 static int64_t avalon4_scanhash(struct thr_info *thr)
 {
 	struct cgpu_info *avalon4 = thr->cgpu;
@@ -1197,7 +1201,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 	cgtime(&current);
 	device_tdiff = tdiff(&current, &(info->last_lw5));
-	if (device_tdiff >= 10.0) {
+	if (device_tdiff >= 1.0) {
 		copy_time(&info->last_lw5, &current);
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -1205,16 +1209,10 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 				continue;
 
 			hashes_done = info->lw5[i] * 4295ull; /* 0xffffffff / 1000000 = 4294.967296, hash_done is mhs */
-			if (info->rolling5_first)
-				info->rolling5w[i] = (double)hashes_done / device_tdiff;
-			else
-				decay_time(&(info->rolling5w[i]), hashes_done, device_tdiff, 300.0);
+			simple_decay_time(&(info->rolling5w[i]), hashes_done, device_tdiff, 30.0);
 
 			hashes_done = info->hw5[i] * 4295ull; /* 0xffffffff / 1000000 = 4294.967296, hash_done is mhs */
-			if (info->rolling5_first)
-				info->rolling5h[i] = (double)hashes_done / device_tdiff;
-			else
-				decay_time(&(info->rolling5h[i]), hashes_done, device_tdiff, 300.0);
+			simple_decay_time(&(info->rolling5h[i]), hashes_done, device_tdiff, 30.0);
 
 			info->dh5[i] = info->rolling5h[i] / info->rolling5w[i];
 

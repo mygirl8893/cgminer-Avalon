@@ -163,7 +163,6 @@ struct avalon4_info {
 	double dh5[AVA4_DEFAULT_MODULARS];
 	double rolling5w[AVA4_DEFAULT_MODULARS];
 	double rolling5h[AVA4_DEFAULT_MODULARS];
-	bool rolling5_first;
 	struct timeval last_lw5;
 	struct timeval last_autov;
 
