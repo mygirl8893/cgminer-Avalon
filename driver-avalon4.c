@@ -1186,9 +1186,8 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		return -1;
 	}
 
-	cgtime(&current);
-
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
+	cgtime(&current);
 	if (tdiff(&current, &(info->last_stratum)) > 180.0)
 		return 0;
 
@@ -1196,6 +1195,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	polling(thr, avalon4, info);
 	cg_runlock(&info->update_lock);
 
+	cgtime(&current);
 	device_tdiff = tdiff(&current, &(info->last_lw5));
 	if (device_tdiff >= 10.0) {
 		copy_time(&info->last_lw5, &current);
@@ -1223,6 +1223,22 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		}
 	}
 
+	cgtime(&current);
+	device_tdiff = tdiff(&current, &(info->last_autov));
+	if (opt_avalon4_autov && device_tdiff > 360.0) {
+		copy_time(&info->last_autov, &current);
+
+		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+			if (!info->enable[i])
+				continue;
+
+			if (info->dh5[i] > AVA4_DH_INC)
+				info->set_voltage[i] = info->set_voltage[0] + 125;
+			if (info->dh5[i] < AVA4_DH_DEC && info->set_voltage[i] > info->set_voltage[0])
+				info->set_voltage[i] = info->set_voltage[0];
+		}
+	}
+
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->set_voltage[i] != info->set_voltage[0])
 			break;
@@ -1232,16 +1248,6 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		info->set_voltage_broadcat = 0;
 	else
 		info->set_voltage_broadcat = 1;
-
-	device_tdiff = tdiff(&current, &(info->last_autov));
-	if (opt_avalon4_autov && device_tdiff > 360.0) {
-		copy_time(&info->last_autov, &current);
-
-		if ((int)(info->dh5[i] * 1000) > AVA4_DH_INC)
-			info->set_voltage[i] = info->set_voltage[0] + 125;
-		if ((int)(info->dh5[i] * 1000) < AVA4_DH_DEC && info->set_voltage[i] > info->set_voltage[0])
-			info->set_voltage[i] = info->set_voltage[0];
-	}
 
 	h = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++)
