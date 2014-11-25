@@ -1259,7 +1259,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon4_info *info = cgpu->device_data;
-	int i, j, a, b;
+	int i, a, b;
 	double hwp;
 	char buf[256];
 	char statbuf[AVA4_DEFAULT_MODULARS][512];
@@ -1288,6 +1288,8 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		strcat(statbuf[i], buf);
 	}
 
+#if 0
+	int j;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
@@ -1299,6 +1301,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		}
 		statbuf[i][strlen(statbuf[i]) - 1] = ']';
 	}
+#endif
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
