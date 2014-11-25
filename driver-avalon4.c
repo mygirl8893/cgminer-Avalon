@@ -1297,13 +1297,13 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
-		sprintf(buf, " LW[%d]", info->local_works[i]);
+		sprintf(buf, " LW[%"PRIu64"]", info->local_works[i]);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
-		sprintf(buf, " HW[%d]", info->hw_works[i]);
+		sprintf(buf, " HW[%"PRIu64"]", info->hw_works[i]);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {

@@ -152,14 +152,14 @@ struct avalon4_info {
 	int temp[AVA4_DEFAULT_MODULARS];
 	int led_red[AVA4_DEFAULT_MODULARS];
 
-	int local_works[AVA4_DEFAULT_MODULARS];
-	int hw_works[AVA4_DEFAULT_MODULARS];
+	uint64_t local_works[AVA4_DEFAULT_MODULARS];
+	uint64_t hw_works[AVA4_DEFAULT_MODULARS];
 
-	int local_work[AVA4_DEFAULT_MODULARS];
-	int hw_work[AVA4_DEFAULT_MODULARS];
+	uint32_t local_work[AVA4_DEFAULT_MODULARS];
+	uint32_t hw_work[AVA4_DEFAULT_MODULARS];
 
-	int lw5[AVA4_DEFAULT_MODULARS];
-	int hw5[AVA4_DEFAULT_MODULARS];
+	uint32_t lw5[AVA4_DEFAULT_MODULARS];
+	uint32_t hw5[AVA4_DEFAULT_MODULARS];
 	double dh5[AVA4_DEFAULT_MODULARS];
 	double rolling5w[AVA4_DEFAULT_MODULARS];
 	double rolling5h[AVA4_DEFAULT_MODULARS];
