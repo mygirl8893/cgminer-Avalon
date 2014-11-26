@@ -1229,8 +1229,11 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			}
 
 			hwp = b ? (double)b / (double)a : 0;
-			if (hwp > AVA4_DH_INC)
+			if (hwp > AVA4_DH_INC) {
 				info->set_voltage[i] = info->set_voltage[0] + 125;
+				applog(LOG_NOTICE, "%s %d: Automatic update module[%d] voltage to %d",
+				       avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
+			}
 		}
 	}
 
