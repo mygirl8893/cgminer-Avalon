@@ -1338,7 +1338,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		hwp = b ? (double)b / (double)a * 100 : 0;
 
-		sprintf(buf, " 5M[%.2f] DH5[%.3f%%]", ((double)a - (double)b) * 4.295 / 300.0, hwp);
+		sprintf(buf, " GHS5m[%.2f] DH5m[%.3f%%]", ((double)a - (double)b) * 4.295 / 300.0, hwp);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
