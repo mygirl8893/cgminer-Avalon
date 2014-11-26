@@ -1093,7 +1093,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct work *work;
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
-	int i;
+	int i, count = 0;
 
 	applog(LOG_DEBUG, "Avalon4: New stratum: restart: %d, update: %d",
 	       thr->work_restart, thr->work_update);
@@ -1160,11 +1160,14 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
 			continue;
+
+		count++;
 		if (info->temp[i] < opt_avalon4_overheat)
 			continue;
 
 		avalon4_stratum_set(avalon4, pool, i, 1);
 	}
+	info->mm_count = count;
 
 	/* Step 6: Send out finish pkg */
 	avalon4_stratum_finish(avalon4);
@@ -1534,14 +1537,13 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	struct avalon4_info *info = avalon4->device_data;
 	int temp = get_current_temp_max(info);
 	int voltsmin = AVA4_DEFAULT_VOLTAGE_MAX, voltsmax = AVA4_DEFAULT_VOLTAGE_MIN;
-	int i, count = 0;
 	int fanmin = AVA4_DEFAULT_FAN_MAX, fanmax = AVA4_DEFAULT_FAN_MIN;
+	int i;
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
 			continue;
 
-		count++;
 		if (fanmax <= info->fan_pct[i])
 			fanmax = info->fan_pct[i];
 		if (fanmin >= info->fan_pct[i])
@@ -1553,10 +1555,8 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 			voltsmin = info->get_voltage[i];
 	}
 
-	info->mm_count = count;
-
 	tailsprintf(buf, bufsiz, "%2dMMs %.4fV-%.4fV %4dMhz %2dC %3d%%-%3d%%",
-		    count, (float)voltsmin / 10000, (float)voltsmax / 10000,
+		    info->mm_count, (float)voltsmin / 10000, (float)voltsmax / 10000,
 		    (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9,
 		    temp, fanmin, fanmax);
 }
