@@ -1235,8 +1235,6 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 			if (info->dh5[i] > AVA4_DH_INC)
 				info->set_voltage[i] = info->set_voltage[0] + 125;
-			if (info->dh5[i] < AVA4_DH_DEC && info->set_voltage[i] > info->set_voltage[0])
-				info->set_voltage[i] = info->set_voltage[0];
 		}
 	}
 
