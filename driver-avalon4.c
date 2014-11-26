@@ -389,8 +389,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		info->local_works[modular_id] += info->local_work[modular_id];
 		info->hw_works[modular_id] += info->hw_work[modular_id];
 
-		info->lw5[modular_id] += info->local_work[modular_id];
-		info->hw5[modular_id] += info->hw_work[modular_id];
+		info->lw5[modular_id][info->i_1m] += info->local_work[modular_id];
+		info->hw5[modular_id][info->i_1m] += info->hw_work[modular_id];
 
 		avalon4->temp = get_current_temp_max(info);
 		break;
@@ -823,8 +823,8 @@ static bool avalon4_prepare(struct thr_info *thr)
 	info->polling_first = 1;
 
 	cgtime(&(info->last_fan));
-	cgtime(&(info->last_lw5));
-	cgtime(&(info->last_autov));
+	cgtime(&(info->last_5m));
+	cgtime(&(info->last_1m));
 
 	cglock_init(&info->update_lock);
 	cglock_init(&info->pool0.data_lock);
@@ -1173,19 +1173,15 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	avalon4_stratum_finish(avalon4);
 }
 
-static inline void simple_decay_time(double *f, double fadd, double fsecs, double interval)
-{
-	*f = (interval * (*f) + fadd) / (interval + fsecs);
-}
-
 static int64_t avalon4_scanhash(struct thr_info *thr)
 {
 	struct cgpu_info *avalon4 = thr->cgpu;
 	struct avalon4_info *info = avalon4->device_data;
 	struct timeval current;
 	double device_tdiff;
+	uint32_t a = 0, b = 0;
 	uint64_t h, hashes_done;
-	int i;
+	int i, j;
 
 	if (unlikely(avalon4->usbinfo.nodev)) {
 		applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
@@ -1203,31 +1199,32 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	cg_runlock(&info->update_lock);
 
 	cgtime(&current);
-	device_tdiff = tdiff(&current, &(info->last_lw5));
-	if (device_tdiff >= 1.0) {
-		copy_time(&info->last_lw5, &current);
+	device_tdiff = tdiff(&current, &(info->last_1m));
+	if (device_tdiff >= 60.0) {
+		copy_time(&info->last_1m, &current);
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 			if (!info->enable[i])
 				continue;
 
-			hashes_done = info->lw5[i] * 4295ull; /* 0xffffffff / 1000000 = 4294.967296, hash_done is mhs */
-			simple_decay_time(&(info->rolling5w[i]), hashes_done, device_tdiff, 30.0);
+			for (j = 0; j < 6; j++) {
+				a += info->lw5[i][j];
+				b += info->hw5[i][j];
+			}
 
-			hashes_done = info->hw5[i] * 4295ull; /* 0xffffffff / 1000000 = 4294.967296, hash_done is mhs */
-			simple_decay_time(&(info->rolling5h[i]), hashes_done, device_tdiff, 30.0);
+			info->dh5[i] = (double)b / (double)a;
 
-			info->dh5[i] = info->rolling5h[i] / info->rolling5w[i];
-
-			info->lw5[i] = 0;
-			info->hw5[i] = 0;
+			if (info->i_1m++ >= 6)
+				info->i_1m = 0;
+			info->lw5[i][info->i_1m] = 0;
+			info->hw5[i][info->i_1m] = 0;
 		}
 	}
 
 	cgtime(&current);
-	device_tdiff = tdiff(&current, &(info->last_autov));
-	if (opt_avalon4_autov && device_tdiff > 360.0) {
-		copy_time(&info->last_autov, &current);
+	device_tdiff = tdiff(&current, &(info->last_5m));
+	if (opt_avalon4_autov && device_tdiff > 480.0) {
+		copy_time(&info->last_5m, &current);
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 			if (!info->enable[i])
@@ -1258,7 +1255,8 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon4_info *info = cgpu->device_data;
-	int i, a, b;
+	int i, j;
+	uint32_t a,b ;
 	double hwp;
 	char buf[256];
 	char statbuf[AVA4_DEFAULT_MODULARS][512];
@@ -1288,7 +1286,6 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	}
 
 #if 0
-	int j;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
@@ -1314,12 +1311,22 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, " HW[%"PRIu64"]", info->hw_works[i]);
 		strcat(statbuf[i], buf);
 	}
+	a = 0;
+	b = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
-		sprintf(buf, " 5M[%.2f]", (info->rolling5w[i] - info->rolling5h[i]) / 1000);
+
+		for (j = 0; j < 6; j++) {
+			a += info->lw5[i][j];
+			b += info->hw5[i][j];
+		}
+
+		sprintf(buf, " 5M[%.2f]", ((double)a - (double)b) * 4295 / 1000 / 300.0);
 		strcat(statbuf[i], buf);
 	}
+	a = 0;
+	b = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
