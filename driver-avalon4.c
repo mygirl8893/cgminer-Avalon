@@ -1178,7 +1178,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	struct cgpu_info *avalon4 = thr->cgpu;
 	struct avalon4_info *info = avalon4->device_data;
 	struct timeval current;
-	double device_tdiff;
+	double device_tdiff, hwp;
 	uint32_t a = 0, b = 0;
 	uint64_t h, hashes_done;
 	int i, j;
@@ -1207,13 +1207,6 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			if (!info->enable[i])
 				continue;
 
-			for (j = 0; j < 6; j++) {
-				a += info->lw5[i][j];
-				b += info->hw5[i][j];
-			}
-
-			info->dh5[i] = (double)b / (double)a;
-
 			if (info->i_1m++ >= 6)
 				info->i_1m = 0;
 			info->lw5[i][info->i_1m] = 0;
@@ -1230,7 +1223,13 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			if (!info->enable[i])
 				continue;
 
-			if (info->dh5[i] > AVA4_DH_INC)
+			for (j = 0; j < 6; j++) {
+				a += info->lw5[i][j];
+				b += info->hw5[i][j];
+			}
+
+			hwp = b ? (double)b / (double)a : 0;
+			if (hwp > AVA4_DH_INC)
 				info->set_voltage[i] = info->set_voltage[0] + 125;
 		}
 	}
@@ -1316,13 +1315,11 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
+		a = info->hw_works[i];
+		b = info->local_works[i];
+		hwp = b ? ((double)a / (double)b) * 100: 0;
 
-		for (j = 0; j < 6; j++) {
-			a += info->lw5[i][j];
-			b += info->hw5[i][j];
-		}
-
-		sprintf(buf, " 5M[%.2f]", ((double)a - (double)b) * 4295 / 1000 / 300.0);
+		sprintf(buf, " DH[%.3f%%]", hwp);
 		strcat(statbuf[i], buf);
 	}
 	a = 0;
@@ -1330,17 +1327,15 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
-		a = info->hw_works[i];
-		b = info->local_works[i];
-		hwp = b ? ((double)a / (double)b) : 0;
 
-		sprintf(buf, " DH[%.3f%%]", hwp * 100);
-		strcat(statbuf[i], buf);
-	}
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if(info->mod_type[i] == AVA4_TYPE_NULL)
-			continue;
-		sprintf(buf, " DH5[%.3f%%]", info->dh5[i] * 100);
+		for (j = 0; j < 6; j++) {
+			a += info->lw5[i][j];
+			b += info->hw5[i][j];
+		}
+
+		hwp = b ? (double)b / (double)a * 100 : 0;
+
+		sprintf(buf, " 5M[%.2f] DH5[%.3f%%]", ((double)a - (double)b) * 4.295 / 300.0, hwp);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
