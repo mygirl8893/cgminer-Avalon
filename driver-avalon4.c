@@ -551,7 +551,6 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 	uint8_t rbuf[AVA4_AUC_P_SIZE];
 	uint8_t *pdata = rbuf + 4;
 	uint16_t adc_val;
-	float div_vol;
 	struct avalon4_info *info = avalon4->device_data;
 
 	iic_info.iic_op = AVA4_IIC_INFO;
@@ -577,9 +576,8 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 			pdata[6]);
 
 	adc_val = pdata[1] << 8 | pdata[0];
-	div_vol = (1023.0 / adc_val) - 1;
 
-	info->auc_temp = 3.3 * 10000 / div_vol;
+	info->auc_temp = 3.3 * adc_val * 10000 / 1023;
 	return 0;
 }
 
