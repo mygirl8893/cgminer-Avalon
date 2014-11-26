@@ -1228,7 +1228,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 				b += info->hw5[i][j];
 			}
 
-			hwp = b ? (double)b / (double)a : 0;
+			hwp = a ? (double)b / (double)a : 0;
 			if (hwp > AVA4_DH_INC) {
 				info->set_voltage[i] = info->set_voltage[0] + 125;
 				applog(LOG_NOTICE, "%s %d: Automatic update module[%d] voltage to %d",
@@ -1259,9 +1259,10 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	struct avalon4_info *info = cgpu->device_data;
 	int i, j;
 	uint32_t a,b ;
-	double hwp;
+	double hwp, diff;
 	char buf[256];
 	char statbuf[AVA4_DEFAULT_MODULARS][512];
+	struct timeval current;
 
 	memset(statbuf, 0, AVA4_DEFAULT_MODULARS * 200);
 
@@ -1334,9 +1335,12 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 			b += info->hw5[i][j];
 		}
 
-		hwp = b ? (double)b / (double)a * 100 : 0;
+		cgtime(&current);
+		diff = tdiff(&current, &(info->last_1m)) + 300.0;
 
-		sprintf(buf, " GHS5m[%.2f] DH5m[%.3f%%]", ((double)a - (double)b) * 4.295 / 300.0, hwp);
+		hwp = a ? (double)b / (double)a * 100 : 0;
+
+		sprintf(buf, " GHS5m[%.2f] DH5m[%.3f%%]", ((double)a - (double)b) * 4.295 / diff, hwp);
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
