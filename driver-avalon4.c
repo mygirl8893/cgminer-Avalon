@@ -1233,7 +1233,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 				       avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
 			}
 			if (hwp < AVA4_DH_DEC && (info->set_voltage[i] > info->set_voltage[0] - 250)) {
-				info->set_voltage[i] = info->set_voltage[0] - 125;
+				info->set_voltage[i] -= 125;
 				applog(LOG_NOTICE, "%s %d: Automatic decrease module[%d] voltage to %d",
 				       avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
 			}
