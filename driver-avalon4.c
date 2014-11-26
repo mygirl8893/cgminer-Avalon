@@ -1313,8 +1313,6 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, " HW[%"PRIu64"]", info->hw_works[i]);
 		strcat(statbuf[i], buf);
 	}
-	a = 0;
-	b = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
@@ -1325,12 +1323,12 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, " DH[%.3f%%]", hwp);
 		strcat(statbuf[i], buf);
 	}
-	a = 0;
-	b = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
+		a = 0;
+		b = 0;
 		for (j = 0; j < 6; j++) {
 			a += info->lw5[i][j];
 			b += info->hw5[i][j];
