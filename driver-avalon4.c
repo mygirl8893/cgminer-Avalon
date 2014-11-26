@@ -550,7 +550,7 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 	uint8_t wbuf[AVA4_AUC_P_SIZE];
 	uint8_t rbuf[AVA4_AUC_P_SIZE];
 	uint8_t *pdata = rbuf + 4;
-	int adc_val;
+	uint16_t adc_val;
 	float div_vol;
 	struct avalon4_info *info = avalon4->device_data;
 
@@ -570,13 +570,13 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 	}
 
 	applog(LOG_DEBUG, "Avalon4: AUC tempADC(%03d), reqcnt(%d), respcnt(%d), txflag(%d), state(%d)",
-			be16toh(pdata[0] << 8 | pdata[1]),
+			pdata[1] << 8 | pdata[0],
 			pdata[2],
 			pdata[3],
-			be16toh(pdata[4] << 8 | pdata[5]),
+			pdata[5] << 8 | pdata[4],
 			pdata[6]);
 
-	adc_val = be16toh(pdata[0] << 8 | pdata[1]);
+	adc_val = pdata[1] << 8 | pdata[0];
 	div_vol = (1023.0 / adc_val) - 1;
 
 	info->auc_temp = 3.3 * 10000 / div_vol;
@@ -1180,7 +1180,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	struct timeval current;
 	double device_tdiff, hwp;
 	uint32_t a = 0, b = 0;
-	uint64_t h, hashes_done;
+	uint64_t h;
 	int i, j;
 
 	if (unlikely(avalon4->usbinfo.nodev)) {
