@@ -795,7 +795,7 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		info->enable[i] = 0;
 		info->mod_type[i] = AVA4_TYPE_NULL;
-		info->fan_pct[i] = opt_avalon4_fan_min + (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
+		info->fan_pct[i] = opt_avalon4_fan_min;
 		info->set_voltage[i] = opt_avalon4_voltage_min;
 	}
 
@@ -834,7 +834,7 @@ static bool avalon4_prepare(struct thr_info *thr)
 	info->set_voltage_broadcat = 1;
 
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++)
-		info->fan_pct[i] = opt_avalon4_fan_min + (opt_avalon4_fan_max - opt_avalon4_fan_min) / 2;
+		info->fan_pct[i] = opt_avalon4_fan_min;
 
 
 	return true;
