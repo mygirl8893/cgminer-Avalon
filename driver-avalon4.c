@@ -1200,13 +1200,13 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	device_tdiff = tdiff(&current, &(info->last_1m));
 	if (device_tdiff >= 60.0) {
 		copy_time(&info->last_1m, &current);
+		if (info->i_1m++ >= 6)
+			info->i_1m = 0;
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 			if (!info->enable[i])
 				continue;
 
-			if (info->i_1m++ >= 6)
-				info->i_1m = 0;
 			info->lw5[i][info->i_1m] = 0;
 			info->hw5[i][info->i_1m] = 0;
 		}
@@ -1221,6 +1221,8 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			if (!info->enable[i])
 				continue;
 
+			a = 0;
+			b = 0;
 			for (j = 0; j < 6; j++) {
 				a += info->lw5[i][j];
 				b += info->hw5[i][j];
