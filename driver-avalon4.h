@@ -142,6 +142,7 @@ struct avalon4_info {
 	int mod_type[AVA4_DEFAULT_MODULARS];
 	bool enable[AVA4_DEFAULT_MODULARS];
 
+	struct timeval elapsed[AVA4_DEFAULT_MODULARS];
 	char mm_version[AVA4_DEFAULT_MODULARS][AVA4_MM_VER_LEN + 1];
 	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_MM_DNA_LEN + 1];
 	int get_voltage[AVA4_DEFAULT_MODULARS];

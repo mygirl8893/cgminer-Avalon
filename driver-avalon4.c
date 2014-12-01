@@ -880,6 +880,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 		if (ret_pkg.type != AVA4_P_ACKDETECT)
 			break;
 
+		cgtime(&info->elapsed[i]);
 		info->enable[i] = 1;
 		memcpy(info->mm_dna[i], ret_pkg.data, AVA4_MM_DNA_LEN);
 		info->mm_dna[i][AVA4_MM_DNA_LEN] = '\0';
