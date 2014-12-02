@@ -904,6 +904,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	struct timeval current_fan;
 	int do_adjust_fan = 0;
 	uint32_t fan_pwm;
+	double device_tdiff;
 
 	if (info->polling_first) {
 		cgsleep_ms(300);
@@ -911,7 +912,8 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	}
 
 	cgtime(&current_fan);
-	if (tdiff(&current_fan, &(info->last_fan)) > 5.0) {
+	device_tdiff = tdiff(&current_fan, &(info->last_fan));
+	if (device_tdiff > 5.0 || device_tdiff < 0) {
 		cgtime(&info->last_fan);
 		do_adjust_fan = 1;
 	}
@@ -1199,7 +1201,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 	cgtime(&current);
 	device_tdiff = tdiff(&current, &(info->last_1m));
-	if (device_tdiff >= 60.0) {
+	if (device_tdiff >= 60.0 || device_tdiff < 0) {
 		copy_time(&info->last_1m, &current);
 		if (info->i_1m++ >= 6)
 			info->i_1m = 0;
@@ -1215,7 +1217,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 	cgtime(&current);
 	device_tdiff = tdiff(&current, &(info->last_5m));
-	if (opt_avalon4_autov && device_tdiff > 480.0) {
+	if (opt_avalon4_autov && (device_tdiff > 480.0 || device_tdiff < 0)) {
 		copy_time(&info->last_5m, &current);
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
