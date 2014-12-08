@@ -1257,8 +1257,11 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		info->set_voltage_broadcat = 1;
 
 	h = 0;
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++)
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		h += info->enable[i] ? (info->local_work[i] - info->hw_work[i]) : 0;
+		info->local_work[i] = 0;
+		info->hw_work[i] = 0;
+	}
 	return h * 0xffffffffull;
 }
 
