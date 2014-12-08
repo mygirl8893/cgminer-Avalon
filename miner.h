@@ -235,6 +235,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
+	DRIVER_ADD_COMMAND(blockerupter) \
 	DRIVER_ADD_COMMAND(cointerra) \
 	DRIVER_ADD_COMMAND(hashfast) \
 	DRIVER_ADD_COMMAND(hashratio) \
@@ -493,6 +494,7 @@ struct cgpu_info {
 	time_t last_share_pool_time;
 	double last_share_diff;
 	time_t last_device_valid_work;
+	uint32_t last_nonce;
 
 	time_t device_last_well;
 	time_t device_last_not_well;
@@ -781,7 +783,7 @@ static inline void _mutex_unlock_noyield(pthread_mutex_t *lock, const char *file
 static inline void _mutex_unlock(pthread_mutex_t *lock, const char *file, const char *func, const int line)
 {
 	_mutex_unlock_noyield(lock, file, func, line);
-	sched_yield();
+	selective_yield();
 }
 
 static inline int _mutex_trylock(pthread_mutex_t *lock, __maybe_unused const char *file, __maybe_unused const char *func, __maybe_unused const int line)
@@ -836,13 +838,13 @@ static inline void _wr_unlock_noyield(pthread_rwlock_t *lock, const char *file, 
 static inline void _rd_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	_rw_unlock(lock, file, func, line);
-	sched_yield();
+	selective_yield();
 }
 
 static inline void _wr_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	_rw_unlock(lock, file, func, line);
-	sched_yield();
+	selective_yield();
 }
 
 static inline void _mutex_init(pthread_mutex_t *lock, const char *file, const char *func, const int line)
@@ -959,6 +961,7 @@ static inline void _cg_wunlock(cglock_t *lock, const char *file, const char *fun
 
 struct pool;
 
+#define API_LISTEN_ADDR "0.0.0.0"
 #define API_MCAST_CODE "FTW"
 #define API_MCAST_ADDR "224.0.0.75"
 
@@ -983,6 +986,7 @@ extern int opt_api_mcast_port;
 extern char *opt_api_groups;
 extern char *opt_api_description;
 extern int opt_api_port;
+extern char *opt_api_host;
 extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
@@ -993,6 +997,8 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern float opt_anu_freq;
+extern float opt_au3_freq;
+extern int opt_au3_volt;
 extern float opt_rock_freq;
 #endif
 extern bool opt_worktime;

@@ -73,6 +73,7 @@ static cgtimer_t usb11_cgt;
 #define COINTERRA_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
 #define HASHRATIO_TIMEOUT_MS 999
+#define BLOCKERUPTER_TIMEOUT_MS 999
 
 /* The safety timeout we use, cancelling async transfers on windows that fail
  * to timeout on their own. */
@@ -87,6 +88,7 @@ static cgtimer_t usb11_cgt;
 #define COINTERRA_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 500
 #define HASHRATIO_TIMEOUT_MS 200
+#define BLOCKERUPTER_TIMEOUT_MS 300
 #endif
 
 #define USB_EPS(_intx, _epinfosx) { \
@@ -177,6 +179,18 @@ static struct usb_epinfo bxm_epinfos[] = {
 
 static struct usb_intinfo bxm_ints[] = {
 	USB_EPS(0, bxm_epinfos)
+};
+#endif
+
+#ifdef USE_BLOCKERUPTER
+// BlockErupter Device
+static struct usb_epinfo bet_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
+};
+
+static struct usb_intinfo bet_ints[] = {
+	USB_EPS(0, bet_epinfos)
 };
 #endif
 
@@ -522,6 +536,19 @@ static struct usb_find_devices find_dev[] = {
 		INTINFO(bxm_ints)
 	},
 #endif
+#ifdef USE_BLOCKERUPTER
+	{
+		.drv = DRIVER_blockerupter,
+		.name = "BET",
+		.ident = IDENT_BET,
+		.idVendor = 0x10c4,
+		.idProduct = 0xea60,
+		.config = 1,
+		.timeout = BLOCKERUPTER_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(bet_ints) },
+	
+#endif	
 #ifdef USE_DRILLBIT
 	{
 		.drv = DRIVER_drillbit,
@@ -1978,6 +2005,7 @@ struct cgpu_info *usb_free_cgpu(struct cgpu_info *cgpu)
 
 static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
 {
+	unsigned char man[STRBUFLEN+1], prod[STRBUFLEN+1];
 	struct cg_usb_device *cgusb = NULL;
 	struct libusb_config_descriptor *config = NULL;
 	const struct libusb_interface_descriptor *idesc;
@@ -1987,7 +2015,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	char devstr[STRBUFLEN+1];
 	int err, ifinfo, epinfo, alt, epnum, pstate;
 	int bad = USB_INIT_FAIL;
-	int cfg, claimed = 0;
+	int cfg, claimed = 0, i;
 
 	DEVWLOCK(cgpu, pstate);
 
@@ -2081,18 +2109,16 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	}
 #endif
 
+	err = libusb_get_string_descriptor_ascii(cgusb->handle,
+							cgusb->descriptor->iManufacturer,
+							man, STRBUFLEN);
+	if (err < 0) {
+		applog(LOG_DEBUG,
+			"USB init, failed to get iManufacturer, err %d %s",
+			err, devstr);
+		goto cldame;
+	}
 	if (found->iManufacturer) {
-		unsigned char man[STRBUFLEN+1];
-
-		err = libusb_get_string_descriptor_ascii(cgusb->handle,
-							 cgusb->descriptor->iManufacturer,
-							 man, STRBUFLEN);
-		if (err < 0) {
-			applog(LOG_DEBUG,
-				"USB init, failed to get iManufacturer, err %d %s",
-				err, devstr);
-			goto cldame;
-		}
 		if (strcmp((char *)man, found->iManufacturer)) {
 			applog(LOG_DEBUG, "USB init, iManufacturer mismatch %s",
 			       devstr);
@@ -2100,26 +2126,55 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 			bad = USB_INIT_IGNORE;
 			goto cldame;
 		}
+	} else {
+		for (i = 0; find_dev[i].drv != DRIVER_MAX; i++) {
+			const char *iManufacturer = find_dev[i].iManufacturer;
+			/* If other drivers has an iManufacturer set that match,
+			 * don't try to claim this device. */
+
+			if (!iManufacturer)
+				continue;
+			if (!strcmp((char *)man, iManufacturer)) {
+				applog(LOG_DEBUG, "USB init, alternative iManufacturer match %s",
+				       devstr);
+				applog(LOG_DEBUG, "Found %s", iManufacturer);
+				bad = USB_INIT_IGNORE;
+				goto cldame;
+			}
+		}
 	}
 
+	err = libusb_get_string_descriptor_ascii(cgusb->handle,
+							cgusb->descriptor->iProduct,
+							prod, STRBUFLEN);
+	if (err < 0) {
+		applog(LOG_DEBUG,
+			"USB init, failed to get iProduct, err %d %s",
+			err, devstr);
+		goto cldame;
+	}
 	if (found->iProduct) {
-		unsigned char prod[STRBUFLEN+1];
-
-		err = libusb_get_string_descriptor_ascii(cgusb->handle,
-							 cgusb->descriptor->iProduct,
-							 prod, STRBUFLEN);
-		if (err < 0) {
-			applog(LOG_DEBUG,
-				"USB init, failed to get iProduct, err %d %s",
-				err, devstr);
-			goto cldame;
-		}
 		if (strcmp((char *)prod, found->iProduct)) {
 			applog(LOG_DEBUG, "USB init, iProduct mismatch %s",
 			       devstr);
 			applog(LOG_DEBUG, "Found %s vs %s", prod, found->iProduct);
 			bad = USB_INIT_IGNORE;
 			goto cldame;
+		}
+	} else {
+		for (i = 0; find_dev[i].drv != DRIVER_MAX; i++) {
+			const char *iProduct = find_dev[i].iProduct;
+			/* Do same for iProduct as iManufacturer above */
+
+			if (!iProduct)
+				continue;
+			if (!strcmp((char *)prod, iProduct)) {
+				applog(LOG_DEBUG, "USB init, alternative iProduct match %s",
+				       devstr);
+				applog(LOG_DEBUG, "Found %s", iProduct);
+				bad = USB_INIT_IGNORE;
+				goto cldame;
+			}
 		}
 	}
 
