@@ -1,7 +1,7 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [4])
-m4_define([v_min], [8])
+m4_define([v_min], [9])
 m4_define([v_mic], [0])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
@@ -175,6 +175,18 @@ if test "x$avalon2" = xyes; then
 	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_AVALON2], [test x$avalon2 = xyes])
+
+
+avalon4="no"
+
+AC_ARG_ENABLE([avalon4],
+	[AC_HELP_STRING([--enable-avalon4],[Compile support for Avalon4 (default disabled)])],
+	[avalon4=$enableval]
+	)
+if test "x$avalon4" = xyes; then
+	AC_DEFINE([USE_AVALON4], [1], [Defined to 1 if Avalon4 support is wanted])
+fi
+AM_CONDITIONAL([HAS_AVALON4], [test x$avalon4 = xyes])
 
 
 bab="no"
@@ -441,7 +453,7 @@ fi
 
 
 #Add a new device to this list if it needs libusb, along with a no on the end.
-if test x$avalon$avalon2$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnonononononononononononononono; then
+if test x$avalon$avalon2$avalon4$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnononononononononononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -453,7 +465,7 @@ else
 	want_libbitfury=false
 fi
 
-if test x$avalon2$hashratio != xnono; then
+if test x$avalon2$avalon4$hashratio != xnonono; then
 	want_crc16=true
 else
 	want_crc16=false
@@ -659,6 +671,12 @@ else
 	echo "  Avalon2.ASICs........: Disabled"
 fi
 
+if test "x$avalon4" = xyes; then
+	echo "  Avalon4.ASICs........: Enabled"
+else
+	echo "  Avalon4.ASICs........: Disabled"
+fi
+
 if test "x$minion" = xyes; then
 	echo "  BlackArrowMinion.ASIC: Enabled"
 else
@@ -764,7 +782,7 @@ else
 fi
 
 #Add any new device to this, along with a no on the end of the test
-if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnonononononononononononononononononononono; then
+if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononononono; then
 	echo
 	AC_MSG_ERROR([No mining devices configured in])
 	echo
