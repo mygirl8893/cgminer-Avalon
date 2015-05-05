@@ -19,6 +19,11 @@
 #define AVAM_DEFAULT_FREQUENCY_MIN	100
 #define AVAM_DEFAULT_FREQUENCY_MAX	1000
 #define AVAM_DEFAULT_FREQUENCY		100
+
+#define AVAM_DEFAULT_VOLTAGE_MIN	4000
+#define AVAM_DEFAULT_VOLTAGE_MAX	9000
+#define AVAM_DEFAULT_VOLTAGE	6875
+
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
 #define AVAM_MM_VER_LEN	15
@@ -61,6 +66,7 @@ struct avalonm_info {
 
 	char avam_ver[AVAM_MM_VER_LEN];
 	int set_frequency[3];
+	int set_voltage;
 
 	uint8_t workinit;
 	uint32_t nonce_cnts;
