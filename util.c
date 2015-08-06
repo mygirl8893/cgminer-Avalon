@@ -2953,17 +2953,6 @@ void suspend_stratum(struct pool *pool)
 	mutex_unlock(&pool->stratum_lock);
 }
 
-void extranonce_subscribe_stratum(struct pool *pool)
-{
-	char s[RBUFSIZE];
-
-	if (pool->extranonce_subscribe) {
-		sprintf(s,"{\"id\": %d, \"method\": \"mining.extranonce.subscribe\", \"params\": []}", swork_id++);
-		applog(LOG_INFO, "Send extranonce.subscribe for stratum pool %d", pool->pool_no);
-		stratum_send(pool, s, strlen(s));
-	}
-}
-
 bool initiate_stratum(struct pool *pool)
 {
 	bool ret = false, recvd = false, noresume = false, sockd = false;
@@ -2994,6 +2983,14 @@ resend:
 	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
+	}
+
+	if (pool->extranonce_subscribe) {
+		sprintf(s, "{\"id\": %d, \"method\": \"mining.extranonce.subscribe\", \"params\": []}", swork_id++);
+		if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
+			applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
+			goto out;
+		}
 	}
 
 	if (!socket_full(pool, DEFAULT_SOCKWAIT)) {
@@ -3120,7 +3117,6 @@ bool restart_stratum(struct pool *pool)
 		goto out;
 	if (!auth_stratum(pool))
 		goto out;
-	extranonce_subscribe_stratum(pool);
 	ret = true;
 out:
 	if (!ret)
