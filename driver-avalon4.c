@@ -1496,9 +1496,9 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt)
 		avalon4_iic_xfer_pkg(avalon4, addr, &send_pkg, NULL);
 }
 
-static uint32_t avalon4_get_cpm(int freq)
+static uint32_t avalon4_get_cpm(unsigned int freq)
 {
-	int i;
+	unsigned int i;
 
 	for (i = 0; i < sizeof(g_freq_array) / sizeof(g_freq_array[0]); i++)
 		if (freq >= g_freq_array[i][0] && freq < g_freq_array[i+1][0])
@@ -1695,7 +1695,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct work *work;
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
-	int i, cutoff = 0, count = 0;
+	int i, count = 0;
 
 	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon4->drv->name, avalon4->device_id,
