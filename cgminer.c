@@ -4653,7 +4653,7 @@ static void signal_work_update(void)
 	rd_unlock(&mining_thr_lock);
 }
 
-static void set_curblock(char *hexstr, unsigned char *bedata)
+static void set_curblock(const char *hexstr, const unsigned char *bedata)
 {
 	int ofs;
 
@@ -4672,20 +4672,6 @@ static void set_curblock(char *hexstr, unsigned char *bedata)
 	prev_block[8] = '\0';
 
 	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
-}
-
-/* Search to see if this string is from a block that has been seen before */
-static bool block_exists(char *hexstr)
-{
-	struct block *s;
-
-	rd_lock(&blk_lock);
-	HASH_FIND_STR(blocks, hexstr, s);
-	rd_unlock(&blk_lock);
-
-	if (s)
-		return true;
-	return false;
 }
 
 static int block_sort(struct block *blocka, struct block *blockb)
@@ -4709,31 +4695,23 @@ static void set_blockdiff(const struct work *work)
 	}
 }
 
-static bool test_work_current(struct work *work)
+/* Search to see if this string is from a block that has been seen before */
+static bool block_exists(const char *hexstr, const unsigned char *bedata, const struct work *work)
 {
-	struct pool *pool = work->pool;
-	unsigned char bedata[32];
-	char hexstr[68];
+	int deleted_block = 0;
+	struct block *s;
 	bool ret = true;
 
-	if (work->mandatory)
-		return ret;
-
-	swap256(bedata, work->data + 4);
-	__bin2hex(hexstr, bedata, 32);
-
-	/* Search to see if this block exists yet and if not, consider it a
-	 * new block and set the current block details to this one */
-	if (!block_exists(hexstr)) {
-		struct block *s = cgcalloc(sizeof(struct block), 1);
-		int deleted_block = 0;
-
+	wr_lock(&blk_lock);
+	HASH_FIND_STR(blocks, hexstr, s);
+	if (!s) {
+		s = cgcalloc(sizeof(struct block), 1);
 		if (unlikely(!s))
-			quit (1, "test_work_current OOM");
+			quit (1, "block_exists OOM");
 		strcpy(s->hash, hexstr);
 		s->block_no = new_blocks++;
 
-		wr_lock(&blk_lock);
+		ret = false;
 		/* Only keep the last hour's worth of blocks in memory since
 		 * work from blocks before this is virtually impossible and we
 		 * want to prevent memory usage from continually rising */
@@ -4748,11 +4726,52 @@ static bool test_work_current(struct work *work)
 		}
 		HASH_ADD_STR(blocks, hash, s);
 		set_blockdiff(work);
-		wr_unlock(&blk_lock);
-
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
+	}
+	wr_unlock(&blk_lock);
+
+	if (!ret)
 		set_curblock(hexstr, bedata);
+	if (deleted_block)
+		applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
+
+	return ret;
+}
+
+static bool test_work_current(struct work *work)
+{
+	struct pool *pool = work->pool;
+	unsigned char bedata[32];
+	char hexstr[68];
+	bool ret = true;
+	unsigned char *bin_height = &pool->coinbase[43];
+	uint8_t cb_height_sz = bin_height[-1];
+	uint32_t height = 0;
+
+	if (work->mandatory)
+		return ret;
+
+	swap256(bedata, work->data + 4);
+	__bin2hex(hexstr, bedata, 32);
+
+	/* Calculate block height */
+	if (cb_height_sz <= 4) {
+		memcpy(&height, bin_height, cb_height_sz);
+		height = le32toh(height);
+		height--;
+	}
+
+	cg_wlock(&pool->data_lock);
+	if (pool->swork.clean) {
+		pool->swork.clean = false;
+		work->longpoll = true;
+	}
+	cg_wunlock(&pool->data_lock);
+
+	/* Search to see if this block exists yet and if not, consider it a
+	 * new block and set the current block details to this one */
+	if (!block_exists(hexstr, bedata, work)) {
 		/* Copy the information to this pool's prev_block since it
 		 * knows the new block exists. */
 		cg_memcpy(pool->prev_block, bedata, 32);
@@ -4765,8 +4784,8 @@ static bool test_work_current(struct work *work)
 
 		if (work->longpoll) {
 			if (work->stratum) {
-				applog(LOG_NOTICE, "Stratum from pool %d detected new block",
-				       pool->pool_no);
+				applog(LOG_NOTICE, "Stratum from pool %d detected new block at height %d",
+				       pool->pool_no, height);
 			} else {
 				applog(LOG_NOTICE, "%sLONGPOLL from pool %d detected new block",
 				       work->gbt ? "GBT " : "", work->pool->pool_no);
@@ -4784,12 +4803,12 @@ static bool test_work_current(struct work *work)
 			 * block. */
 			if (memcmp(bedata, current_block, 32)) {
 				/* Doesn't match current block. It's stale */
-				applog(LOG_DEBUG, "Stale data from pool %d", pool->pool_no);
+				applog(LOG_DEBUG, "Stale data from pool %d at height %d", pool->pool_no, height);
 				ret = false;
 			} else {
 				/* Work is from new block and pool is up now
 				 * current. */
-				applog(LOG_INFO, "Pool %d now up to date", pool->pool_no);
+				applog(LOG_INFO, "Pool %d now up to date at height %d", pool->pool_no, height);
 				cg_memcpy(pool->prev_block, bedata, 32);
 			}
 		}
@@ -6238,9 +6257,7 @@ static void *stratum_rthread(void *userdata)
 
 			/* Generate a single work item to update the current
 			 * block database */
-			pool->swork.clean = false;
 			gen_stratum_work(pool, work);
-			work->longpoll = true;
 			/* Return value doesn't matter. We're just informing
 			 * that we may need to restart. */
 			test_work_current(work);
@@ -8970,10 +8987,16 @@ static void noop_hash_work(struct thr_info __maybe_unused *thr)
 {
 }
 
+static void generic_zero_stats(struct cgpu_info *cgpu)
+{
+	cgpu->diff_accepted =
+	cgpu->diff_rejected =
+	cgpu->hw_errors = 0;
+}
+
 #define noop_flush_work noop_reinit_device
 #define noop_update_work noop_reinit_device
 #define noop_queue_full noop_get_stats
-#define noop_zero_stats noop_reinit_device
 #define noop_identify_device noop_reinit_device
 
 /* Fill missing driver drv functions with noops */
@@ -9012,7 +9035,7 @@ void fill_device_drv(struct device_drv *drv)
 	if (!drv->queue_full)
 		drv->queue_full = &noop_queue_full;
 	if (!drv->zero_stats)
-		drv->zero_stats = &noop_zero_stats;
+		drv->zero_stats = &generic_zero_stats;
 	/* If drivers support internal diff they should set a max_diff or
 	 * we will assume they don't and set max to 1. */
 	if (!drv->max_diff)
@@ -9042,7 +9065,7 @@ void null_device_drv(struct device_drv *drv)
 	drv->thread_shutdown = &noop_thread_shutdown;
 	drv->thread_enable = &noop_thread_enable;
 
-	drv->zero_stats = &noop_zero_stats;
+	drv->zero_stats = &generic_zero_stats;
 
 	drv->hash_work = &noop_hash_work;
 
@@ -9050,7 +9073,6 @@ void null_device_drv(struct device_drv *drv)
 	drv->flush_work = &noop_flush_work;
 	drv->update_work = &noop_update_work;
 
-	drv->zero_stats = &noop_zero_stats;
 	drv->max_diff = 1;
 	drv->min_diff = 1;
 }
