@@ -1,6 +1,6 @@
 /*
  * Copyright 2014-2015 Mikeqin <Fengling.Qin@gmail.com>
- * Copyright 2013-2015 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2015 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
@@ -31,7 +31,9 @@ bool opt_avalon4_autov;
 bool opt_avalon4_freezesafe;
 int opt_avalon4_voltage_min = AVA4_DEFAULT_VOLTAGE;
 int opt_avalon4_voltage_max = AVA4_DEFAULT_VOLTAGE;
-int opt_avalon4_freq[3];
+int opt_avalon4_freq[3] = {AVA4_DEFAULT_FREQUENCY,
+			   AVA4_DEFAULT_FREQUENCY,
+			   AVA4_DEFAULT_FREQUENCY};
 
 int opt_avalon4_polling_delay = AVA4_DEFAULT_POLLING_DELAY;
 
@@ -45,13 +47,12 @@ int opt_avalon4_ntcb = AVA4_DEFAULT_NTCB;
 int opt_avalon4_freq_min = AVA4_DEFAULT_FREQUENCY_MIN;
 int opt_avalon4_freq_max = AVA4_DEFAULT_FREQUENCY_MAX;
 bool opt_avalon4_noncecheck = AVA4_DEFAULT_NCHECK;
-int opt_avalon4_smart_speed = AVA4_DEFAULT_SMART_SPEED;
+bool opt_avalon4_smart_speed = AVA4_DEFAULT_SMART_SPEED;
 /*
- * smart speed have 3 modes
+ * smart speed have 3 options
  * 1. auto speed by A3218 chips
  * 2. option 1 + adjust by least pll count
- *    option 1 + adjust by most pll count
- * 3. option 1 + adjust by average frequency
+ * 3. option 1 + adjust by most pll count
  */
 int opt_avalon4_least_pll_check = AVA4_DEFAULT_LEAST_PLL;
 int opt_avalon4_most_pll_check = AVA4_DEFAULT_MOST_PLL;
@@ -393,7 +394,7 @@ static uint32_t decode_voltage_ncp5392p(uint32_t v)
 static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 {
 	uint32_t pwm;
-	int t = info->temp[id], diff, fandiff = opt_avalon4_fan_max - opt_avalon4_fan_min;
+	int t = info->temp[id];
 
 	if (info->mod_type[id] == AVA4_TYPE_MM60) {
 		int t1, t2;
@@ -409,17 +410,21 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 		return pwm;
 	}
 
-	/* Scale fan% non linearly relatively to target temperature. It will
-	 * not try to keep the temperature at temp_target that accurately but
-	 * avoids temperature overshoot in both directions. */
-	diff = t - opt_avalon4_temp_target + 22;
-	if (diff > 32)
-		diff = 32;
-	else if (diff < 0)
-		diff = 0;
-	diff *= diff;
-	fandiff = fandiff * diff / 1024;
-	info->fan_pct[id] = opt_avalon4_fan_min + fandiff;
+	if (t > info->temp_target[id] + 4 || t > info->toverheat[id] - 3)
+		info->fan_pct[id] = opt_avalon4_fan_max;
+	else if (t > info->temp_target[id] + 2)
+		info->fan_pct[id] += 20;
+	else if (t > info->temp_target[id] + 1)
+		info->fan_pct[id] += 4;
+	else if (t < info->temp_target[id] - 1)
+		info->fan_pct[id] -= 4;
+	else if (t < info->temp_target[id] - 10)
+		info->fan_pct[id] = opt_avalon4_fan_min;
+
+	if (info->fan_pct[id] < opt_avalon4_fan_min)
+		info->fan_pct[id] = opt_avalon4_fan_min;
+	if (info->fan_pct[id] > opt_avalon4_fan_max)
+		info->fan_pct[id] = opt_avalon4_fan_max;
 
 	pwm = get_fan_pwm(info->fan_pct[id]);
 	if (info->cutoff[id])
@@ -1106,7 +1111,6 @@ static bool avalon4_prepare(struct thr_info *thr)
 
 	info->polling_first = 1;
 
-	memset(&(info->firsthash), 0, sizeof(info->firsthash));
 	cgtime(&(info->last_fan));
 	cgtime(&(info->last_30s));
 	cgtime(&(info->last_5s));
@@ -1138,22 +1142,6 @@ static bool avalon4_prepare(struct thr_info *thr)
 	}
 
 	return true;
-}
-
-static int check_module_exits(struct cgpu_info *avalon4, uint8_t mm_dna[AVA4_MM_DNA_LEN + 1])
-{
-	struct avalon4_info *info = avalon4->device_data;
-	int i;
-
-	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->enable[i]) {
-			/* last byte is \0 */
-			if (!memcmp(info->mm_dna[i], mm_dna, AVA4_MM_DNA_LEN))
-				return 1;
-		}
-	}
-
-	return 0;
 }
 
 static void detect_modules(struct cgpu_info *avalon4)
@@ -1204,13 +1192,9 @@ static void detect_modules(struct cgpu_info *avalon4)
 		if (ret_pkg.type != AVA4_P_ACKDETECT)
 			break;
 
-		if (check_module_exits(avalon4, ret_pkg.data))
-			continue;
-
 		cgtime(&info->elapsed[i]);
 		cgtime(&info->last_finc[i]);
 		cgtime(&info->last_fdec[i]);
-		cgtime(&info->last_favg[i]);
 		info->enable[i] = 1;
 		memcpy(info->mm_dna[i], ret_pkg.data, AVA4_MM_DNA_LEN);
 		info->mm_dna[i][AVA4_MM_DNA_LEN] = '\0';
@@ -1243,22 +1227,19 @@ static void detect_modules(struct cgpu_info *avalon4)
 			info->mod_type[i] = AVA4_TYPE_MM50;
 		}
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM60_PREFIXSTR, 2)) {
-			avalon4->drv->name = "AV6";
 			info->miner_count[i] = AVA4_MM60_MINER_CNT;
 			info->asic_count[i] = AVA4_MM60_ASIC_CNT;
 			if (opt_avalon4_autov)
 				applog(LOG_NOTICE, "%s-%d-%d: Module do not support autov",
 				       avalon4->drv->name, avalon4->device_id, i);
 			info->autov[i] = false;
-			/* These are both limited to safe levels by the input
-			 * mechanism in cgminer.c */
 			info->toverheat[i] = opt_avalon4_overheat;
-			if (opt_avalon4_temp_target > opt_avalon4_overheat - 15) {
-				opt_avalon4_temp_target = opt_avalon4_overheat - 15;
-				applog(LOG_WARNING, "%s-%d-%d: Decreasing avalon4 temp target to safe overheat headroom of %d",
-				       avalon4->drv->name, avalon4->device_id, i, opt_avalon4_temp_target);
-			}
+			if (info->toverheat[i] > AVA4_DEFAULT_TEMP_OVERHEAT)
+				info->toverheat[i] = AVA4_DEFAULT_TEMP_OVERHEAT;
+
 			info->temp_target[i] = opt_avalon4_temp_target;
+			if (info->temp_target[i] > AVA4_DEFAULT_TEMP_TARGET)
+				info->temp_target[i] = AVA4_DEFAULT_TEMP_TARGET;
 			info->mod_type[i] = AVA4_TYPE_MM60;
 		}
 		info->ntime_offset[i] = (opt_avalon4_ntime_offset > info->asic_count[i]) ? info->asic_count[i] : opt_avalon4_ntime_offset;
@@ -1321,56 +1302,11 @@ static void detect_modules(struct cgpu_info *avalon4)
 	}
 }
 
-static void detach_module(struct cgpu_info *avalon4, int addr)
+static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalon4_info *info)
 {
-	struct avalon4_info *info = avalon4->device_data;
-	int i, j;
-
-	info->polling_err_cnt[addr] = 0;
-	info->mod_type[addr] = AVA4_TYPE_NULL;
-	info->enable[addr] = 0;
-	info->get_voltage[addr] = 0;
-	info->get_frequency[addr] = 0;
-	info->power_good[addr] = 0;
-	info->error_code[addr] = 0;
-	info->local_work[addr] = 0;
-	info->local_works[addr] = 0;
-	info->hw_work[addr] = 0;
-	info->hw_works[addr] = 0;
-	info->total_asics[addr] = 0;
-	info->toverheat[addr] = opt_avalon4_overheat;
-	info->temp_target[addr] = opt_avalon4_temp_target;
-	info->speed_bingo[addr] = opt_avalon4_speed_bingo;
-	info->speed_error[addr] = opt_avalon4_speed_error;
-	memset(info->set_frequency, 0, sizeof(int) * 3);
-	for (i = 0; i < AVA4_DEFAULT_ADJ_TIMES; i++) {
-		info->lw5[addr][i] = 0;
-		info->hw5[addr][i] = 0;
-	}
-
-	for (i = 0; i < info->miner_count[addr]; i++) {
-		info->matching_work[addr][i] = 0;
-		memset(info->chipmatching_work[addr][i], 0, sizeof(int) * info->asic_count[addr]);
-		info->local_works_i[addr][i] = 0;
-		info->hw_works_i[addr][i] = 0;
-		memset(info->lw5_i[addr][i], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
-		memset(info->hw5_i[addr][i], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
-		memset(info->ma_sum[addr][i], 0, sizeof(uint8_t) * info->asic_count[addr]);
-		for (j = 0; j < info->asic_count[addr]; j++)
-			memset(info->set_frequency_i[addr][i][j], 0, sizeof(int) * 3);
-	}
-	info->freq_mode[addr] = AVA4_FREQ_INIT_MODE;
-	applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
-			avalon4->drv->name, avalon4->device_id, addr);
-}
-
-static int polling(struct cgpu_info *avalon4)
-{
-	struct avalon4_info *info = avalon4->device_data;
-	struct thr_info *thr = avalon4->thr[0];
 	struct avalon4_pkg send_pkg;
 	struct avalon4_ret ar;
-	int i, tmp, ret, decode_err = 0, do_polling = 0;
+	int i, j, k, tmp, ret, decode_err = 0, do_polling = 0;
 	struct timeval current_fan;
 	int do_adjust_fan = 0;
 	uint32_t fan_pwm;
@@ -1411,28 +1347,55 @@ static int polling(struct cgpu_info *avalon4)
 		avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
 		ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
 		if (ret == AVA4_SEND_OK)
-			decode_err = decode_pkg(thr, &ar, i);
+			decode_err =  decode_pkg(thr, &ar, i);
 
 		if (ret != AVA4_SEND_OK || decode_err) {
 			info->polling_err_cnt[i]++;
 			memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 			avalon4_init_pkg(&send_pkg, AVA4_P_RSTMMTX, 1, 1);
 			avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, NULL);
-			if (info->polling_err_cnt[i] >= 4)
-				detach_module(avalon4, i);
-		}
+			if (info->polling_err_cnt[i] >= 4) {
+				info->polling_err_cnt[i] = 0;
+				info->mod_type[i] = AVA4_TYPE_NULL;
+				info->enable[i] = 0;
+				info->get_voltage[i] = 0;
+				info->get_frequency[i] = 0;
+				info->power_good[i] = 0;
+				info->error_code[i] = 0;
+				info->local_work[i] = 0;
+				info->local_works[i] = 0;
+				info->hw_work[i] = 0;
+				info->hw_works[i] = 0;
+				info->total_asics[i] = 0;
+				info->toverheat[i] = opt_avalon4_overheat;
+				info->temp_target[i] = opt_avalon4_temp_target;
+				info->speed_bingo[i] = opt_avalon4_speed_bingo;
+				info->speed_error[i] = opt_avalon4_speed_error;
+				memset(info->set_frequency, 0, sizeof(int) * 3);
+				for (j = 0; j < AVA4_DEFAULT_ADJ_TIMES; j++) {
+					info->lw5[i][j] = 0;
+					info->hw5[i][j] = 0;
+				}
 
-		if (ret == AVA4_SEND_OK && !decode_err) {
-			info->polling_err_cnt[i] = 0;
-
-			if (info->mm_dna[i][AVA4_MM_DNA_LEN - 1] != ar.opt) {
-				applog(LOG_ERR, "%s-%d-%d: Dup address found %d-%d",
-						avalon4->drv->name, avalon4->device_id, i,
-						info->mm_dna[i][AVA4_MM_DNA_LEN - 1], ar.opt);
-				hexdump((uint8_t *)&ar, sizeof(ar));
-				detach_module(avalon4, i);
+				for (j = 0; j < info->miner_count[i]; j++) {
+					info->matching_work[i][j] = 0;
+					memset(info->chipmatching_work[i][j], 0, sizeof(int) * info->asic_count[i]);
+					info->local_works_i[i][j] = 0;
+					info->hw_works_i[i][j] = 0;
+					memset(info->lw5_i[i][j], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
+					memset(info->hw5_i[i][j], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
+					memset(info->ma_sum[i][j], 0, sizeof(uint8_t) * info->asic_count[i]);
+					for (k = 0; k < info->asic_count[i]; k++)
+						memset(info->set_frequency_i[i][j][k], 0, sizeof(int) * 3);
+				}
+				info->freq_mode[i] = AVA4_FREQ_INIT_MODE;
+				applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
+				       avalon4->drv->name, avalon4->device_id, i);
 			}
 		}
+
+		if (ret == AVA4_SEND_OK && !decode_err)
+			info->polling_err_cnt[i] = 0;
 	}
 
 	if (!do_polling)
@@ -1552,9 +1515,9 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt)
 		avalon4_iic_xfer_pkg(avalon4, addr, &send_pkg, NULL);
 }
 
-static uint32_t avalon4_get_cpm(uint32_t freq)
+static uint32_t avalon4_get_cpm(unsigned int freq)
 {
-	size_t i;
+	unsigned int i;
 
 	for (i = 0; i < sizeof(g_freq_array) / sizeof(g_freq_array[0]); i++)
 		if (freq >= g_freq_array[i][0] && freq < g_freq_array[i+1][0])
@@ -1637,7 +1600,6 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
 	uint32_t tmp = 0, range, start, volt;
-	int i;
 
 	/* Set the NTime, Voltage and Frequency */
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
@@ -1666,16 +1628,6 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 		tmp = encode_voltage_ncp5392p(volt);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
-
-	/* No optional frequencies were set, choose default frequencies */
-	for (i = 0; i < 3; i++) {
-		if (!info->set_frequency[i]) {
-			if (info->mod_type[addr] == AVA4_TYPE_MM60)
-				info->set_frequency[i] = AVA6_DEFAULT_FREQUENCY;
-			else
-				info->set_frequency[i] = AVA4_DEFAULT_FREQUENCY;
-		}
-	}
 
 	tmp = info->set_frequency[0] | (info->set_frequency[1] << 10) | (info->set_frequency[2] << 20);
 	if (avalon4_freezsafemode)
@@ -1793,10 +1745,9 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct work *work;
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
-	int i;
+	int i, count = 0;
 	struct timeval current;
 	double device_tdiff;
-	uint32_t tmp;
 
 	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon4->drv->name, avalon4->device_id,
@@ -1831,29 +1782,34 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		return;
 	}
 
+	/* Step 3: Send out stratum pkgs */
 	cg_wlock(&info->update_lock);
-	/* Step 3: Try to detect new modules */
-	detect_modules(avalon4);
-
-	/* Step 4: Send out stratum pkgs */
 	cg_rlock(&pool->data_lock);
+
 	cgtime(&info->last_stratum);
 	info->pool_no = pool->pool_no;
 	copy_pool_stratum(&info->pool2, &info->pool1);
 	copy_pool_stratum(&info->pool1, &info->pool0);
 	copy_pool_stratum(&info->pool0, pool);
-
 	avalon4_stratum_pkgs(avalon4, pool);
+
 	cg_runlock(&pool->data_lock);
+	cg_wunlock(&info->update_lock);
+
+	/* Step 4: Try to detect new modules */
+	detect_modules(avalon4);
 
 	/* Step 5: Configure the parameter from outside */
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
 			continue;
 
-		if (get_temp_max(info, i) >= info->toverheat[i] || thr->pause)
+		count++;
+
+		if (get_temp_max(info, i) >= info->toverheat[i])
 			info->cutoff[i] = 1;
-		else if (info->cutoff[i] && (get_temp_max(info, i) <= (info->toverheat[i] - 10)))
+
+		if (info->cutoff[i] && (get_temp_max(info, i) <= (info->toverheat[i] - 10)))
 			info->cutoff[i] = 0;
 
 		if (info->cutoff[i])
@@ -1871,7 +1827,8 @@ static void avalon4_update(struct cgpu_info *avalon4)
 						info->freq_mode[i] = AVA4_FREQ_CUTOFF_MODE;
 						break;
 					}
-					if (mm_cmp_1512(info, i) && (opt_avalon4_smart_speed != AVA4_DEFAULT_SMARTSPEED_OFF))
+					if (mm_cmp_1512(info, i) && opt_avalon4_smart_speed &&
+						 (opt_avalon4_least_pll_check || opt_avalon4_most_pll_check))
 						info->freq_mode[i] = AVA4_FREQ_PLLADJ_MODE;
 					break;
 				case AVA4_FREQ_CUTOFF_MODE:
@@ -1921,41 +1878,23 @@ static void avalon4_update(struct cgpu_info *avalon4)
 						break;
 					}
 
-					/* AVA4_DEFAULT_SMARTSPEED_MODE1: auto speed by A3218 chips */
 					cgtime(&current);
-					if (opt_avalon4_smart_speed == AVA4_DEFAULT_SMARTSPEED_MODE2) {
-						device_tdiff = tdiff(&current, &(info->last_fdec[i]));
-						if ((device_tdiff >= AVA4_DEFAULT_FDEC_TIME) ||
-								(device_tdiff < 0)) {
-							copy_time(&info->last_fdec[i], &current);
-							if ((opt_avalon4_least_pll_check && (info->pll_sel[i][0] >= opt_avalon4_least_pll_check)) ||
-									(opt_avalon4_most_pll_check && (info->pll_sel[i][AVA4_DEFAULT_PLL_MAX - 1] <= opt_avalon4_most_pll_check)))
-								avalon4_freq_dec(avalon4, i, info->set_smart_frequency[i], 25);
-						}
-
-						device_tdiff = tdiff(&current, &(info->last_finc[i]));
-						if ((device_tdiff >= AVA4_DEFAULT_FINC_TIME) ||
-								(device_tdiff < 0)) {
-							copy_time(&info->last_finc[i], &current);
-							if ((opt_avalon4_least_pll_check && (info->pll_sel[i][0] < opt_avalon4_least_pll_check)) ||
-									(opt_avalon4_most_pll_check && (info->pll_sel[i][AVA4_DEFAULT_PLL_MAX - 1] > opt_avalon4_most_pll_check)))
-								avalon4_freq_inc(avalon4, i, info->set_smart_frequency[i], 25);
-						}
+					device_tdiff = tdiff(&current, &(info->last_fdec[i]));
+					if ((device_tdiff >= AVA4_DEFAULT_FDEC_TIME) ||
+							(device_tdiff < 0)) {
+						copy_time(&info->last_fdec[i], &current);
+						if ((opt_avalon4_least_pll_check && (info->pll_sel[i][0] >= opt_avalon4_least_pll_check)) ||
+								(opt_avalon4_most_pll_check && (info->pll_sel[i][AVA4_DEFAULT_PLL_MAX - 1] <= opt_avalon4_most_pll_check)))
+							avalon4_freq_dec(avalon4, i, info->set_smart_frequency[i], 25);
 					}
 
-					if (opt_avalon4_smart_speed == AVA4_DEFAULT_SMARTSPEED_MODE3) {
-						device_tdiff = tdiff(&current, &(info->last_favg[i]));
-						if ((device_tdiff >= AVA4_DEFAULT_FAVG_TIME) ||
-								(device_tdiff < 0)) {
-							copy_time(&info->last_favg[i], &current);
-							tmp = (info->get_frequency[i] / 96);
-							tmp = (uint32_t)ceil(tmp / 25.0) * 25 + 25;
-							if (tmp < AVA4_DEFAULT_FREQUENCY_MIN)
-								tmp = AVA4_DEFAULT_FREQUENCY_MIN;
-							if (tmp > AVA4_MM60_FREQUENCY_MAX)
-								tmp = AVA4_MM60_FREQUENCY_MAX;
-							info->set_smart_frequency[i][0] = info->set_smart_frequency[i][1] = info->set_smart_frequency[i][2] = tmp;
-						}
+					device_tdiff = tdiff(&current, &(info->last_finc[i]));
+					if ((device_tdiff >= AVA4_DEFAULT_FINC_TIME) ||
+							(device_tdiff < 0)) {
+						copy_time(&info->last_finc[i], &current);
+						if ((opt_avalon4_least_pll_check && (info->pll_sel[i][0] < opt_avalon4_least_pll_check)) ||
+								(opt_avalon4_most_pll_check && (info->pll_sel[i][AVA4_DEFAULT_PLL_MAX - 1] > opt_avalon4_most_pll_check)))
+							avalon4_freq_inc(avalon4, i, info->set_smart_frequency[i], 25);
 					}
 
 					memcpy(info->set_frequency, info->set_smart_frequency[i], sizeof(info->set_frequency));
@@ -1971,10 +1910,10 @@ static void avalon4_update(struct cgpu_info *avalon4)
 			avalon4_adjust_vf(avalon4, i, 0);
 		}
 	}
+	info->mm_count = count;
 
 	/* Step 6: Send out finish pkg */
 	avalon4_stratum_finish(avalon4);
-	cg_wunlock(&info->update_lock);
 }
 
 static int64_t avalon4_scanhash(struct thr_info *thr)
@@ -1985,7 +1924,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	double device_tdiff, hwp;
 	uint32_t a = 0, b = 0;
 	int64_t h;
-	int i, j, k, count = 0;
+	int i, j, k;
 
 	if (unlikely(avalon4->usbinfo.nodev)) {
 		applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
@@ -2006,7 +1945,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 	/* Step 2: Polling  */
 	cg_rlock(&info->update_lock);
-	polling(avalon4);
+	polling(thr, avalon4, info);
 	cg_runlock(&info->update_lock);
 
 	/* Step 3: Adjust voltage */
@@ -2014,7 +1953,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	device_tdiff = tdiff(&current, &(info->last_5s));
 	if (device_tdiff >= 5.0 || device_tdiff < 0) {
 		copy_time(&info->last_5s, &current);
-		if (++info->i_5s >= AVA4_DEFAULT_ADJ_TIMES)
+		if (info->i_5s++ >= AVA4_DEFAULT_ADJ_TIMES)
 			info->i_5s = 0;
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -2142,30 +2081,20 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		}
 	}
 
-	/* Step 4: Calculate mm count and hash */
+	/* Step 4: Calculate hash */
 	h = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->enable[i]) {
-			count++;
-			if (info->local_work[i] > info->hw_work[i]) {
-				if (info->mod_type[i] == AVA4_TYPE_MM60) {
-					h += avalon4->diff1 - info->newnonce;
-					info->newnonce = avalon4->diff1;
-				} else {
-					h += (info->local_work[i] - info->hw_work[i]);
-					info->local_work[i] = 0;
-					info->hw_work[i] = 0;
-				}
+		if (info->enable[i] && (info->local_work[i] > info->hw_work[i])) {
+			if (info->mod_type[i] == AVA4_TYPE_MM60) {
+				h += avalon4->diff1 - info->newnonce;
+				info->newnonce = avalon4->diff1;
+			} else {
+				h += (info->local_work[i] - info->hw_work[i]);
+				info->local_work[i] = 0;
+				info->hw_work[i] = 0;
 			}
 		}
 	}
-	info->mm_count = count;
-
-	if (h && !info->firsthash.tv_sec) {
-		cgtime(&info->firsthash);
-		copy_time(&(avalon4->dev_start_tv), &(info->firsthash));
-	}
-
 	return h * 0xffffffffull;
 }
 
@@ -2564,7 +2493,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "MM Count", &(info->mm_count), true);
 	if (!has_a6)
 		root = api_add_bool(root, "Automatic Voltage", &opt_avalon4_autov, true);
-	root = api_add_int(root, "Smart Speed", &opt_avalon4_smart_speed, true);
+	root = api_add_bool(root, "Smart Speed", &opt_avalon4_smart_speed, true);
 	root = api_add_bool(root, "Nonce check", &opt_avalon4_noncecheck, true);
 	root = api_add_string(root, "AUC VER", info->auc_version, false);
 	root = api_add_int(root, "AUC I2C Speed", &(info->auc_speed), true);
@@ -2577,9 +2506,10 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 /* format: freq[-addr[-miner[-chip]]] add4[0, 63], miner[1, miner_count], chip[1, asic_count] */
 char *set_avalon4_device_freq(struct cgpu_info *avalon4, char *arg)
 {
-	int val[3], addr = 0, miner_id = 0, chip_id = 0, i;
 	struct avalon4_info *info = avalon4->device_data;
 	char *colon1, *colon2, *param = arg;
+	int val[3], addr = 0, i;
+	uint32_t miner_id = 0, chip_id = 0;
 
 	if (!(*arg))
 		return NULL;
