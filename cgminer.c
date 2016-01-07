@@ -1236,8 +1236,8 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef USE_AVALON4
 	OPT_WITHOUT_ARG("--avalon4-automatic-voltage",
-			opt_set_bool, &opt_avalon4_autov,
-			"Automatic adjust voltage base on module DH"),
+		     opt_set_bool, &opt_avalon4_autov,
+		     "Automatic adjust voltage base on module DH"),
 	OPT_WITH_CBARG("--avalon4-voltage",
 		     set_avalon4_voltage, NULL, &opt_set_avalon4_voltage,
 		     "Set Avalon4 core voltage, in millivolts, step: 125"),
@@ -1269,8 +1269,8 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_intval, opt_show_intval, &opt_avalon4_miningmode,
 		     "Set Avalon4 mining mode(0:custom, 1:eco, 2:normal, 3:turbo"),
 	OPT_WITHOUT_ARG("--avalon4-freezesafe",
-			opt_set_bool, &opt_avalon4_freezesafe,
-			"Make Avalon4 running as a radiator when stratum server failed"),
+		     opt_set_bool, &opt_avalon4_freezesafe,
+		     "Make Avalon4 running as a radiator when stratum server failed"),
 	OPT_WITH_ARG("--avalon4-ntcb",
 		     opt_set_intval, opt_show_intval, &opt_avalon4_ntcb,
 		     "Set Avalon4 MM NTC B value"),
@@ -1281,23 +1281,23 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_intval, opt_show_intval, &opt_avalon4_freq_max,
 		     "Set maximum frequency for Avalon4"),
 	OPT_WITHOUT_ARG("--avalon4-noncecheck-off",
-			opt_set_invbool, &opt_avalon4_noncecheck,
-			"Disable MM noncheck"),
+		     opt_set_invbool, &opt_avalon4_noncecheck,
+		     "Disable A3218 inside nonce check function"),
 	OPT_WITH_ARG("--avalon4-smart-speed",
-			opt_set_intval, opt_show_intval, &opt_avalon4_smart_speed,
-			"Set smart speed, range 0-3"),
+		     opt_set_intval, opt_show_intval, &opt_avalon4_smart_speed,
+		     "Set smart speed, range 0-3. 0 means Disable"),
 	OPT_WITH_ARG("--avalon4-speed-bingo",
 		     set_int_1_to_255, opt_show_intval, &opt_avalon4_speed_bingo,
-		     "Set Avalon4 speed bingo"),
+		     "Set A3218 speed bingo for smart speed mode 1"),
 	OPT_WITH_ARG("--avalon4-speed-error",
 		     set_int_1_to_255, opt_show_intval, &opt_avalon4_speed_error,
-		     "Set Avalon4 speed error"),
+		     "Set A3218 speed error for smart speed mode 1"),
 	OPT_WITH_ARG("--avalon4-least-pll",
 		     set_int_0_to_7680, opt_show_intval, &opt_avalon4_least_pll_check,
-		     "Set Avalon4 least pll check threshold"),
+		     "Set least pll check threshold for smart speed mode 2"),
 	OPT_WITH_ARG("--avalon4-most-pll",
 		     set_int_0_to_7680, opt_show_intval, &opt_avalon4_most_pll_check,
-		     "Set Avalon4 most pll check threshold"),
+		     "Set most pll check threshold for smart speed mode 2"),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
@@ -4695,6 +4695,8 @@ static void set_blockdiff(const struct work *work)
 {
 	uint8_t pow = work->data[72];
 	int powdiff = (8 * (0x1d - 3)) - (8 * (pow - 3));
+	if (powdiff < 8)
+		powdiff = 8;
 	uint32_t diff32 = be32toh(*((uint32_t *)(work->data + 72))) & 0x00FFFFFF;
 	double numerator = 0xFFFFULL << powdiff;
 	double ddiff = numerator / (double)diff32;
