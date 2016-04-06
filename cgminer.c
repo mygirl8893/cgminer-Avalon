@@ -1298,6 +1298,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon4-most-pll",
 		     set_int_0_to_7680, opt_show_intval, &opt_avalon4_most_pll_check,
 		     "Set most pll check threshold for smart speed mode 2"),
+	OPT_WITHOUT_ARG("--avalon4-iic-detect",
+		     opt_set_bool, &opt_avalon4_iic_detect,
+		     "Enable miner detect through iic controller"),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
