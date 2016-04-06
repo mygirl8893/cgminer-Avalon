@@ -1492,7 +1492,6 @@ static void detach_module(struct cgpu_info *avalon4, int addr)
 			memset(info->set_frequency_i[addr][i][j], 0, sizeof(int) * 3);
 	}
 	info->freq_mode[addr] = AVA4_FREQ_INIT_MODE;
-	info->connecter = AVA4_CONNECTER_NONE;
 	applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
 			avalon4->drv->name, avalon4->device_id, addr);
 }
