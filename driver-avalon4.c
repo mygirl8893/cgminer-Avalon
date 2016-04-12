@@ -1127,6 +1127,7 @@ static struct cgpu_info *avalon4_iic_detect(void)
 	avalon4->drv = &avalon4_drv;
 	avalon4->deven = DEV_ENABLED;
 	avalon4->threads = 1;
+	add_cgpu(avalon4);
 
 	applog(LOG_INFO, "%s-%d: Found at %s", avalon4->drv->name, avalon4->device_id,
 	       I2C_BUS);
@@ -1163,7 +1164,6 @@ static struct cgpu_info *avalon4_iic_detect(void)
 	info->speed_bingo[0] = opt_avalon4_speed_bingo;
 	info->speed_error[0] = opt_avalon4_speed_error;
 	info->connecter = AVA4_CONNECTER_IIC;
-	add_cgpu(avalon4);
 
 	return avalon4;
 }
