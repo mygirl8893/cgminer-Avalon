@@ -396,7 +396,7 @@ static uint32_t decode_voltage_ncp5392p(uint32_t v)
 static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 {
 	uint32_t pwm;
-	int t = info->temp[id];
+	int t = info->temp[id], diff, fandiff = opt_avalon4_fan_max - opt_avalon4_fan_min;;
 
 	if (info->mod_type[id] == AVA4_TYPE_MM60) {
 		int t1, t2;
@@ -412,21 +412,17 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 		return pwm;
 	}
 
-	if (t > info->temp_target[id] + 4 || t > info->toverheat[id] - 3)
-		info->fan_pct[id] = opt_avalon4_fan_max;
-	else if (t > info->temp_target[id] + 2)
-		info->fan_pct[id] += 20;
-	else if (t > info->temp_target[id] + 1)
-		info->fan_pct[id] += 4;
-	else if (t < info->temp_target[id] - 1)
-		info->fan_pct[id] -= 4;
-	else if (t < info->temp_target[id] - 10)
-		info->fan_pct[id] = opt_avalon4_fan_min;
-
-	if (info->fan_pct[id] < opt_avalon4_fan_min)
-		info->fan_pct[id] = opt_avalon4_fan_min;
-	if (info->fan_pct[id] > opt_avalon4_fan_max)
-		info->fan_pct[id] = opt_avalon4_fan_max;
+	/* Scale fan% non linearly relatively to target temperature. It will
+	 * not try to keep the temperature at temp_target that accurately but
+	 * avoids temperature overshoot in both directions. */
+	diff = t - opt_avalon4_temp_target + 28;
+	if (diff > 32)
+		diff = 32;
+	else if (diff < 0)
+		diff = 0;
+	diff *= diff;
+	fandiff = fandiff * diff / 1024;
+	info->fan_pct[id] = opt_avalon4_fan_min + fandiff;
 
 	pwm = get_fan_pwm(info->fan_pct[id]);
 	if (info->cutoff[id])
