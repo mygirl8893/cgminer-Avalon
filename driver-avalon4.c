@@ -1761,11 +1761,6 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 		memcpy(send_pkg.data + 4, &tmp, 4);
 		tmp = be32toh(freq[2]);
 		memcpy(send_pkg.data + 8, &tmp, 4);
-		applog(LOG_NOTICE, "%s-%d-%d: AVA Set freq (%d-%d-%d)",
-				avalon4->drv->name, avalon4->device_id, i,
-				freq[0],
-				freq[1],
-				freq[2]);
 	} else {
 		tmp = avalon4_get_cpm(freq[0]);
 		tmp = be32toh(tmp);
@@ -1777,6 +1772,11 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 		tmp = be32toh(tmp);
 		memcpy(send_pkg.data + 8, &tmp, 4);
 	}
+	applog(LOG_DEBUG, "%s-%d-%d: avalon4 set freq (%d-%d-%d)",
+			avalon4->drv->name, avalon4->device_id, addr,
+			freq[0],
+			freq[1],
+			freq[2]);
 	send_pkg.data[12] = miner_id;
 
 	/* Package the data */
@@ -2255,9 +2255,6 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 				continue;
 
 			if (info->mod_type[i] == AVA4_TYPE_MM60) {
-				applog(LOG_NOTICE, "%s-%d-%d: temp check (%d)",
-						avalon4->drv->name, avalon4->device_id, i,
-						info->freq_mode[i]);
 				max_temp = get_temp_max(info, i);
 				if (info->freq_mode[i] != AVA4_FREQ_TEMPADJ_MODE) {
 					if (max_temp >= opt_avalon4_freqadj_temp) {
@@ -2265,7 +2262,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 						cg_wlock(&info->update_lock);
 						avalon4_freq_dec(avalon4, i, info->set_smart_frequency[i], opt_avalon4_delta_freq + 50);
 						avalon4_set_freq(avalon4, i, 0, 0, info->set_smart_frequency[i]);
-						applog(LOG_DEBUG, "%s-%d-%d: Set freq after temp check (%d-%d-%d)",
+						applog(LOG_DEBUG, "%s-%d-%d: set freq after temp check (%d-%d-%d)",
 								avalon4->drv->name, avalon4->device_id, i,
 								info->set_smart_frequency[i][0],
 								info->set_smart_frequency[i][1],
@@ -2309,7 +2306,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 						cg_wlock(&info->update_lock);
 						avalon4_freq_dec(avalon4, i, info->set_smart_frequency[i], opt_avalon4_delta_freq);
 						avalon4_set_freq(avalon4, i, 0, 0, info->set_smart_frequency[i]);
-						applog(LOG_DEBUG, "%s-%d-%d: Set freq (%d-%d-%d)",
+						applog(LOG_DEBUG, "%s-%d-%d: update freq (%d-%d-%d) AVA4_FREQ_PLLADJ_MODE",
 								avalon4->drv->name, avalon4->device_id, i,
 								info->set_smart_frequency[i][0],
 								info->set_smart_frequency[i][1],
@@ -2355,7 +2352,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 						}
 						cg_wlock(&info->update_lock);
 						avalon4_set_freq(avalon4, i, 0, 0, info->set_smart_frequency[i]);
-						applog(LOG_DEBUG, "%s-%d-%d: Update freq (%d-%d-%d)",
+						applog(LOG_DEBUG, "%s-%d-%d: update freq (%d-%d-%d) AVA4_FREQ_PLLADJ_MODE",
 								avalon4->drv->name, avalon4->device_id, i,
 								info->set_smart_frequency[i][0],
 								info->set_smart_frequency[i][1],
