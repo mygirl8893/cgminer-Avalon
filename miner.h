@@ -445,7 +445,7 @@ struct cgpu_info {
 	bool blacklisted;
 	bool nozlp; // Device prefers no zero length packet
 #endif
-#if defined(USE_AVALON) || defined(USE_AVALON2) || defined (USE_AVALON_MINER)
+#if defined(USE_AVALON) || defined(USE_AVALON2) || defined (USE_AVALON_MINER) || defined(USE_AVALON4)
 	struct work **works;
 	int work_array;
 	int queued;
@@ -1415,6 +1415,11 @@ struct work {
 	struct timeval	tv_work_start;
 	struct timeval	tv_work_found;
 	char		getwork_mode;
+
+	/* ssplus usage */
+	uint32_t merkle_tail;
+	uint64_t ss_nonce2;
+	unsigned char	ss_midstate[32];
 };
 
 #ifdef USE_MODMINER

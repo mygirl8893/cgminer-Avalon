@@ -67,6 +67,9 @@
 #define AVA4_DEFAULT_SMART_SPEED	(AVA4_DEFAULT_SMARTSPEED_MODE3)
 
 #define AVA4_DEFAULT_IIC_DETECT	false
+#define AVA4_DEFAULT_SSPLUS	false
+
+#define AVA4_DEFAULT_ARRAY_SIZE 5
 
 #define AVA4_DH_INC	0.03
 #define AVA4_DH_DEC	0.002
@@ -87,6 +90,9 @@
 
 #define AVA4_CONNECTER_AUC	1
 #define AVA4_CONNECTER_IIC	2
+
+/* 2 ^ 32 * 1000 / (10 ^ 8 * 96) ~= 447 ms */
+#define AVA4_MM60_TIMEOUT_100M	(447 * 96 / 12)
 
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
@@ -111,6 +117,9 @@
 #define AVA4_P_MERKLES	0x14
 #define AVA4_P_HEADER	0x15
 #define AVA4_P_TARGET	0x16
+
+/* ssplus package */
+#define AVA4_P_MID      0xa7
 
 /* Broadcase or Address */
 #define AVA4_P_SET	0x20
@@ -193,7 +202,6 @@ struct avalon4_info {
 	int polling_err_cnt[AVA4_DEFAULT_MODULARS];
 	int xfer_err_cnt;
 
-	int pool_no;
 	struct pool pool0;
 	struct pool pool1;
 	struct pool pool2;
@@ -275,6 +283,12 @@ struct avalon4_info {
 	uint32_t freq_mode[AVA4_DEFAULT_MODULARS];
 	struct i2c_ctx *i2c_slaves[AVA4_DEFAULT_MODULARS];
 	int last_maxtemp[AVA4_DEFAULT_MODULARS];
+
+	/* ssp usage */
+	struct thr_info *thr;
+	pthread_t process_thr;
+	uint32_t delay_ms;
+	struct timeval last_fill;
 };
 
 struct avalon4_iic_info {
@@ -318,5 +332,6 @@ extern int opt_avalon4_freqadj_time;
 extern int opt_avalon4_delta_temp;
 extern int opt_avalon4_delta_freq;
 extern int opt_avalon4_freqadj_temp;
+extern bool opt_avalon4_ssplus_enable;
 #endif /* USE_AVALON4 */
 #endif	/* _AVALON4_H_ */

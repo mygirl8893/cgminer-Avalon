@@ -1318,6 +1318,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon4-freqadj-temp",
 		     opt_set_intval, opt_show_intval, &opt_avalon4_freqadj_temp,
 		     "Set Avalon4 check temperature when run into AVA4_FREQ_TEMPADJ_MODE"),
+	OPT_WITHOUT_ARG("--avalon4-ssplus-enable",
+		     opt_set_bool, &opt_avalon4_ssplus_enable,
+		     "Enable smart speed+"),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
@@ -9360,6 +9363,7 @@ static void initialise_usb(void) {
 
 int main(int argc, char *argv[])
 {
+	static struct work *ss_works = NULL;
 	struct sigaction handler;
 	struct work *work = NULL;
 	bool pool_msg = false;
@@ -9791,8 +9795,18 @@ begin_bench:
 		int ts, max_staged = max_queue;
 		struct pool *pool;
 
-		if (opt_work_update)
+		if (opt_work_update) {
 			signal_work_update();
+			if (ss_works) {
+				struct work *work, *tmp;
+
+				HASH_ITER(hh, ss_works, work, tmp) {
+					HASH_DEL(ss_works, work);
+					free(work);
+				}
+				ss_works = NULL;
+			}
+		}
 		opt_work_update = false;
 
 		mutex_lock(stgd_lock);
@@ -9830,8 +9844,43 @@ begin_bench:
 				cgsleep_ms(5);
 		};
 		if (pool->has_stratum) {
-			gen_stratum_work(pool, work);
-			applog(LOG_DEBUG, "Generated stratum work");
+			if (opt_avalon4_ssplus_enable) {
+				static uint32_t ss_workno = 0;
+
+				while (1) {
+					struct work *ss_work = NULL;
+
+					gen_stratum_work(pool, work);
+
+					memcpy(&(work->merkle_tail), work->data + 64, 4);
+					work->merkle_tail = le32toh(work->merkle_tail);
+
+					if (ss_works) {
+						HASH_FIND_INT(ss_works, &work->merkle_tail, ss_work);
+						if (ss_work) {
+							if (ss_work->nonce2 == work->nonce2) {
+								applog(LOG_DEBUG, "Same work");
+								continue;
+							}
+
+							if (memcmp(ss_work->data + 64, work->data + 64, 12))
+								continue;
+
+							memcpy(work->ss_midstate, ss_work->midstate, 32);
+							work->ss_nonce2 = ss_work->nonce2;
+							HASH_DEL(ss_works, ss_work);
+							free(ss_work);
+							break;
+						}
+					}
+					HASH_ADD_INT(ss_works, merkle_tail, work);
+					work = make_work();
+				}
+				applog(LOG_DEBUG, "Generated stratum ss work %d-%d", HASH_COUNT(ss_works), ++ss_workno);
+			} else {
+				gen_stratum_work(pool, work);
+				applog(LOG_DEBUG, "Generated stratum work");
+			}
 			stage_work(work);
 			continue;
 		}
