@@ -81,6 +81,10 @@ char *curly = ":D";
 #include "driver-avalon4.h"
 #endif
 
+#ifdef USE_AVALON7
+#include "driver-avalon7.h"
+#endif
+
 #ifdef USE_AVALON_MINER
 #include "driver-avalon-miner.h"
 #endif
@@ -247,6 +251,11 @@ static char *opt_set_avalon2_voltage;
 static char *opt_set_avalon4_fan;
 static char *opt_set_avalon4_voltage;
 static char *opt_set_avalon4_freq;
+#endif
+#ifdef USE_AVALON7
+static char *opt_set_avalon7_fan;
+static char *opt_set_avalon7_voltage;
+static char *opt_set_avalon7_freq;
 #endif
 #ifdef USE_AVALON_MINER
 static char *opt_set_avalonm_voltage;
@@ -1319,6 +1328,53 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_intval, opt_show_intval, &opt_avalon4_freqadj_temp,
 		     "Set Avalon4 check temperature when run into AVA4_FREQ_TEMPADJ_MODE"),
 #endif
+#ifdef USE_AVALON7
+	OPT_WITH_CBARG("--avalon7-voltage",
+		     set_avalon7_voltage, NULL, &opt_set_avalon7_voltage,
+		     "Set Avalon7 default core voltage, in millivolts, step: 125"),
+	OPT_WITH_CBARG("--avalon7-freq",
+		     set_avalon7_freq, NULL, &opt_set_avalon7_freq,
+		     "Set Avalon7 default frequency, range:[100, 500], step: 25, example: 500"),
+	OPT_WITH_CBARG("--avalon7-fan",
+		     set_avalon7_fan, NULL, &opt_set_avalon7_fan,
+		     "Set Avalon7 target fan speed, range:[0, 100], step: 1, example: 0-100"),
+	OPT_WITH_ARG("--avalon7-temp",
+		     set_int_22_to_75, opt_show_intval, &opt_avalon7_temp_target,
+		     "Set Avalon7 target temperature"),
+	OPT_WITH_ARG("--avalon7-cutoff",
+		     set_int_42_to_85, opt_show_intval, &opt_avalon7_overheat,
+		     "Set Avalon7 overheat cut off temperature"),
+	OPT_WITH_ARG("--avalon7-polling-delay",
+		     set_int_1_to_65535, opt_show_intval, &opt_avalon7_polling_delay,
+		     "Set Avalon7 polling delay value (ms)"),
+	OPT_WITH_ARG("--avalon7-ntime-offset",
+		     opt_set_intval, opt_show_intval, &opt_avalon7_ntime_offset,
+		     "Set Avalon7 MM ntime rolling max offset"),
+	OPT_WITH_ARG("--avalon7-aucspeed",
+		     opt_set_intval, opt_show_intval, &opt_avalon7_aucspeed,
+		     "Set Avalon7 AUC IIC bus speed"),
+	OPT_WITH_ARG("--avalon7-aucxdelay",
+		     opt_set_intval, opt_show_intval, &opt_avalon7_aucxdelay,
+		     "Set Avalon7 AUC IIC xfer read delay, 4800 ~= 1ms"),
+	OPT_WITH_ARG("--avalon7-smart-speed",
+		     opt_set_intval, opt_show_intval, &opt_avalon7_smart_speed,
+		     "Set Avalon7 smart speed, range 0-3. 0 means Disable"),
+	OPT_WITHOUT_ARG("--avalon7-iic-detect",
+		     opt_set_bool, &opt_avalon7_iic_detect,
+		     "Enable Avalon7 detect through iic controller"),
+	OPT_WITH_ARG("--avalon7-freqadj-time",
+		     set_int_1_to_60, opt_show_intval, &opt_avalon7_freqadj_time,
+		     "Set Avalon7 check interval when run in AVA4_FREQ_TEMPADJ_MODE"),
+	OPT_WITH_ARG("--avalon7-delta-temp",
+		     opt_set_intval, opt_show_intval, &opt_avalon7_delta_temp,
+		     "Set Avalon7 delta temperature when reset freq in AVA4_FREQ_TEMPADJ_MODE"),
+	OPT_WITH_ARG("--avalon7-delta-freq",
+		     opt_set_intval, opt_show_intval, &opt_avalon7_delta_freq,
+		     "Set Avalon7 delta freq when adjust freq in AVA4_FREQ_TEMPADJ_MODE"),
+	OPT_WITH_ARG("--avalon7-freqadj-temp",
+		     opt_set_intval, opt_show_intval, &opt_avalon7_freqadj_temp,
+		     "Set Avalon7 check temperature when run into AVA4_FREQ_TEMPADJ_MODE"),
+#endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
 		     set_avalonm_voltage, NULL, &opt_set_avalonm_voltage,
@@ -1960,6 +2016,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_AVALON4
 		"avalon4 "
+#endif
+#ifdef USE_AVALON7
+		"avalon7 "
 #endif
 #ifdef USE_AVALON_MINER
 		"avalon miner"
@@ -6871,7 +6930,7 @@ void set_target(unsigned char *dest_target, double diff)
 	cg_memcpy(dest_target, target, 32);
 }
 
-#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_AVALON_MINER) || defined (USE_HASHRATIO)
+#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_AVALON7) || defined (USE_AVALON_MINER) || defined (USE_HASHRATIO)
 bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
 			 uint32_t nonce2, uint32_t nonce,  uint32_t ntime)
 {
