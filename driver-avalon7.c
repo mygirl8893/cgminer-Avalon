@@ -216,9 +216,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	unsigned short actual_crc;
 	uint32_t nonce, nonce2, ntime, miner, chip_id, tmp;
 	uint8_t job_id[2];
-	int pool_no, i;
-	uint32_t local_work = 0;
-	uint32_t hw_work = 0;
+	int pool_no;
 
 	if (ar->head[0] != AVA7_H1 && ar->head[1] != AVA7_H2) {
 		applog(LOG_DEBUG, "%s-%d-%d: H1 %02x, H2 %02x",
@@ -314,37 +312,37 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		tmp = be32toh(tmp);
 		info->fan_cpm[modular_id] = tmp;
 
-		memcpy(&(info->get_frequency[modular_id]), ar->data + 8, 4);
-		memcpy(&(info->get_voltage[modular_id]), ar->data + 12, 4);
-		memcpy(&local_work, ar->data + 16, 4);
-		memcpy(&hw_work, ar->data + 20, 4);
-		memcpy(&(info->error_code[modular_id]), ar->data + 24, 4);
+		if (!ar->idx) {
+			memcpy(&tmp, ar->data + 8, 4);
+			info->local_works[modular_id] += be32toh(tmp);
 
-		if (info->total_asics[modular_id])
-			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]) / info->total_asics[modular_id];
-		info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
-		info->error_code[modular_id] = be32toh(info->error_code[modular_id]);
+			memcpy(&tmp, ar->data + 12, 4);
+			info->hw_works[modular_id] += be32toh(tmp);
 
-		/* TODO: fix it with the actual board */
-		tmp = AVA7_DEFAULT_VOLTAGE_MIN;
-		info->get_voltage[modular_id] = tmp;
+			memcpy(&tmp, ar->data + 16, 4);
+			info->error_code[modular_id][ar->cnt] = be32toh(tmp);
+		} else {
+			memcpy(&tmp, ar->data + 8, 4);
+			info->local_works_i[modular_id][ar->idx - 1] += be32toh(tmp);
 
-		local_work = be32toh(local_work);
-		info->local_works[modular_id] += local_work;
-		hw_work = be32toh(hw_work);
-		info->hw_works[modular_id] += hw_work;
-		break;
-	case AVA7_P_STATUS_LW:
-		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_LW", avalon7->drv->name, avalon7->device_id, modular_id);
-		for (i = 0; i < info->miner_count[modular_id]; i++) {
-			info->local_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
-							    (ar->data[i * 3 + 1] << 8) |
-							    (ar->data[i * 3 + 2]));
+			memcpy(&tmp, ar->data + 12, 4);
+			info->hw_works_i[modular_id][ar->idx - 1] += be32toh(tmp);
+
+			memcpy(&tmp, ar->data + 16, 4);
+			info->error_code[modular_id][ar->idx - 1] = be32toh(tmp);
 		}
 		break;
 	case AVA7_P_STATUS_M:
-		/* TODO:decode data from PMU */
+		/* TODO: decode data from PMU */
 		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_M", avalon7->drv->name, avalon7->device_id, modular_id);
+		break;
+	case AVA7_P_STATUS_VOLT:
+		info->get_voltage[modular_id] = AVA7_DEFAULT_VOLTAGE_MIN;
+		/* TODO: decode voltage */
+		break;
+	case AVA7_P_STATUS_FREQ:
+		/* TODO: decode frequency */
+		info->get_frequency[modular_id] = info->set_frequency[modular_id][0] * 96;
 		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d-%d: Unknown response", avalon7->drv->name, avalon7->device_id, modular_id);
@@ -1012,7 +1010,6 @@ static void detect_modules(struct cgpu_info *avalon7)
 		info->cutoff[i] = 0;
 		info->get_voltage[i] = 0;
 		info->get_frequency[i] = 0;
-		info->error_code[i] = 0;
 		info->fan_cpm[i] = 0;
 		info->temp[i] = -273;
 		info->last_maxtemp[i] = -273;
@@ -1022,7 +1019,9 @@ static void detect_modules(struct cgpu_info *avalon7)
 			memset(info->chipmatching_work[i][j], 0, sizeof(int) * info->asic_count[i]);
 			info->local_works_i[i][j] = 0;
 			info->hw_works_i[i][j] = 0;
+			info->error_code[i][j] = 0;
 		}
+		info->error_code[i][j] = 0;
 		info->polling_err_cnt[i] = 0;
 
 		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d]",
@@ -1618,7 +1617,14 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, " TA[%d]", info->total_asics[i]);
 		strcat(statbuf, buf);
 
-		sprintf(buf, " EC[%d]", info->error_code[i]);
+		strcat(statbuf, " ECHU[");
+		for (j = 0; j < info->miner_count[i]; j++) {
+			sprintf(buf, "%d ", info->error_code[i][j]);
+			strcat(statbuf, buf);
+		}
+		statbuf[strlen(statbuf) - 1] = ']';
+
+		sprintf(buf, " ECMM[%d]", info->error_code[i][j]);
 		strcat(statbuf, buf);
 
 		if (opt_debug) {

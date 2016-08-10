@@ -104,7 +104,7 @@
 #define AVA7_P_STATUS_LW        0x44
 #define AVA7_P_STATUS_HW        0x45
 #define AVA7_P_STATUS_VOLT	0x46
-#define AVA7_P_STATUS_MA	0x47
+#define AVA7_P_STATUS_FREQ	0x47
 #define AVA7_P_STATUS_M	0x48
 
 #define AVA7_MODULE_BROADCAST	0
@@ -204,7 +204,6 @@ struct avalon7_info {
 
 	int get_voltage[AVA7_DEFAULT_MODULARS];
 	int get_frequency[AVA7_DEFAULT_MODULARS];
-	int error_code[AVA7_DEFAULT_MODULARS];
 	int fan_cpm[AVA7_DEFAULT_MODULARS];
 	int temp[AVA7_DEFAULT_MODULARS];
 	int last_maxtemp[AVA7_DEFAULT_MODULARS];
@@ -213,6 +212,7 @@ struct avalon7_info {
 	uint64_t local_works_i[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_MAX];
 	uint64_t hw_works[AVA7_DEFAULT_MODULARS];
 	uint64_t hw_works_i[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_MAX];
+	int error_code[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_MAX + 1];
 	int chipmatching_work[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_MAX][AVA7_DEFAULT_ASIC_MAX];
 
 	int polling_err_cnt[AVA7_DEFAULT_MODULARS];
