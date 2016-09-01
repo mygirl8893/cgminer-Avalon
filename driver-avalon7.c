@@ -48,7 +48,7 @@ int opt_avalon7_freqadj_temp = AVA7_MM711_TEMP_FREQADJ;
 static uint32_t encode_voltage(uint32_t volt)
 {
 	if (volt > AVA7_DEFAULT_VOLTAGE_MAX)
-	      volt = AVA7_DEFAULT_FREQUENCY_MAX;
+	      volt = AVA7_DEFAULT_VOLTAGE_MAX;
 
 	if (volt < AVA7_DEFAULT_VOLTAGE_MIN)
 	      volt = AVA7_DEFAULT_VOLTAGE_MIN;
