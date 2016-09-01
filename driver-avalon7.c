@@ -140,8 +140,8 @@ static int avalon7_init_pkg(struct avalon7_pkg *pkg, uint8_t type, uint8_t idx, 
 
 	crc = crc16(pkg->data, AVA7_P_DATA_LEN);
 
-	pkg->crc[0] = crc & 0xff;
-	pkg->crc[1] = (crc & 0xff00) >> 8;
+	pkg->crc[0] = (crc & 0xff00) >> 8;
+	pkg->crc[1] = crc & 0xff;
 
 	return 0;
 }
@@ -157,7 +157,7 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 	job_id_len = strlen(pool_job_id);
 	crc_expect = crc16((unsigned char *)pool_job_id, job_id_len);
 
-	crc = job_id[0] | job_id[1] << 8;
+	crc = job_id[0] << 8 | job_id[1];
 
 	if (crc_expect == crc)
 		return 0;
@@ -227,7 +227,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	}
 
 	expected_crc = crc16(ar->data, AVA7_P_DATA_LEN);
-	actual_crc = (ar->crc[0] & 0xff) | ((ar->crc[1] & 0xff) << 8);
+	actual_crc = ((ar->crc[0] & 0xff) << 8) | (ar->crc[1] & 0xff);
 	if (expected_crc != actual_crc) {
 		applog(LOG_DEBUG, "%s-%d-%d: %02x: expected crc(%04x), actual_crc(%04x)",
 		       avalon7->drv->name, avalon7->device_id, modular_id,
@@ -737,8 +737,8 @@ static void avalon7_stratum_pkgs(struct cgpu_info *avalon7, struct pool *pool)
 	       avalon7->drv->name, avalon7->device_id,
 	       crc, pool->swork.job_id);
 
-	pkg.data[0] = crc & 0xff;
-	pkg.data[1] = (crc & 0xff00) >> 8;
+	pkg.data[0] = (crc & 0xff00) >> 8;
+	pkg.data[1] = crc & 0xff;
 	pkg.data[2] = pool->pool_no & 0xff;
 	pkg.data[3] = (pool->pool_no & 0xff00) >> 8;
 	avalon7_init_pkg(&pkg, AVA7_P_JOB_ID, 1, 1);
