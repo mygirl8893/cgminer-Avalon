@@ -1331,7 +1331,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_AVALON7
 	OPT_WITH_CBARG("--avalon7-voltage",
 		     set_avalon7_voltage, NULL, &opt_set_avalon7_voltage,
-		     "Set Avalon7 default core voltage, in millivolts, step: 125"),
+		     "Set Avalon7 default core voltage, in millivolts, step: 78"),
 	OPT_WITH_CBARG("--avalon7-freq",
 		     set_avalon7_freq, NULL, &opt_set_avalon7_freq,
 		     "Set Avalon7 default frequency, range:[100, 500], step: 25, example: 500"),

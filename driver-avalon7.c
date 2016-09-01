@@ -45,6 +45,17 @@ int opt_avalon7_delta_temp = AVA7_DEFAULT_DELTA_T;
 int opt_avalon7_delta_freq = AVA7_DEFAULT_DELTA_FREQ;
 int opt_avalon7_freqadj_temp = AVA7_MM711_TEMP_FREQADJ;
 
+static uint32_t encode_voltage(uint32_t volt)
+{
+	if (volt > AVA7_DEFAULT_VOLTAGE_MAX)
+	      volt = AVA7_DEFAULT_FREQUENCY_MAX;
+
+	if (volt < AVA7_DEFAULT_VOLTAGE_MIN)
+	      volt = AVA7_DEFAULT_VOLTAGE_MIN;
+
+	return 0x8000 | ((volt - AVA7_DEFAULT_VOLTAGE_MIN) / 78);
+}
+
 #define UNPACK32(x, str)			\
 {						\
 	*((str) + 3) = (uint8_t) ((x)      );	\
@@ -1202,8 +1213,7 @@ static void avalon7_set_voltage(struct cgpu_info *avalon7, int addr, unsigned in
 
 	/* FIXME: miner_count should <= 8 */
 	for (i = 0; i < info->miner_count[addr]; i++) {
-		tmp = be32toh(voltage[i]);
-		/* TODO: encode voltage */
+		tmp = be32toh(encode_voltage(voltage[i]));
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set voltage miner %d, (%d-%d)",
