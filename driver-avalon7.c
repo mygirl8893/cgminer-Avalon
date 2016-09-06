@@ -53,7 +53,7 @@ static uint32_t encode_voltage(uint32_t volt)
 	if (volt < AVA7_DEFAULT_VOLTAGE_MIN)
 	      volt = AVA7_DEFAULT_VOLTAGE_MIN;
 
-	return 0x8000 | ((volt - AVA7_DEFAULT_VOLTAGE_MIN) / 78);
+	return 0x78 - volt / 125;
 }
 
 #define UNPACK32(x, str)			\
