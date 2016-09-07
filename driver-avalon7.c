@@ -378,6 +378,28 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		/* TODO: decode frequency */
 		info->get_frequency[modular_id] = info->set_frequency[modular_id][0] * 96;
 		break;
+	case AVA7_P_STATUS_PLL:
+		PACK32(ar->data, &tmp);
+		info->miner_pll[modular_id][ar->idx][0] = tmp;
+
+		PACK32(ar->data + 4, &tmp);
+		info->miner_pll[modular_id][ar->idx][1] = tmp;
+
+		PACK32(ar->data + 8, &tmp);
+		info->miner_pll[modular_id][ar->idx][2] = tmp;
+
+		PACK32(ar->data + 12, &tmp);
+		info->miner_pll[modular_id][ar->idx][3] = tmp;
+
+		PACK32(ar->data + 16, &tmp);
+		info->miner_pll[modular_id][ar->idx][4] = tmp;
+
+		PACK32(ar->data + 20, &tmp);
+		info->miner_pll[modular_id][ar->idx][5] = tmp;
+
+		PACK32(ar->data + 24, &tmp);
+		info->miner_pll[modular_id][ar->idx][6] = tmp;
+		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d-%d: Unknown response", avalon7->drv->name, avalon7->device_id, modular_id);
 		break;
@@ -1634,6 +1656,17 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
 
 		for (j = 0; j < info->miner_count[i]; j++) {
 			sprintf(buf, " Vo%d[%d]", j, info->get_voltage[i][j]);
+			strcat(statbuf, buf);
+		}
+
+		for (j = 0; j < info->miner_count[i]; j++) {
+			sprintf(buf, " PLL%d[", j);
+			strcat(statbuf, buf);
+			for (k = 0; k < AVA7_MM711_PLL_CNT - 1; k++) {
+				sprintf(buf, "%d ", info->miner_pll[i][j][k]);
+				strcat(statbuf, buf);
+			}
+			sprintf(buf, "%d]", info->miner_pll[i][j][k]);
 			strcat(statbuf, buf);
 		}
 
