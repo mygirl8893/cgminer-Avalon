@@ -133,6 +133,8 @@
 #define AVA7_DEFAULT_DELTA_T	0
 #define AVA7_DEFAULT_DELTA_FREQ	100
 
+#define AVA7_VOLT_ADC_RATIO	(3.3 / 1024.0 * 125.0 / 43.0 * 10000.0)
+
 struct avalon7_pkg {
 	uint8_t head[2];
 	uint8_t type;
@@ -202,7 +204,7 @@ struct avalon7_info {
 	int led_red[AVA7_DEFAULT_MODULARS];
 	uint8_t cutoff[AVA7_DEFAULT_MODULARS];
 
-	int get_voltage[AVA7_DEFAULT_MODULARS];
+	int get_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_MAX];
 	int get_frequency[AVA7_DEFAULT_MODULARS];
 	int fan_cpm[AVA7_DEFAULT_MODULARS];
 	int temp[AVA7_DEFAULT_MODULARS];
