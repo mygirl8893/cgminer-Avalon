@@ -1632,6 +1632,11 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, " Fan[%d]", info->fan_cpm[i]);
 		strcat(statbuf, buf);
 
+		for (j = 0; j < info->miner_count[i]; j++) {
+			sprintf(buf, " Vo%d[%d]", j, info->get_voltage[i][j]);
+			strcat(statbuf, buf);
+		}
+
 		sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)info->get_frequency[i] / 1000 * info->total_asics[i], (float)info->get_frequency[i] / 1000);
 		strcat(statbuf, buf);
 
