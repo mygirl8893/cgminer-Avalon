@@ -222,6 +222,8 @@ struct avalon7_info {
 	int chipmatching_work[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_MAX][AVA7_DEFAULT_ASIC_MAX];
 
 	int polling_err_cnt[AVA7_DEFAULT_MODULARS];
+
+	uint8_t pg[AVA7_DEFAULT_MODULARS];
 };
 
 struct avalon7_iic_info {
