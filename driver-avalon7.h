@@ -35,6 +35,7 @@
 
 #define AVA7_MM711_MINER_CNT	4
 #define AVA7_MM711_ASIC_CNT	18
+#define AVA7_MM711_PLL_CNT	7
 
 #define AVA7_DEFAULT_POLLING_DELAY	20 /* ms */
 #define AVA7_DEFAULT_NTIME_OFFSET 4
@@ -106,6 +107,7 @@
 #define AVA7_P_STATUS_VOLT	0x46
 #define AVA7_P_STATUS_FREQ	0x47
 #define AVA7_P_STATUS_M	0x48
+#define AVA7_P_STATUS_PLL	0x49
 
 #define AVA7_MODULE_BROADCAST	0
 /* Endof avalon7 protocol package type */
@@ -132,6 +134,8 @@
 
 #define AVA7_DEFAULT_DELTA_T	0
 #define AVA7_DEFAULT_DELTA_FREQ	100
+
+#define AVA7_VOLT_ADC_RATIO	(3.3 / 1024.0 * 125.0 / 43.0 * 10000.0)
 
 struct avalon7_pkg {
 	uint8_t head[2];
@@ -202,7 +206,9 @@ struct avalon7_info {
 	int led_red[AVA7_DEFAULT_MODULARS];
 	uint8_t cutoff[AVA7_DEFAULT_MODULARS];
 
-	int get_voltage[AVA7_DEFAULT_MODULARS];
+	int miner_pll[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_MAX][AVA7_MM711_PLL_CNT];
+
+	int get_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_MAX];
 	int get_frequency[AVA7_DEFAULT_MODULARS];
 	int fan_cpm[AVA7_DEFAULT_MODULARS];
 	int temp[AVA7_DEFAULT_MODULARS];
