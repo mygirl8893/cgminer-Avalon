@@ -366,7 +366,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	case AVA7_P_STATUS_PLL:
 		for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
 			memcpy(&tmp, ar->data + i * 4, 4);
-			info->miner_pll[modular_id][ar->idx][i] = be32toh(tmp);
+			info->pll_info[modular_id][ar->idx][i] = be32toh(tmp);
 		}
 		break;
 	default:
@@ -1632,10 +1632,10 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
 			sprintf(buf, " PLL%d[", j);
 			strcat(statbuf, buf);
 			for (k = 0; k < AVA7_DEFAULT_PLL_CNT - 1; k++) {
-				sprintf(buf, "%d ", info->miner_pll[i][j][k]);
+				sprintf(buf, "%d ", info->pll_info[i][j][k]);
 				strcat(statbuf, buf);
 			}
-			sprintf(buf, "%d]", info->miner_pll[i][j][k]);
+			sprintf(buf, "%d]", info->pll_info[i][j][k]);
 			strcat(statbuf, buf);
 		}
 
