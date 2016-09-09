@@ -69,14 +69,6 @@ static uint32_t decode_voltage(uint32_t volt)
 	*((str) + 0) = (uint8_t) ((x) >> 24);	\
 }
 
-#define PACK32(str, x)                        \
-{                                             \
-    *(x) =   ((uint32_t) *((str) + 3)      )    \
-           | ((uint32_t) *((str) + 2) <<  8)    \
-           | ((uint32_t) *((str) + 1) << 16)    \
-           | ((uint32_t) *((str) + 0) << 24);   \
-}
-
 static inline void sha256_prehash(const unsigned char *message, unsigned int len, unsigned char *digest)
 {
 	int i;
@@ -241,7 +233,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	uint32_t nonce, nonce2, ntime, miner, chip_id, tmp;
 	uint8_t job_id[2];
 	int pool_no;
-	uint32_t volt;
+	uint32_t volt, i;
 
 	if (ar->head[0] != AVA7_H1 && ar->head[1] != AVA7_H2) {
 		applog(LOG_DEBUG, "%s-%d-%d: H1 %02x, H2 %02x",
@@ -362,43 +354,20 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_M", avalon7->drv->name, avalon7->device_id, modular_id);
 		break;
 	case AVA7_P_STATUS_VOLT:
-		PACK32(ar->data, &volt);
-		info->get_voltage[modular_id][0] = decode_voltage(volt);
-
-		PACK32(ar->data + 4, &volt);
-		info->get_voltage[modular_id][1] = decode_voltage(volt);
-
-		PACK32(ar->data + 8, &volt);
-		info->get_voltage[modular_id][2] = decode_voltage(volt);
-
-		PACK32(ar->data + 12, &volt);
-		info->get_voltage[modular_id][3] = decode_voltage(volt);
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			memcpy(&volt, ar->data + i * 4, 4);
+			info->get_voltage[modular_id][i] = decode_voltage(be32toh(volt));
+		}
 		break;
 	case AVA7_P_STATUS_FREQ:
 		/* TODO: decode frequency */
 		info->get_frequency[modular_id] = info->set_frequency[modular_id][0] * 96;
 		break;
 	case AVA7_P_STATUS_PLL:
-		PACK32(ar->data, &tmp);
-		info->miner_pll[modular_id][ar->idx][0] = tmp;
-
-		PACK32(ar->data + 4, &tmp);
-		info->miner_pll[modular_id][ar->idx][1] = tmp;
-
-		PACK32(ar->data + 8, &tmp);
-		info->miner_pll[modular_id][ar->idx][2] = tmp;
-
-		PACK32(ar->data + 12, &tmp);
-		info->miner_pll[modular_id][ar->idx][3] = tmp;
-
-		PACK32(ar->data + 16, &tmp);
-		info->miner_pll[modular_id][ar->idx][4] = tmp;
-
-		PACK32(ar->data + 20, &tmp);
-		info->miner_pll[modular_id][ar->idx][5] = tmp;
-
-		PACK32(ar->data + 24, &tmp);
-		info->miner_pll[modular_id][ar->idx][6] = tmp;
+		for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
+			memcpy(&tmp, ar->data + i * 4, 4);
+			info->miner_pll[modular_id][ar->idx][i] = be32toh(tmp);
+		}
 		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d-%d: Unknown response", avalon7->drv->name, avalon7->device_id, modular_id);
@@ -1662,7 +1631,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
 		for (j = 0; j < info->miner_count[i]; j++) {
 			sprintf(buf, " PLL%d[", j);
 			strcat(statbuf, buf);
-			for (k = 0; k < AVA7_MM711_PLL_CNT - 1; k++) {
+			for (k = 0; k < AVA7_DEFAULT_PLL_CNT - 1; k++) {
 				sprintf(buf, "%d ", info->miner_pll[i][j][k]);
 				strcat(statbuf, buf);
 			}
