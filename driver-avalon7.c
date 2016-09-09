@@ -943,7 +943,7 @@ static bool avalon7_prepare(struct thr_info *thr)
 	return true;
 }
 
-static int check_module_exits(struct cgpu_info *avalon7, uint8_t mm_dna[AVA7_MM_DNA_LEN + 1])
+static int check_module_exist(struct cgpu_info *avalon7, uint8_t mm_dna[AVA7_MM_DNA_LEN + 1])
 {
 	struct avalon7_info *info = avalon7->device_data;
 	int i;
@@ -998,7 +998,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		if (ret_pkg.type != AVA7_P_ACKDETECT)
 			break;
 
-		if (check_module_exits(avalon7, ret_pkg.data))
+		if (check_module_exist(avalon7, ret_pkg.data))
 			continue;
 
 		info->enable[i] = 1;
