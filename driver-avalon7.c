@@ -56,9 +56,9 @@ static uint32_t encode_voltage(uint32_t volt)
 	return 0x8000 | ((volt - AVA7_DEFAULT_VOLTAGE_MIN) / 78);
 }
 
-static uint32_t decode_voltage(uint32_t volt)
+static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32_t volt)
 {
-	return (volt * AVA7_VOLT_ADC_RATIO / AVA7_MM711_ASIC_CNT);
+	return (volt * AVA7_VOLT_ADC_RATIO / info->asic_count[modular_id]);
 }
 
 #define UNPACK32(x, str)			\
@@ -356,7 +356,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	case AVA7_P_STATUS_VOLT:
 		for (i = 0; i < info->miner_count[modular_id]; i++) {
 			memcpy(&volt, ar->data + i * 4, 4);
-			info->get_voltage[modular_id][i] = decode_voltage(be32toh(volt));
+			info->get_voltage[modular_id][i] = decode_voltage(info, modular_id, be32toh(volt));
 		}
 		break;
 	case AVA7_P_STATUS_FREQ:
