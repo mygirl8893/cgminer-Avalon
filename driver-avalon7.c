@@ -1628,15 +1628,17 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
 			strcat(statbuf, buf);
 		}
 
-		for (j = 0; j < info->miner_count[i]; j++) {
-			sprintf(buf, " PLL%d[", j);
-			strcat(statbuf, buf);
-			for (k = 0; k < AVA7_DEFAULT_PLL_CNT - 1; k++) {
-				sprintf(buf, "%d ", info->pll_info[i][j][k]);
+		if (opt_debug) {
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " PLL%d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < AVA7_DEFAULT_PLL_CNT - 1; k++) {
+					sprintf(buf, "%d ", info->pll_info[i][j][k]);
+					strcat(statbuf, buf);
+				}
+				sprintf(buf, "%d]", info->pll_info[i][j][k]);
 				strcat(statbuf, buf);
 			}
-			sprintf(buf, "%d]", info->pll_info[i][j][k]);
-			strcat(statbuf, buf);
 		}
 
 		sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)info->get_frequency[i] / 1000 * info->total_asics[i], (float)info->get_frequency[i] / 1000);
