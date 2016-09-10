@@ -324,6 +324,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		memcpy(&tmp, ar->data, 4);
 		tmp = be32toh(tmp);
 		info->temp[modular_id] = tmp;
+		avalon7->temp = tmp;
 
 		memcpy(&tmp, ar->data + 4, 4);
 		tmp = be32toh(tmp);
