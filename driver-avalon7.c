@@ -362,8 +362,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		}
 		break;
 	case AVA7_P_STATUS_FREQ:
-		/* TODO: decode frequency */
-		info->get_frequency[modular_id] = info->set_frequency[modular_id][0] * 96;
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			memcpy(&tmp, ar->data + i * 4, 4);
+			info->get_frequency[modular_id][i] = be32toh(tmp);
+		}
 		break;
 	case AVA7_P_STATUS_PLL:
 		for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
@@ -1005,7 +1007,6 @@ static void detect_modules(struct cgpu_info *avalon7)
 
 		info->enable[i] = 1;
 		cgtime(&info->elapsed[i]);
-		cgtime(&info->last_favg[i]);
 		memcpy(info->mm_dna[i], ret_pkg.data, AVA7_MM_DNA_LEN);
 		info->mm_dna[i][AVA7_MM_DNA_LEN] = '\0';
 		memcpy(info->mm_version[i], ret_pkg.data + AVA7_MM_DNA_LEN, AVA7_MM_VER_LEN);
@@ -1030,6 +1031,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		for (j = 0; j < info->miner_count[i]; j++) {
 			info->set_voltage[i][j] = opt_avalon7_voltage_min;
 			info->get_voltage[i][j] = 0;
+			info->get_frequency[i][j] = 0;
 		}
 
 		info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
@@ -1037,7 +1039,6 @@ static void detect_modules(struct cgpu_info *avalon7)
 
 		info->led_red[i] = 0;
 		info->cutoff[i] = 0;
-		info->get_frequency[i] = 0;
 		info->fan_cpm[i] = 0;
 		info->temp[i] = -273;
 		info->last_maxtemp[i] = -273;
@@ -1375,7 +1376,6 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 	double device_tdiff;
 	int64_t h;
 	int i, j, count = 0;
-	uint32_t tmp;
 	int max_temp;
 	bool update_settings = false;
 	bool freq_dec_check = false;
@@ -1501,26 +1501,6 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 					break;
 
 				/* AVA7_DEFAULT_SMARTSPEED_MODE1: auto speed by A3218 chips */
-				if (opt_avalon7_smart_speed == AVA7_DEFAULT_SMARTSPEED_MODE2) {
-					device_tdiff = tdiff(&current, &(info->last_favg[i]));
-					if ((device_tdiff >= AVA7_DEFAULT_FAVG_TIME) ||
-							(device_tdiff < 0)) {
-						update_settings = true;
-						copy_time(&info->last_favg[i], &current);
-						tmp = (info->get_frequency[i] / 96);
-						tmp = (uint32_t)ceil(tmp / 25.0) * 25 + 25;
-						if (tmp < AVA7_DEFAULT_FREQUENCY_MIN)
-							tmp = AVA7_DEFAULT_FREQUENCY_MIN;
-						if (tmp > AVA7_MM711_FREQUENCY_MAX)
-							tmp = AVA7_MM711_FREQUENCY_MAX;
-						for (j = 0; j < info->miner_count[i]; j++)
-							info->set_frequency[i][j] = tmp;
-						applog(LOG_DEBUG, "%s-%d-%d: update freq (%d-%d) AVA7_FREQ_PLLADJ_MODE",
-							avalon7->drv->name, avalon7->device_id, i,
-							info->set_frequency[i][0],
-							info->set_frequency[i][info->miner_count[i] - 1]);
-					}
-				}
 				break;
 			default:
 				applog(LOG_ERR, "%s-%d-%d: Invalid frequency mode %d",
@@ -1558,17 +1538,41 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 	return h * 0xffffffffull;
 }
 
+static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)
+{
+	struct avalon7_info *info = avalon7->device_data;
+	uint32_t tmp_freq[AVA7_DEFAULT_PLL_CNT];
+	unsigned int i, j;
+	float mhsmm;
+
+	mhsmm = 0;
+	for (i = 0; i < info->miner_count[modular_id]; i++) {
+		for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
+			tmp_freq[j] = info->get_frequency[modular_id][i];
+
+		avalon7_freq_dec(avalon7, modular_id, 1, &tmp_freq[0], 132);
+		mhsmm += info->pll_info[modular_id][i][0] * tmp_freq[0];
+		for (j = 1; j < AVA7_DEFAULT_PLL_CNT; j++) {
+			avalon7_freq_dec(avalon7, modular_id, 1, &tmp_freq[j], (AVA7_DEFAULT_PLL_CNT - 1 - j) * 24);
+			mhsmm += (info->pll_info[modular_id][i][j] * tmp_freq[j]);
+		}
+	}
+
+	return mhsmm;
+}
+
 #define STATBUFLEN (6 * 1024)
-static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
+static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 {
 	struct api_data *root = NULL;
-	struct avalon7_info *info = cgpu->device_data;
+	struct avalon7_info *info = avalon7->device_data;
 	int i, j, k;
 	uint32_t a, b;
 	double hwp;
 	char buf[256];
 	char statbuf[STATBUFLEN];
 	struct timeval current;
+	float mhsmm;
 
 	cgtime(&current);
 	for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
@@ -1634,7 +1638,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
 			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " PLL%d[", j);
 				strcat(statbuf, buf);
-				for (k = 0; k < AVA7_DEFAULT_PLL_CNT - 1; k++) {
+				for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++) {
 					sprintf(buf, "%d ", info->pll_info[i][j][k]);
 					strcat(statbuf, buf);
 				}
@@ -1643,7 +1647,8 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
 			}
 		}
 
-		sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)info->get_frequency[i] / 1000 * info->total_asics[i], (float)info->get_frequency[i] / 1000);
+		mhsmm = avalon7_hash_cal(avalon7, i);
+		sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)mhsmm / 1000, (float)mhsmm / AVA7_ASIC_CONST);
 		strcat(statbuf, buf);
 
 		sprintf(buf, " PG[%d]", info->pg[i]);
@@ -1947,7 +1952,7 @@ static void avalon7_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	int fanmin = AVA7_DEFAULT_FAN_MAX;
 	int i;
 	uint32_t frequency = 0;
-	float ghs_sum = 0.0;
+	float ghs_sum = 0, mhsmm = 0;
 
 	for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
@@ -1959,13 +1964,15 @@ static void avalon7_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		if (temp < get_temp_max(info, i))
 			temp = get_temp_max(info, i);
 
-		frequency += info->get_frequency[i];
-		ghs_sum += ((float)info->get_frequency[i] / 1000 * info->total_asics[i]);
+		mhsmm = avalon7_hash_cal(avalon7, i);
+		frequency += (mhsmm / AVA7_ASIC_CONST);
+		ghs_sum += (mhsmm / 1000);
 	}
 
 	if (info->mm_count)
 		frequency /= info->mm_count;
-	tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS %2dC %3d%%", frequency / 96,
+
+	tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS %2dC %3d%%", frequency,
 			ghs_sum, temp, fanmin);
 }
 
