@@ -1645,7 +1645,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)info->get_frequency[i] / 1000 * info->total_asics[i], (float)info->get_frequency[i] / 1000);
 		strcat(statbuf, buf);
 
-		sprintf(buf, " PG[%x]", info->pg[i]);
+		sprintf(buf, " PG[%d]", info->pg[i]);
 		strcat(statbuf, buf);
 
 		sprintf(buf, " Led[%d]", info->led_red[i]);
