@@ -1649,8 +1649,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 					sprintf(buf, "%d ", info->pll_info[i][j][k]);
 					strcat(statbuf, buf);
 				}
-				sprintf(buf, "%d]", info->pll_info[i][j][k]);
-				strcat(statbuf, buf);
+				statbuf[strlen(statbuf) - 1] = ']';
 			}
 		}
 
