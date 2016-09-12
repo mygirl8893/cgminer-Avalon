@@ -353,6 +353,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	case AVA7_P_STATUS_M:
 		/* TODO: decode ntc vin led from PMU */
 		info->pg[modular_id] = ar->data[16];
+		for (i = 0; i < AVA7_DEFAULT_PMU_CNT; i++) {
+			memcpy(&info->pmu_version[modular_id][i], ar->data + 24 + (i * 4), 4);
+			info->pmu_version[modular_id][i][4] = '\0';
+		}
 		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_M", avalon7->drv->name, avalon7->device_id, modular_id);
 		break;
 	case AVA7_P_STATUS_VOLT:
@@ -1687,6 +1691,13 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 					info->set_frequency[i][1],
 					info->set_frequency[i][2]);
 			strcat(statbuf, buf);
+
+			strcat(statbuf, " PMUV[");
+			for (j = 0; j < AVA7_DEFAULT_PMU_CNT; j++) {
+				sprintf(buf, "%s ", info->pmu_version[i][j]);
+				strcat(statbuf, buf);
+			}
+			statbuf[strlen(statbuf) - 1] = ']';
 		}
 
 		sprintf(buf, " FM[%d]", info->freq_mode[i]);

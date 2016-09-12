@@ -33,6 +33,7 @@
 #define AVA7_DEFAULT_MINER_MAX	8
 #define AVA7_DEFAULT_ASIC_MAX	40
 #define AVA7_DEFAULT_PLL_CNT	6
+#define AVA7_DEFAULT_PMU_CNT	2
 
 #define AVA7_MM711_MINER_CNT	4
 #define AVA7_MM711_ASIC_CNT	18
@@ -223,6 +224,7 @@ struct avalon7_info {
 	int polling_err_cnt[AVA7_DEFAULT_MODULARS];
 
 	uint8_t pg[AVA7_DEFAULT_MODULARS];
+	char pmu_version[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_PMU_CNT][5];
 };
 
 struct avalon7_iic_info {
