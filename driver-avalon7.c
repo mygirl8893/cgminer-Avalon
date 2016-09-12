@@ -233,7 +233,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	uint32_t nonce, nonce2, ntime, miner, chip_id, tmp;
 	uint8_t job_id[2];
 	int pool_no;
-	uint32_t volt, i;
+	uint32_t i;
 
 	if (ar->head[0] != AVA7_H1 && ar->head[1] != AVA7_H2) {
 		applog(LOG_DEBUG, "%s-%d-%d: H1 %02x, H2 %02x",
@@ -361,8 +361,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		break;
 	case AVA7_P_STATUS_VOLT:
 		for (i = 0; i < info->miner_count[modular_id]; i++) {
-			memcpy(&volt, ar->data + i * 4, 4);
-			info->get_voltage[modular_id][i] = decode_voltage(info, modular_id, be32toh(volt));
+			memcpy(&tmp, ar->data + i * 4, 4);
+			info->get_voltage[modular_id][i] = decode_voltage(info, modular_id, be32toh(tmp));
 		}
 		break;
 	case AVA7_P_STATUS_FREQ:
@@ -1633,10 +1633,13 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		sprintf(buf, " Fan[%d]", info->fan_cpm[i]);
 		strcat(statbuf, buf);
 
+		sprintf(buf, " Vo[");
+		strcat(statbuf, buf);
 		for (j = 0; j < info->miner_count[i]; j++) {
-			sprintf(buf, " Vo%d[%d]", j, info->get_voltage[i][j]);
+			sprintf(buf, "%d ", info->get_voltage[i][j]);
 			strcat(statbuf, buf);
 		}
+		statbuf[strlen(statbuf) - 1] = ']';
 
 		if (opt_debug) {
 			for (j = 0; j < info->miner_count[i]; j++) {
