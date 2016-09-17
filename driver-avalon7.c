@@ -349,6 +349,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 			memcpy(&tmp, ar->data + 16, 4);
 			info->error_code[modular_id][ar->idx - 1] = be32toh(tmp);
 		}
+		memcpy(&tmp, ar->data + 20, 4);
+		info->error_crc[modular_id] = be32toh(tmp);
 		break;
 	case AVA7_P_STATUS_M:
 		/* TODO: decode ntc vin led from PMU */
@@ -1554,12 +1556,9 @@ static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)
 		for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
 			tmp_freq[j] = info->get_frequency[modular_id][i];
 
-		avalon7_freq_dec(avalon7, modular_id, 1, &tmp_freq[0], 132);
 		mhsmm += info->pll_info[modular_id][i][0] * tmp_freq[0];
-		for (j = 1; j < AVA7_DEFAULT_PLL_CNT; j++) {
-			avalon7_freq_dec(avalon7, modular_id, 1, &tmp_freq[j], (AVA7_DEFAULT_PLL_CNT - 1 - j) * 24);
+		for (j = 1; j < AVA7_DEFAULT_PLL_CNT; j++)
 			mhsmm += (info->pll_info[modular_id][i][j] * tmp_freq[j]);
-		}
 	}
 
 	return mhsmm;
@@ -1703,6 +1702,9 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		}
 
 		sprintf(buf, " FM[%d]", info->freq_mode[i]);
+		strcat(statbuf, buf);
+
+		sprintf(buf, " CRC[%d]", info->error_crc[i]);
 		strcat(statbuf, buf);
 
 		sprintf(buf, "MM ID%d", i);
