@@ -348,9 +348,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 
 			memcpy(&tmp, ar->data + 16, 4);
 			info->error_code[modular_id][ar->idx - 1] = be32toh(tmp);
+			memcpy(&tmp, ar->data + 20, 4);
+			info->error_crc[modular_id][ar->idx - 1] = be32toh(tmp);
 		}
-		memcpy(&tmp, ar->data + 20, 4);
-		info->error_crc[modular_id] = be32toh(tmp);
 		break;
 	case AVA7_P_STATUS_M:
 		/* TODO: decode ntc vin led from PMU */
@@ -1704,8 +1704,12 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		sprintf(buf, " FM[%d]", info->freq_mode[i]);
 		strcat(statbuf, buf);
 
-		sprintf(buf, " CRC[%d]", info->error_crc[i]);
-		strcat(statbuf, buf);
+		strcat(statbuf, " CRC[");
+		for (j = 0; j < info->miner_count[i]; j++) {
+			sprintf(buf, "%d ", info->error_crc[i][j]);
+			strcat(statbuf, buf);
+		}
+		statbuf[strlen(statbuf) - 1] = ']';
 
 		sprintf(buf, "MM ID%d", i);
 		root = api_add_string(root, buf, statbuf, true);
