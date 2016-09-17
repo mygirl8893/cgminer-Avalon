@@ -109,6 +109,8 @@
 #define AVA7_P_STATUS_FREQ	0x47
 #define AVA7_P_STATUS_M	0x48
 #define AVA7_P_STATUS_PLL	0x49
+#define AVA7_P_STATUS_LOG	0x4a
+
 
 #define AVA7_MODULE_BROADCAST	0
 /* Endof avalon7 protocol package type */
