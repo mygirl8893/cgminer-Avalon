@@ -330,26 +330,28 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		tmp = be32toh(tmp);
 		info->fan_cpm[modular_id] = tmp;
 
-		if (!ar->idx) {
+		info->local_works[modular_id] = 0;
+		info->hw_works[modular_id]  = 0;
+		for (i = 0; i < ar->cnt; i++) {
+			info->local_works[modular_id] += info->local_works_i[modular_id][i];
+			info->hw_works[modular_id] += info->hw_works_i[modular_id][i];
+		}
+
+		{
 			memcpy(&tmp, ar->data + 8, 4);
-			info->local_works[modular_id] += be32toh(tmp);
+			info->local_works_i[modular_id][ar->idx] += be32toh(tmp);
 
 			memcpy(&tmp, ar->data + 12, 4);
-			info->hw_works[modular_id] += be32toh(tmp);
+			info->hw_works_i[modular_id][ar->idx] += be32toh(tmp);
 
 			memcpy(&tmp, ar->data + 16, 4);
-			info->error_code[modular_id][ar->cnt] = be32toh(tmp);
-		} else {
-			memcpy(&tmp, ar->data + 8, 4);
-			info->local_works_i[modular_id][ar->idx - 1] += be32toh(tmp);
+			info->error_code[modular_id][ar->idx] = be32toh(tmp);
 
-			memcpy(&tmp, ar->data + 12, 4);
-			info->hw_works_i[modular_id][ar->idx - 1] += be32toh(tmp);
-
-			memcpy(&tmp, ar->data + 16, 4);
-			info->error_code[modular_id][ar->idx - 1] = be32toh(tmp);
 			memcpy(&tmp, ar->data + 20, 4);
-			info->error_crc[modular_id][ar->idx - 1] = be32toh(tmp);
+			info->error_code[modular_id][ar->cnt] = be32toh(tmp);
+
+			memcpy(&tmp, ar->data + 24, 4);
+			info->error_crc[modular_id][ar->idx] = be32toh(tmp);
 		}
 		break;
 	case AVA7_P_STATUS_M:
