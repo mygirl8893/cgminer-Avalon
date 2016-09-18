@@ -90,7 +90,6 @@
 #define AVA7_P_SET	0x20
 #define AVA7_P_FINISH	0x21
 #define AVA7_P_SET_VOLT 0x22
-#define AVA7_P_SET_FREQ 0x23
 #define AVA7_P_SET_PMU	0x24
 #define AVA7_P_SET_PLL  0x25
 
@@ -109,7 +108,6 @@
 #define AVA7_P_STATUS_LW        0x44
 #define AVA7_P_STATUS_HW        0x45
 #define AVA7_P_STATUS_VOLT	0x46
-#define AVA7_P_STATUS_FREQ	0x47
 #define AVA7_P_STATUS_M	0x48
 #define AVA7_P_STATUS_PLL	0x49
 #define AVA7_P_STATUS_LOG	0x4a
@@ -207,7 +205,6 @@ struct avalon7_info {
 
 	uint32_t freq_mode[AVA7_DEFAULT_MODULARS];
 	uint32_t set_frequency[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
-	uint32_t get_frequency[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 
 	int led_red[AVA7_DEFAULT_MODULARS];
 	uint8_t cutoff[AVA7_DEFAULT_MODULARS];

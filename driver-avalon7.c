@@ -512,12 +512,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 			info->get_voltage[modular_id][i] = decode_voltage(info, modular_id, be32toh(tmp));
 		}
 		break;
-	case AVA7_P_STATUS_FREQ:
-		for (i = 0; i < info->miner_count[modular_id]; i++) {
-			memcpy(&tmp, ar->data + i * 4, 4);
-			info->get_frequency[modular_id][i] = be32toh(tmp);
-		}
-		break;
 	case AVA7_P_STATUS_PLL:
 		for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
 			memcpy(&tmp, ar->data + i * 4, 4);
@@ -1182,7 +1176,6 @@ static void detect_modules(struct cgpu_info *avalon7)
 		for (j = 0; j < info->miner_count[i]; j++) {
 			info->set_voltage[i][j] = opt_avalon7_voltage_min;
 			info->get_voltage[i][j] = 0;
-			info->get_frequency[i][j] = 0;
 		}
 
 		info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
@@ -1706,7 +1699,7 @@ static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)
 	mhsmm = 0;
 	for (i = 0; i < info->miner_count[modular_id]; i++) {
 		for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
-			tmp_freq[j] = info->get_frequency[modular_id][i];
+			tmp_freq[j] = info->set_frequency[modular_id][i];
 
 		mhsmm += info->pll_info[modular_id][i][0] * tmp_freq[0];
 		for (j = 1; j < AVA7_DEFAULT_PLL_CNT; j++)
@@ -1839,11 +1832,12 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		strcat(statbuf, buf);
 
 		if (opt_debug) {
-			sprintf(buf, " SF[%d %d %d]",
-					info->set_frequency[i][0],
-					info->set_frequency[i][1],
-					info->set_frequency[i][2]);
-			strcat(statbuf, buf);
+			strcat(statbuf, " SF[");
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, "%d ", info->set_frequency[i][j]);
+				strcat(statbuf, buf);
+			}
+			statbuf[strlen(statbuf) - 1] = ']';
 
 			strcat(statbuf, " PMUV[");
 			for (j = 0; j < AVA7_DEFAULT_PMU_CNT; j++) {
