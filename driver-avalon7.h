@@ -86,35 +86,35 @@
 #define AVA7_P_HEADER	0x15
 #define AVA7_P_TARGET	0x16
 
-/* Broadcase or Address */
+/* ss package */
+#define AVA7_P_MID	0xa7
+
+/* Broadcase or with I2C address */
 #define AVA7_P_SET	0x20
 #define AVA7_P_FINISH	0x21
-#define AVA7_P_SET_VOLT 0x22
+#define AVA7_P_SET_VOLT	0x22
 #define AVA7_P_SET_PMU	0x24
-#define AVA7_P_SET_PLL  0x25
+#define AVA7_P_SET_PLL	0x25
 
-/* Have to with I2C address */
+/* Have to send with I2C address */
 #define AVA7_P_POLLING	0x30
 #define AVA7_P_REQUIRE	0x31
 #define AVA7_P_TEST	0x32
 #define AVA7_P_RSTMMTX	0x33
-#define AVA7_P_GET_VOLT 0x34
+#define AVA7_P_GET_VOLT	0x34
 
 /* Back to host */
 #define AVA7_P_ACKDETECT	0x40
 #define AVA7_P_STATUS		0x41
 #define AVA7_P_NONCE		0x42
 #define AVA7_P_TEST_RET		0x43
-#define AVA7_P_STATUS_LW        0x44
-#define AVA7_P_STATUS_HW        0x45
 #define AVA7_P_STATUS_VOLT	0x46
-#define AVA7_P_STATUS_M	0x48
+#define AVA7_P_STATUS_PMU	0x48
 #define AVA7_P_STATUS_PLL	0x49
 #define AVA7_P_STATUS_LOG	0x4a
 
-
 #define AVA7_MODULE_BROADCAST	0
-/* Endof avalon7 protocol package type */
+/* End of avalon7 protocol package type */
 
 #define AVA7_MM711_PREFIXSTR	"711"
 #define AVA7_MM_VERNULL		"NONE"
