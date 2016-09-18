@@ -25,7 +25,8 @@ int opt_avalon7_fan_max = AVA7_DEFAULT_FAN_MAX;
 
 int opt_avalon7_voltage_min = AVA7_DEFAULT_VOLTAGE_MIN;
 int opt_avalon7_voltage_max = AVA7_DEFAULT_VOLTAGE_MAX;
-int opt_avalon7_freq = AVA7_DEFAULT_FREQUENCY_MIN;
+int opt_avalon7_freq = AVA7_DEFAULT_FREQUENCY;
+int opt_avalon7_freq_sel = AVA7_DEFAULT_FREQUENCY_SEL;
 
 int opt_avalon7_polling_delay = AVA7_DEFAULT_POLLING_DELAY;
 
@@ -1403,7 +1404,8 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, unsigned int f
 	uint32_t tmp;
 	uint8_t i;
 
-	send_pkg.idx = 0; 	/* For broadcast to all miners */
+	send_pkg.idx = 0; 	/* TODO: This is only for broadcast to all miners
+				 * This should be support 4 miners */
 	send_pkg.cnt = info->miner_count[addr];
 
 	memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
@@ -1411,9 +1413,13 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, unsigned int f
 		tmp = be32toh(api_get_cpm(freq[0]));
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
+
+	tmp = be32toh(opt_avalon7_freq_sel);
+	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4, &tmp, 4);
+
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %d, (%d-%d)",
 			avalon7->drv->name, avalon7->device_id, addr,
-			i, freq[0], freq[info->miner_count[addr] - 1]);
+			0, freq[0], freq[info->miner_count[addr] - 1]);
 
 	/* Package the data */
 	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, 1, 1);

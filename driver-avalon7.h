@@ -29,7 +29,9 @@
 #define AVA7_DEFAULT_VOLTAGE_MAX	5059
 
 #define AVA7_DEFAULT_FREQUENCY_MIN	24
+#define AVA7_DEFAULT_FREQUENCY		504
 #define AVA7_DEFAULT_FREQUENCY_MAX	1404
+#define AVA7_DEFAULT_FREQUENCY_SEL	3
 
 #define AVA7_DEFAULT_MODULARS	7	/* Only support 6 modules maximum with one AUC */
 #define AVA7_DEFAULT_MINER_CNT	4
@@ -266,5 +268,6 @@ extern int opt_avalon7_freqadj_time;
 extern int opt_avalon7_delta_temp;
 extern int opt_avalon7_delta_freq;
 extern int opt_avalon7_freqadj_temp;
+extern int opt_avalon7_freq_sel;
 #endif /* USE_AVALON7 */
 #endif	/* _AVALON7_H_ */
