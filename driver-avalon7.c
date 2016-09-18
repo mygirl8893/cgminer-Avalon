@@ -45,6 +45,148 @@ int opt_avalon7_delta_temp = AVA7_DEFAULT_DELTA_T;
 int opt_avalon7_delta_freq = AVA7_DEFAULT_DELTA_FREQ;
 int opt_avalon7_freqadj_temp = AVA7_MM711_TEMP_FREQADJ;
 
+static struct avalon7_freq_table freq_list[] = {
+	{24	,127,	7},
+	{36	,191,	7},
+	{48	,127,	6},
+	{60	,159,	6},
+	{72	,191,	6},
+	{84	,223,	6},
+	{96	,127,	5},
+	{108	,143,	5},
+	{120	,159,	5},
+	{132	,175,	5},
+	{144	,191,	5},
+	{156	,207,	5},
+	{168	,223,	5},
+	{180	,239,	5},
+	{192	,127,	4},
+	{204	,135,	4},
+	{216	,143,	4},
+	{228	,151,	4},
+	{240	,159,	4},
+	{252	,167,	4},
+	{264	,175,	4},
+	{276	,183,	4},
+	{288	,191,	4},
+	{300	,199,	4},
+	{312	,207,	4},
+	{324	,215,	4},
+	{336	,223,	4},
+	{348	,231,	4},
+	{360	,239,	4},
+	{372	,247,	4},
+	{384	,127,	3},
+	{396	,131,	3},
+	{408	,135,	3},
+	{420	,139,	3},
+	{432	,143,	3},
+	{444	,147,	3},
+	{456	,151,	3},
+	{468	,155,	3},
+	{480	,159,	3},
+	{492	,163,	3},
+	{504	,167,	3},
+	{516	,171,	3},
+	{528	,175,	3},
+	{540	,179,	3},
+	{552	,183,	3},
+	{564	,187,	3},
+	{576	,191,	3},
+	{588	,195,	3},
+	{600	,199,	3},
+	{612	,203,	3},
+	{624	,207,	3},
+	{636	,211,	3},
+	{648	,215,	3},
+	{660	,219,	3},
+	{672	,223,	3},
+	{684	,227,	3},
+	{696	,231,	3},
+	{708	,235,	3},
+	{720	,239,	3},
+	{732	,243,	3},
+	{744	,247,	3},
+	{756	,125,	2},
+	{768	,127,	2},
+	{780	,129,	2},
+	{792	,131,	2},
+	{804	,133,	2},
+	{816	,135,	2},
+	{828	,137,	2},
+	{840	,139,	2},
+	{852	,141,	2},
+	{864	,143,	2},
+	{876	,145,	2},
+	{888	,147,	2},
+	{900	,149,	2},
+	{912	,151,	2},
+	{924	,153,	2},
+	{936	,155,	2},
+	{948	,157,	2},
+	{960	,159,	2},
+	{972	,161,	2},
+	{984	,163,	2},
+	{996	,165,	2},
+	{1008	,167,	2},
+	{1020	,169,	2},
+	{1032	,171,	2},
+	{1044	,173,	2},
+	{1056	,175,	2},
+	{1068	,177,	2},
+	{1080	,179,	2},
+	{1092	,181,	2},
+	{1104	,183,	2},
+	{1116	,185,	2},
+	{1128	,187,	2},
+	{1140	,189,	2},
+	{1152	,191,	2},
+	{1164	,193,	2},
+	{1176	,195,	2},
+	{1188	,197,	2},
+	{1200	,199,	2},
+	{1212	,201,	2},
+	{1224	,203,	2},
+	{1236	,205,	2},
+	{1248	,207,	2},
+	{1260	,209,	2},
+	{1272	,211,	2},
+	{1284	,213,	2},
+	{1296	,215,	2},
+	{1308	,217,	2},
+	{1320	,219,	2},
+	{1332	,221,	2},
+	{1344	,223,	2},
+	{1356	,225,	2},
+	{1368	,227,	2},
+	{1380	,229,	2},
+	{1392	,231,	2},
+	{1404	,233,	2},
+};
+
+static uint32_t api_get_cpm(uint32_t freq)
+{
+	uint32_t cpm = 0;
+	uint32_t range = 2;	/* For 12M clock. 3: for others */
+	uint32_t divf, divq;
+	uint16_t offset;
+
+	cpm |= 1;
+	if (!freq)
+		return (1 << 26 | 1);
+
+	cpm |= (1 << 1) | (1 << 4) | (range << 23);
+
+	offset = (freq / 12 - 2);
+	divf = freq_list[offset].divf;
+	divq = freq_list[offset].divq;
+
+	cpm |= ((divf & 0x1ff) << 11);
+	cpm |= ((divq & 7) << 20);
+
+	return cpm;
+}
+
 static uint32_t encode_voltage(uint32_t volt)
 {
 	if (volt > AVA7_DEFAULT_VOLTAGE_MAX)
@@ -1025,7 +1167,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 
 		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM711_PREFIXSTR, 3)) {
 			info->mod_type[i] = AVA7_TYPE_MM711;
-			info->miner_count[i] = AVA7_MM711_MINER_CNT;
+			info->miner_count[i] = AVA7_DEFAULT_MINER_CNT;
 			info->asic_count[i] = AVA7_MM711_ASIC_CNT;
 			info->toverheat[i] = opt_avalon7_overheat;
 			if (info->toverheat[i] > AVA7_DEFAULT_TEMP_OVERHEAT)
@@ -1261,10 +1403,12 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, unsigned int f
 	uint32_t tmp;
 	uint8_t i;
 
+	send_pkg.idx = 0; 	/* For broadcast to all miners */
+	send_pkg.cnt = info->miner_count[addr];
+
 	memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
-	/* FIXME: miner_count should <= 8 */
-	for (i = 0; i < info->miner_count[addr]; i++) {
-		tmp = be32toh(freq[i]);
+	for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
+		tmp = be32toh(api_get_cpm(freq[0]));
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %d, (%d-%d)",
@@ -1272,7 +1416,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, unsigned int f
 			i, freq[0], freq[info->miner_count[addr] - 1]);
 
 	/* Package the data */
-	avalon7_init_pkg(&send_pkg, AVA7_P_SET_FREQ, 1, 1);
+	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, 1, 1);
 
 	if (addr == AVA7_MODULE_BROADCAST)
 		avalon7_send_bc_pkgs(avalon7, &send_pkg);
