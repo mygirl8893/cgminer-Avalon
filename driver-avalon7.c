@@ -518,6 +518,38 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 			info->get_pll[modular_id][ar->idx][i] = be32toh(tmp);
 		}
 		break;
+	case AVA7_P_STATUS_ASIC:
+		{
+		    	int x_miner_id;
+			int x_asic_id;
+
+			x_miner_id = ar->idx / AVA7_MM711_ASIC_CNT;
+			x_asic_id  = ar->idx % AVA7_MM711_ASIC_CNT;
+
+			memcpy(&tmp, ar->data + 0, 4);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][0] = be32toh(tmp);
+			memcpy(&tmp, ar->data + 4, 4);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][1] = be32toh(tmp);
+			memcpy(&tmp, ar->data + 8, 4);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][2] = be32toh(tmp);
+			memcpy(&tmp, ar->data + 12, 4);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][3] = be32toh(tmp);
+			memcpy(&tmp, ar->data + 16, 4);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][4] = be32toh(tmp);
+			tmp = *(ar->data + 20);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][5] = tmp;
+			tmp = *(ar->data + 21);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][6] = tmp;
+			tmp = *(ar->data + 22);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][7] = tmp;
+			tmp = *(ar->data + 23);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][8] = tmp;
+			tmp = *(ar->data + 24);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][9] = tmp;
+			tmp = *(ar->data + 25);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][10] = tmp;
+		}
+		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d-%d: Unknown response", avalon7->drv->name, avalon7->device_id, modular_id);
 		break;
