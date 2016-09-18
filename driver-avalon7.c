@@ -354,7 +354,7 @@ static inline uint32_t adjust_fan(struct avalon7_info *info, int id)
 		(info->freq_mode[id] == AVA7_FREQ_TEMPADJ_MODE))
 		pwm = get_fan_pwm(opt_avalon7_fan_max);
 
-	if (info->cutoff[id])
+	if (info->temp_cutoff[id])
 		pwm = get_fan_pwm(opt_avalon7_fan_max);
 
 	applog(LOG_DEBUG, "[%d], Adjust_fan: %dC-%d%%(%03x)", id, t, info->fan_pct[id], pwm);
@@ -424,10 +424,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		       avalon7->drv->name, avalon7->device_id, modular_id,
 		       pool_no, nonce2, nonce, ntime,
 		       miner,
-		       info->chipmatching_work[modular_id][miner][0],
-		       info->chipmatching_work[modular_id][miner][1],
-		       info->chipmatching_work[modular_id][miner][2],
-		       info->chipmatching_work[modular_id][miner][3]);
+		       info->chip_matching_work[modular_id][miner][0],
+		       info->chip_matching_work[modular_id][miner][1],
+		       info->chip_matching_work[modular_id][miner][2],
+		       info->chip_matching_work[modular_id][miner][3]);
 
 		real_pool = pool = pools[pool_no];
 		if (job_idcmp(job_id, pool->swork.job_id)) {
@@ -459,7 +459,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		if (!submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime))
 			info->hw_works_i[modular_id][miner]++;
 		else
-			info->chipmatching_work[modular_id][miner][chip_id]++;
+			info->chip_matching_work[modular_id][miner][chip_id]++;
 		break;
 	case AVA7_P_STATUS:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS", avalon7->drv->name, avalon7->device_id, modular_id);
@@ -499,7 +499,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		break;
 	case AVA7_P_STATUS_M:
 		/* TODO: decode ntc vin led from PMU */
-		info->pg[modular_id] = ar->data[16];
+		info->pmu_good[modular_id] = ar->data[16];
 		for (i = 0; i < AVA7_DEFAULT_PMU_CNT; i++) {
 			memcpy(&info->pmu_version[modular_id][i], ar->data + 24 + (i * 4), 4);
 			info->pmu_version[modular_id][i][4] = '\0';
@@ -515,7 +515,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	case AVA7_P_STATUS_PLL:
 		for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
 			memcpy(&tmp, ar->data + i * 4, 4);
-			info->pll_info[modular_id][ar->idx][i] = be32toh(tmp);
+			info->get_pll[modular_id][ar->idx][i] = be32toh(tmp);
 		}
 		break;
 	default:
@@ -1164,9 +1164,9 @@ static void detect_modules(struct cgpu_info *avalon7)
 			info->mod_type[i] = AVA7_TYPE_MM711;
 			info->miner_count[i] = AVA7_DEFAULT_MINER_CNT;
 			info->asic_count[i] = AVA7_MM711_ASIC_CNT;
-			info->toverheat[i] = opt_avalon7_overheat;
-			if (info->toverheat[i] > AVA7_DEFAULT_TEMP_OVERHEAT)
-				info->toverheat[i] = AVA7_DEFAULT_TEMP_OVERHEAT;
+			info->temp_overheat[i] = opt_avalon7_overheat;
+			if (info->temp_overheat[i] > AVA7_DEFAULT_TEMP_OVERHEAT)
+				info->temp_overheat[i] = AVA7_DEFAULT_TEMP_OVERHEAT;
 
 			info->temp_target[i] = opt_avalon7_temp_target;
 			if (info->temp_target[i] > AVA7_DEFAULT_TEMP_TARGET)
@@ -1181,21 +1181,21 @@ static void detect_modules(struct cgpu_info *avalon7)
 		info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
 		memset(info->set_frequency[i], 0, sizeof(unsigned int) * info->miner_count[i]);
 
-		info->led_red[i] = 0;
-		info->cutoff[i] = 0;
+		info->led_indicator[i] = 0;
+		info->temp_cutoff[i] = 0;
 		info->fan_cpm[i] = 0;
 		info->temp[i] = -273;
-		info->last_maxtemp[i] = -273;
+		info->temp_last_max[i] = -273;
 		info->local_works[i] = 0;
 		info->hw_works[i] = 0;
 		for (j = 0; j < info->miner_count[i]; j++) {
-			memset(info->chipmatching_work[i][j], 0, sizeof(int) * info->asic_count[i]);
+			memset(info->chip_matching_work[i][j], 0, sizeof(int) * info->asic_count[i]);
 			info->local_works_i[i][j] = 0;
 			info->hw_works_i[i][j] = 0;
 			info->error_code[i][j] = 0;
 		}
 		info->error_code[i][j] = 0;
-		info->polling_err_cnt[i] = 0;
+		info->error_polling_cnt[i] = 0;
 
 		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d]",
 		       avalon7->drv->name, avalon7->device_id, i);
@@ -1244,7 +1244,7 @@ static int polling(struct cgpu_info *avalon7)
 
 		memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
 		/* Red LED */
-		tmp = be32toh(info->led_red[i]);
+		tmp = be32toh(info->led_indicator[i]);
 		memcpy(send_pkg.data, &tmp, 4);
 
 		/* Adjust fan every 10 seconds*/
@@ -1261,16 +1261,16 @@ static int polling(struct cgpu_info *avalon7)
 			decode_err = decode_pkg(thr, &ar, i);
 
 		if (ret != AVA7_SEND_OK || decode_err) {
-			info->polling_err_cnt[i]++;
+			info->error_polling_cnt[i]++;
 			memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
 			avalon7_init_pkg(&send_pkg, AVA7_P_RSTMMTX, 1, 1);
 			avalon7_iic_xfer_pkg(avalon7, i, &send_pkg, NULL);
-			if (info->polling_err_cnt[i] >= 4)
+			if (info->error_polling_cnt[i] >= 4)
 				detach_module(avalon7, i);
 		}
 
 		if (ret == AVA7_SEND_OK && !decode_err) {
-			info->polling_err_cnt[i] = 0;
+			info->error_polling_cnt[i] = 0;
 
 			if ((ar.opt == AVA7_P_STATUS) &&
 				(info->mm_dna[i][AVA7_MM_DNA_LEN - 1] != ar.opt)) {
@@ -1577,7 +1577,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		if (freq_dec_check && (info->freq_mode[i] != AVA7_FREQ_TEMPADJ_MODE)) {
 			if (max_temp >= opt_avalon7_freqadj_temp) {
 				update_settings = true;
-				info->last_maxtemp[i] = max_temp;
+				info->temp_last_max[i] = max_temp;
 				avalon7_freq_dec(avalon7, i, 0, info->set_frequency[i], opt_avalon7_delta_freq + 50);
 				applog(LOG_DEBUG, "%s-%d-%d: set freq after temp check %d-%d",
 					avalon7->drv->name, avalon7->device_id, i,
@@ -1588,9 +1588,9 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		}
 
 		/* Enter too hot */
-		if (max_temp >= info->toverheat[i]) {
+		if (max_temp >= info->temp_overheat[i]) {
 			update_settings = true;
-			info->cutoff[i] = 1;
+			info->temp_cutoff[i] = 1;
 			info->polling_first = 1;
 			for (j = 0; j < info->miner_count[i]; j++)
 				info->set_frequency[i][j] = AVA7_DEFAULT_FREQUENCY_MIN;
@@ -1598,8 +1598,8 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		}
 
 		/* Exit too hot */
-		if (info->cutoff[i] && (max_temp <= (info->toverheat[i] - 10)))
-			info->cutoff[i] = 0;
+		if (info->temp_cutoff[i] && (max_temp <= (info->temp_overheat[i] - 10)))
+			info->temp_cutoff[i] = 0;
 
 		/* State machine for settings
 		 * https://en.bitcoin.it/wiki/Avalon6#Frequency_Statechart
@@ -1614,7 +1614,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 				info->freq_mode[i] = AVA7_FREQ_PLLADJ_MODE;
 				break;
 			case AVA7_FREQ_CUTOFF_MODE:
-				if (!info->cutoff[i]) {
+				if (!info->temp_cutoff[i]) {
 					update_settings = true;
 					for (j = 0; j < info->miner_count[i]; j++)
 						info->set_frequency[i][j] = opt_avalon7_freq;
@@ -1624,14 +1624,14 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 			case AVA7_FREQ_TEMPADJ_MODE:
 				if (freq_adj_check) {
 					/* if max_temp goes down ,then we don't need adjust frequency */
-					if (info->last_maxtemp[i] > max_temp) {
+					if (info->temp_last_max[i] > max_temp) {
 						applog(LOG_DEBUG, "AVA7_FREQ_TEMPADJ_MODE temp goes down");
-						info->last_maxtemp[i] = get_temp_max(info, i);
+						info->temp_last_max[i] = get_temp_max(info, i);
 						break;
 					}
 
 					update_settings = true;
-					info->last_maxtemp[i] = get_temp_max(info, i);
+					info->temp_last_max[i] = get_temp_max(info, i);
 					avalon7_freq_dec(avalon7, i, 0, info->set_frequency[i], opt_avalon7_delta_freq);
 					applog(LOG_DEBUG, "%s-%d-%d: update freq (%d-%d) AVA7_FREQ_PLLADJ_MODE",
 							avalon7->drv->name, avalon7->device_id, i,
@@ -1698,12 +1698,10 @@ static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)
 
 	mhsmm = 0;
 	for (i = 0; i < info->miner_count[modular_id]; i++) {
-		for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
-			tmp_freq[j] = info->set_frequency[modular_id][i];
+		tmp_freq[i] = info->set_frequency[modular_id][i];
 
-		mhsmm += info->pll_info[modular_id][i][0] * tmp_freq[0];
-		for (j = 1; j < AVA7_DEFAULT_PLL_CNT; j++)
-			mhsmm += (info->pll_info[modular_id][i][j] * tmp_freq[j]);
+		for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
+			mhsmm += (info->get_pll[modular_id][i][j] * tmp_freq[j]);
 	}
 
 	return mhsmm;
@@ -1790,7 +1788,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 				sprintf(buf, " PLL%d[", j);
 				strcat(statbuf, buf);
 				for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++) {
-					sprintf(buf, "%d ", info->pll_info[i][j][k]);
+					sprintf(buf, "%d ", info->get_pll[i][j][k]);
 					strcat(statbuf, buf);
 				}
 				statbuf[strlen(statbuf) - 1] = ']';
@@ -1801,17 +1799,17 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)mhsmm / 1000, (float)mhsmm / AVA7_ASIC_CONST);
 		strcat(statbuf, buf);
 
-		sprintf(buf, " PG[%d]", info->pg[i]);
+		sprintf(buf, " PG[%d]", info->pmu_good[i]);
 		strcat(statbuf, buf);
 
-		sprintf(buf, " Led[%d]", info->led_red[i]);
+		sprintf(buf, " Led[%d]", info->led_indicator[i]);
 		strcat(statbuf, buf);
 
 		for (j = 0; j < info->miner_count[i]; j++) {
 			sprintf(buf, " MW%d[", j);
 			strcat(statbuf, buf);
 			for (k = 0; k < info->asic_count[i]; k++) {
-				sprintf(buf, "%d ", info->chipmatching_work[i][j][k]);
+				sprintf(buf, "%d ", info->chip_matching_work[i][j][k]);
 				strcat(statbuf, buf);
 			}
 
@@ -2079,20 +2077,20 @@ static char *avalon7_set_device(struct cgpu_info *avalon7, char *option, char *s
 		}
 
 		if (val_led == -1)
-			info->led_red[val] = !info->led_red[val];
+			info->led_indicator[val] = !info->led_indicator[val];
 		else {
 			if (val_led < 0 || val_led > 1) {
 				sprintf(replybuf, "invalid LED status: %d, valid value 0|1", val_led);
 				return replybuf;
 			}
 
-			if (val_led != info->led_red[val])
-				info->led_red[val] = val_led;
+			if (val_led != info->led_indicator[val])
+				info->led_indicator[val] = val_led;
 		}
 
 		applog(LOG_NOTICE, "%s-%d: Module:%d, LED: %s",
 				avalon7->drv->name, avalon7->device_id,
-				val, info->led_red[val] ? "on" : "off");
+				val, info->led_indicator[val] ? "on" : "off");
 
 		return NULL;
 	}
