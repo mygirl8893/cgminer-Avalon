@@ -456,29 +456,21 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		tmp = be32toh(tmp);
 		info->fan_cpm[modular_id] = tmp;
 
-		info->local_works[modular_id] = 0;
-		info->hw_works[modular_id]  = 0;
-		for (i = 0; i < ar->cnt; i++) {
-			info->local_works[modular_id] += info->local_works_i[modular_id][i];
-			info->hw_works[modular_id] += info->hw_works_i[modular_id][i];
-		}
+		memcpy(&tmp, ar->data + 8, 4);
+		info->local_works_i[modular_id][ar->idx] += be32toh(tmp);
 
-		{
-			memcpy(&tmp, ar->data + 8, 4);
-			info->local_works_i[modular_id][ar->idx] += be32toh(tmp);
+		memcpy(&tmp, ar->data + 12, 4);
+		info->hw_works_i[modular_id][ar->idx] += be32toh(tmp);
 
-			memcpy(&tmp, ar->data + 12, 4);
-			info->hw_works_i[modular_id][ar->idx] += be32toh(tmp);
+		memcpy(&tmp, ar->data + 16, 4);
+		info->error_code[modular_id][ar->idx] = be32toh(tmp);
 
-			memcpy(&tmp, ar->data + 16, 4);
-			info->error_code[modular_id][ar->idx] = be32toh(tmp);
+		memcpy(&tmp, ar->data + 20, 4);
+		info->error_code[modular_id][ar->cnt] = be32toh(tmp);
 
-			memcpy(&tmp, ar->data + 20, 4);
-			info->error_code[modular_id][ar->cnt] = be32toh(tmp);
+		memcpy(&tmp, ar->data + 24, 4);
+		info->error_crc[modular_id][ar->idx] = be32toh(tmp);
 
-			memcpy(&tmp, ar->data + 24, 4);
-			info->error_crc[modular_id][ar->idx] = be32toh(tmp);
-		}
 		break;
 	case AVA7_P_STATUS_PMU:
 		/* TODO: decode ntc vin led from PMU */
@@ -1764,7 +1756,9 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		strcat(statbuf, buf);
 
 		strcat(statbuf, " MW[");
+		info->local_works[i] = 0;
 		for (j = 0; j < info->miner_count[i]; j++) {
+			info->local_works[i] += info->local_works_i[i][j];
 			sprintf(buf, "%"PRIu64" ", info->local_works_i[i][j]);
 			strcat(statbuf, buf);
 		}
@@ -1774,7 +1768,9 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		strcat(statbuf, buf);
 
 		strcat(statbuf, " MH[");
+		info->hw_works[i]  = 0;
 		for (j = 0; j < info->miner_count[i]; j++) {
+			info->hw_works[i] += info->hw_works_i[i][j];
 			sprintf(buf, "%"PRIu64" ", info->hw_works_i[i][j]);
 			strcat(statbuf, buf);
 		}
