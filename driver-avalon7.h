@@ -226,7 +226,7 @@ struct avalon7_info {
 	uint32_t error_crc[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	int error_polling_cnt[AVA7_DEFAULT_MODULARS];
 
-	uint8_t pmu_good[AVA7_DEFAULT_MODULARS];
+	uint8_t power_good[AVA7_DEFAULT_MODULARS];
 	char pmu_version[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_PMU_CNT][5];
 };
 
