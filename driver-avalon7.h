@@ -238,12 +238,6 @@ struct avalon7_iic_info {
 	} iic_param;
 };
 
-struct avalon7_freq_table {
-	uint32_t freq;
-	uint32_t divf;
-	uint32_t divq;
-};
-
 #define AVA7_WRITE_SIZE (sizeof(struct avalon7_pkg))
 #define AVA7_READ_SIZE AVA7_WRITE_SIZE
 
