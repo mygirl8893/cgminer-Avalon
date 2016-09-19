@@ -782,6 +782,11 @@ static char *set_int_1_to_65535(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 65535);
 }
 
+static char *set_int_0_to_5(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 5);
+}
+
 static char *set_int_0_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 10);
@@ -1336,7 +1341,7 @@ static struct opt_table opt_config_table[] = {
 		     set_avalon7_freq, NULL, &opt_set_avalon7_freq,
 		     "Set Avalon7 default frequency, range:[100, 500], step: 25, example: 500"),
 	OPT_WITH_CBARG("--avalon7-freq-sel",
-		     set_int_0_to_10, opt_show_intval, &opt_avalon7_freq_sel,
+		     set_int_0_to_5, opt_show_intval, &opt_avalon7_freq_sel,
 		     "Set Avalon7 default frequency pll, range:[0, 5], step: 1, example: 3"),
 	OPT_WITH_CBARG("--avalon7-fan",
 		     set_avalon7_fan, NULL, &opt_set_avalon7_fan,
@@ -5137,6 +5142,7 @@ void write_config(FILE *fcfg)
 			    ((void *)opt->cb_arg == (void *)opt_set_intval ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
 			     (void *)opt->cb_arg == (void *)set_int_1_to_65535 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_5 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
 			     (void *)opt->cb_arg == (void *)set_int_1_to_10 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
