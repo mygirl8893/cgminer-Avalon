@@ -499,20 +499,22 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		break;
 	case AVA7_P_STATUS_PMU:
 		/* TODO: decode ntc vin led from PMU */
+		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_PMU", avalon7->drv->name, avalon7->device_id, modular_id);
 		info->pmu_good[modular_id] = ar->data[16];
 		for (i = 0; i < AVA7_DEFAULT_PMU_CNT; i++) {
 			memcpy(&info->pmu_version[modular_id][i], ar->data + 24 + (i * 4), 4);
 			info->pmu_version[modular_id][i][4] = '\0';
 		}
-		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_M", avalon7->drv->name, avalon7->device_id, modular_id);
 		break;
 	case AVA7_P_STATUS_VOLT:
+		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_VOLT", avalon7->drv->name, avalon7->device_id, modular_id);
 		for (i = 0; i < info->miner_count[modular_id]; i++) {
 			memcpy(&tmp, ar->data + i * 4, 4);
 			info->get_voltage[modular_id][i] = decode_voltage(info, modular_id, be32toh(tmp));
 		}
 		break;
 	case AVA7_P_STATUS_PLL:
+		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_PLL", avalon7->drv->name, avalon7->device_id, modular_id);
 		for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
 			memcpy(&tmp, ar->data + i * 4, 4);
 			info->get_pll[modular_id][ar->idx][i] = be32toh(tmp);
@@ -526,6 +528,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 			x_miner_id = ar->idx / AVA7_MM711_ASIC_CNT;
 			x_asic_id  = ar->idx % AVA7_MM711_ASIC_CNT;
 
+			applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_ASIC %d-%d",
+					avalon7->drv->name, avalon7->device_id, modular_id,
+					x_miner_id, x_asic_id);
 			memcpy(&tmp, ar->data + 0, 4);
 			info->get_asic[modular_id][x_miner_id][x_asic_id][0] += be32toh(tmp);
 			memcpy(&tmp, ar->data + 4, 4);
