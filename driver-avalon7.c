@@ -497,7 +497,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		break;
 	case AVA7_P_STATUS_ASIC:
 		{
-		    	int x_miner_id;
+			int x_miner_id;
 			int x_asic_id;
 
 			x_miner_id = ar->idx / AVA7_MM711_ASIC_CNT;
@@ -1424,7 +1424,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, unsigned int f
 
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %d, (%d-%d)",
 			avalon7->drv->name, avalon7->device_id, addr,
-			0, freq[0], freq[info->miner_count[addr] - 1]);
+			send_pkg.idx, freq[0], freq[info->miner_count[addr] - 1]);
 
 	/* Package the data */
 	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, 1, 1);
@@ -1539,7 +1539,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 	double device_tdiff;
 	int64_t h;
 	int i, j, count = 0;
-	int max_temp;
+	int temp_max;
 	bool update_settings = false;
 	bool freq_dec_check = false;
 	bool freq_adj_check = false;
@@ -1583,13 +1583,13 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		update_settings = false;
 
 		/* Check temperautre */
-		max_temp = get_temp_max(info, i);
+		temp_max = get_temp_max(info, i);
 
 		/* Check if frequency need decrease */
 		if (freq_dec_check && (info->freq_mode[i] != AVA7_FREQ_TEMPADJ_MODE)) {
-			if (max_temp >= opt_avalon7_freqadj_temp) {
+			if (temp_max >= opt_avalon7_freqadj_temp) {
 				update_settings = true;
-				info->temp_last_max[i] = max_temp;
+				info->temp_last_max[i] = temp_max;
 				avalon7_freq_dec(avalon7, i, 0, info->set_frequency[i], opt_avalon7_delta_freq + 50);
 				applog(LOG_DEBUG, "%s-%d-%d: set freq after temp check %d-%d",
 					avalon7->drv->name, avalon7->device_id, i,
@@ -1600,7 +1600,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		}
 
 		/* Enter too hot */
-		if (max_temp >= info->temp_overheat[i]) {
+		if (temp_max >= info->temp_overheat[i]) {
 			update_settings = true;
 			info->temp_cutoff[i] = 1;
 			info->polling_first = 1;
@@ -1610,7 +1610,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		}
 
 		/* Exit too hot */
-		if (info->temp_cutoff[i] && (max_temp <= (info->temp_overheat[i] - 10)))
+		if (info->temp_cutoff[i] && (temp_max <= (info->temp_overheat[i] - 10)))
 			info->temp_cutoff[i] = 0;
 
 		/* State machine for settings
@@ -1635,8 +1635,8 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 				break;
 			case AVA7_FREQ_TEMPADJ_MODE:
 				if (freq_adj_check) {
-					/* if max_temp goes down ,then we don't need adjust frequency */
-					if (info->temp_last_max[i] > max_temp) {
+					/* if temp_max goes down ,then we don't need adjust frequency */
+					if (info->temp_last_max[i] > temp_max) {
 						applog(LOG_DEBUG, "AVA7_FREQ_TEMPADJ_MODE temp goes down");
 						info->temp_last_max[i] = get_temp_max(info, i);
 						break;
