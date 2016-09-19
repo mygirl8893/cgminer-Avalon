@@ -1713,7 +1713,7 @@ static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)
 		tmp_freq[i] = info->set_frequency[modular_id][i];
 
 		for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
-			mhsmm += (info->get_pll[modular_id][i][j] * tmp_freq[j]);
+			mhsmm += (info->get_pll[modular_id][i][j] * tmp_freq[i]);
 	}
 
 	return mhsmm;
