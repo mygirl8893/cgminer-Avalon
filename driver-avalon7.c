@@ -1345,6 +1345,7 @@ static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 
 static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 {
+	struct avalon7_info *info = avalon7->device_data;
 	struct avalon7_pkg send_pkg;
 	uint32_t tmp;
 
@@ -1352,7 +1353,8 @@ static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 
 	/* TODO:ss/ssp mode */
 
-	tmp = be32toh(opt_avalon7_ntime_offset);
+	tmp = (uint32_t)(AVA7_ASIC_TIMEOUT_CONST / info->miner_count[addr] / info->set_frequency[addr][0]);
+	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
 	/* adjust flag [0-5]: reserved, 6: nonce check, 7: autof*/
@@ -1415,6 +1417,9 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, unsigned int f
 
 	tmp = be32toh(opt_avalon7_freq_sel);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4, &tmp, 4);
+	tmp = (uint32_t)(AVA7_ASIC_TIMEOUT_CONST / info->miner_count[addr] / freq[0] * (opt_avalon7_ntime_offset + 1));
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4 + 4, &tmp, 4);
 
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %d, (%d-%d)",
 			avalon7->drv->name, avalon7->device_id, addr,
@@ -1613,9 +1618,9 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		switch (info->freq_mode[i]) {
 			case AVA7_FREQ_INIT_MODE:
 				update_settings = true;
-				avalon7_init_setting(avalon7, i);
 				for (j = 0; j < info->miner_count[i]; j++)
 					info->set_frequency[i][j] = opt_avalon7_freq;
+				avalon7_init_setting(avalon7, i);
 
 				info->freq_mode[i] = AVA7_FREQ_PLLADJ_MODE;
 				break;
@@ -1657,7 +1662,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 				if (opt_avalon7_smart_speed == AVA7_DEFAULT_SMARTSPEED_OFF)
 					break;
 
-				/* AVA7_DEFAULT_SMARTSPEED_MODE1: auto speed by A3218 chips */
+				/* AVA7_DEFAULT_SMARTSPEED_MODE1: auto speed by A3212 chips */
 				break;
 			default:
 				applog(LOG_ERR, "%s-%d-%d: Invalid frequency mode %d",
@@ -1806,7 +1811,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		}
 
 		mhsmm = avalon7_hash_cal(avalon7, i);
-		sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)mhsmm / 1000, (float)mhsmm / AVA7_ASIC_CONST);
+		sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)mhsmm / 1000, (float)mhsmm / AVA7_ASIC_CORE_CONST);
 		strcat(statbuf, buf);
 
 		sprintf(buf, " PG[%d]", info->power_good[i]);
@@ -2153,7 +2158,7 @@ static void avalon7_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 			temp = get_temp_max(info, i);
 
 		mhsmm = avalon7_hash_cal(avalon7, i);
-		frequency += (mhsmm / AVA7_ASIC_CONST);
+		frequency += (mhsmm / AVA7_ASIC_CORE_CONST);
 		ghs_sum += (mhsmm / 1000);
 	}
 
