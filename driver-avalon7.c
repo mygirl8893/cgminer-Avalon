@@ -1186,7 +1186,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		}
 		info->fan_pct[i] = opt_avalon7_fan_min;
 		for (j = 0; j < info->miner_count[i]; j++) {
-			info->set_voltage[i][j] = opt_avalon7_voltage_min;
+			info->set_voltage[i][j] = AVA7_DEFAULT_VOLTAGE;
 			info->get_voltage[i][j] = 0;
 		}
 
