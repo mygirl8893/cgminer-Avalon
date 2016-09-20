@@ -463,7 +463,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		info->error_code[modular_id][ar->cnt] = be32toh(tmp);
 
 		memcpy(&tmp, ar->data + 24, 4);
-		info->error_crc[modular_id][ar->idx] = be32toh(tmp);
+		info->error_crc[modular_id][ar->idx] += be32toh(tmp);
 
 		break;
 	case AVA7_P_STATUS_PMU:
