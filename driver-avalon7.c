@@ -23,8 +23,7 @@ int opt_avalon7_overheat = AVA7_DEFAULT_TEMP_OVERHEAT;
 int opt_avalon7_fan_min = AVA7_DEFAULT_FAN_MIN;
 int opt_avalon7_fan_max = AVA7_DEFAULT_FAN_MAX;
 
-int opt_avalon7_voltage_min = AVA7_DEFAULT_VOLTAGE_MIN;
-int opt_avalon7_voltage_max = AVA7_DEFAULT_VOLTAGE_MAX;
+int opt_avalon7_voltage = AVA7_DEFAULT_VOLTAGE;
 int opt_avalon7_freq = AVA7_DEFAULT_FREQUENCY;
 int opt_avalon7_freq_sel = AVA7_DEFAULT_FREQUENCY_SEL;
 
@@ -249,21 +248,16 @@ char *set_avalon7_freq(char *arg)
 
 char *set_avalon7_voltage(char *arg)
 {
-	int val1, val2, ret;
+	int val, ret;
 
-	ret = sscanf(arg, "%d-%d", &val1, &val2);
+	ret = sscanf(arg, "%d", &val);
 	if (ret < 1)
 		return "No values passed to avalon7-voltage";
-	if (ret == 1)
-		val2 = val1;
 
-	if (val1 < AVA7_DEFAULT_VOLTAGE_MIN || val1 > AVA7_DEFAULT_VOLTAGE_MAX ||
-	    val2 < AVA7_DEFAULT_VOLTAGE_MIN || val2 > AVA7_DEFAULT_VOLTAGE_MAX ||
-	    val2 < val1)
+	if (val < AVA7_DEFAULT_VOLTAGE_MIN || val > AVA7_DEFAULT_VOLTAGE_MAX)
 		return "Invalid value passed to avalon7-voltage";
 
-	opt_avalon7_voltage_min = val1;
-	opt_avalon7_voltage_max = val2;
+	opt_avalon7_voltage = val;
 
 	return NULL;
 }
@@ -1186,7 +1180,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		}
 		info->fan_pct[i] = opt_avalon7_fan_min;
 		for (j = 0; j < info->miner_count[i]; j++) {
-			info->set_voltage[i][j] = AVA7_DEFAULT_VOLTAGE;
+			info->set_voltage[i][j] = opt_avalon7_voltage;
 			info->get_voltage[i][j] = 0;
 		}
 
