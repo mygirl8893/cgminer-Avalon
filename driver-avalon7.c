@@ -1718,7 +1718,7 @@ static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)
 	return mhsmm;
 }
 
-#define STATBUFLEN (6 * 1024)
+#define STATBUFLEN (8 * 1024)
 static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 {
 	struct api_data *root = NULL;
@@ -1859,14 +1859,27 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 			}
 			statbuf[strlen(statbuf) - 1] = ']';
 
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " ERATIO%d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					if (info->get_asic[i][j][k][0])
+						sprintf(buf, "%.2f%% ", (double)(info->get_asic[i][j][k][1] * 100.0 / info->get_asic[i][j][k][0]));
+					else
+						sprintf(buf, "%.2f%% ", 0.0);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
+			}
 			int l;
 			/* i: modular, j: miner, k:asic, l:value */
 			for (l = 0; l < 11; l++) {
 				for (j = 0; j < info->miner_count[i]; j++) {
-					sprintf(buf, " C_%d_%d[", j, l);
+					sprintf(buf, " C_%d_%02d[", j, l);
 					strcat(statbuf, buf);
 					for (k = 0; k < info->asic_count[i]; k++) {
-						sprintf(buf, "%d ", info->get_asic[i][j][k][l]);
+						sprintf(buf, "%5d ", info->get_asic[i][j][k][l]);
 						strcat(statbuf, buf);
 					}
 
