@@ -1366,7 +1366,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set Avalon7 AUC IIC xfer read delay, 4800 ~= 1ms"),
 	OPT_WITH_ARG("--avalon7-smart-speed",
 		     opt_set_intval, opt_show_intval, &opt_avalon7_smart_speed,
-		     "Set Avalon7 smart speed, range 0-2. 0 means Disable"),
+		     "Set Avalon7 smart speed, range 0-1. 0 means Disable"),
 	OPT_WITHOUT_ARG("--avalon7-iic-detect",
 		     opt_set_bool, &opt_avalon7_iic_detect,
 		     "Enable Avalon7 detect through iic controller"),
