@@ -24,7 +24,13 @@ int opt_avalon7_fan_min = AVA7_DEFAULT_FAN_MIN;
 int opt_avalon7_fan_max = AVA7_DEFAULT_FAN_MAX;
 
 int opt_avalon7_voltage = AVA7_DEFAULT_VOLTAGE;
-int opt_avalon7_freq = AVA7_DEFAULT_FREQUENCY;
+int opt_avalon7_freq[AVA7_DEFAULT_PLL_CNT] = {AVA7_DEFAULT_FREQUENCY,
+					      AVA7_DEFAULT_FREQUENCY,
+					      AVA7_DEFAULT_FREQUENCY,
+					      AVA7_DEFAULT_FREQUENCY,
+					      AVA7_DEFAULT_FREQUENCY,
+					      AVA7_DEFAULT_FREQUENCY};
+
 int opt_avalon7_freq_sel = AVA7_DEFAULT_FREQUENCY_SEL;
 
 int opt_avalon7_polling_delay = AVA7_DEFAULT_POLLING_DELAY;
@@ -227,21 +233,53 @@ char *set_avalon7_fan(char *arg)
 
 char *set_avalon7_freq(char *arg)
 {
-	int val = 0;
+	int val[AVA7_DEFAULT_PLL_CNT];
+	char *colon, *data;
+	int i, j;
 
 	if (!(*arg))
 		return NULL;
 
-	if (*arg) {
-		val = atoi(arg);
-		if (val < AVA7_DEFAULT_FREQUENCY_MIN || val > AVA7_DEFAULT_FREQUENCY_MAX)
-			return "Invalid value passed to avalon7-freq";
+	data = arg;
+	memset(val, 0, AVA7_DEFAULT_PLL_CNT);
+
+	for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
+		colon = strchr(data, ':');
+		if (colon)
+			*(colon++) = '\0';
+		else {
+			if (*data) {
+				val[i] = atoi(data);
+				if (val[i] < AVA7_DEFAULT_FREQUENCY_MIN || val[i] > AVA7_DEFAULT_FREQUENCY_MAX)
+					return "Invalid value passed to avalon7-freq";
+			}
+			break;
+		}
+
+		if (*data) {
+			val[i] = atoi(data);
+			if (val[i] < AVA7_DEFAULT_FREQUENCY_MIN || val[i] > AVA7_DEFAULT_FREQUENCY_MAX)
+				return "Invalid value passed to avalon7-freq";
+		}
+		data = colon;
 	}
 
-	if (!val)
-		val = AVA7_DEFAULT_FREQUENCY_MIN;
+	for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
+		if (!val[i]) {
+			if (i) {
+				for (j = i; j < AVA7_DEFAULT_PLL_CNT; j++)
+					val[j] = val[j - 1];
+			} else {
+				for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
+					val[j] = AVA7_DEFAULT_FREQUENCY;
+			}
 
-	opt_avalon7_freq = val;
+			break;
+		}
+	}
+
+	for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++)
+		opt_avalon7_freq[i] = val[i];
 
 	return NULL;
 }
@@ -1185,7 +1223,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		}
 
 		info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
-		memset(info->set_frequency[i], 0, sizeof(unsigned int) * info->miner_count[i]);
+		memset(info->set_frequency[i], 0, sizeof(unsigned int) * info->miner_count[i] * AVA7_DEFAULT_PLL_CNT);
 
 		info->led_indicator[i] = 0;
 		info->temp_cutoff[i] = 0;
@@ -1353,7 +1391,7 @@ static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 
 	/* TODO:ss/ssp mode */
 
-	tmp = (uint32_t)(AVA7_ASIC_TIMEOUT_CONST / info->miner_count[addr] / info->set_frequency[addr][0]);
+	tmp = (uint32_t)(AVA7_ASIC_TIMEOUT_CONST / info->miner_count[addr] / info->set_frequency[addr][0][AVA7_DEFAULT_PLL_CNT - 1]);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
@@ -1398,7 +1436,7 @@ static void avalon7_set_voltage(struct cgpu_info *avalon7, int addr, unsigned in
 		avalon7_iic_xfer_pkg(avalon7, addr, &send_pkg, NULL);
 }
 
-static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, unsigned int freq[])
+static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, unsigned int freq[])
 {
 	struct avalon7_info *info = avalon7->device_data;
 	struct avalon7_pkg send_pkg;
@@ -1411,7 +1449,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, unsigned int f
 
 	memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
 	for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
-		tmp = be32toh(api_get_cpm(freq[0]));
+		tmp = be32toh(api_get_cpm(freq[i]));
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
 
@@ -1426,7 +1464,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, unsigned int f
 			send_pkg.idx, freq[0], freq[info->miner_count[addr] - 1]);
 
 	/* Package the data */
-	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, 1, 1);
+	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, miner_id + 1, AVA7_DEFAULT_MINER_CNT);
 
 	if (addr == AVA7_MODULE_BROADCAST)
 		avalon7_send_bc_pkgs(avalon7, &send_pkg);
@@ -1444,31 +1482,35 @@ static void avalon7_stratum_finish(struct cgpu_info *avalon7)
 }
 
 /* miner [0, miner_count], 0 means all miners */
-static void avalon7_freq_dec(struct cgpu_info *avalon7, int addr, unsigned int miner_id, unsigned int freq[], unsigned int val)
+static void avalon7_freq_dec(struct cgpu_info *avalon7, int addr, unsigned int miner_id, unsigned int freq[][AVA7_DEFAULT_PLL_CNT], unsigned int val)
 {
 	struct avalon7_info *info = avalon7->device_data;
-	int i;
+	int i, j;
 
 	if (!miner_id) {
 		for (i = 0; i < info->miner_count[addr]; i++) {
-			if (freq[i] <= val) {
-				freq[i] = AVA7_DEFAULT_FREQUENCY_MIN;
-				continue;
-			}
+			for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++) {
+				if (freq[i][j] <= val) {
+					freq[i][j] = AVA7_DEFAULT_FREQUENCY_MIN;
+					continue;
+				}
 
-			if ((freq[i] - val) >= AVA7_DEFAULT_FREQUENCY_MIN)
-				freq[i] -= val;
-			else
-				freq[i] = AVA7_DEFAULT_FREQUENCY_MIN;
+				if ((freq[i][j] - val) >= AVA7_DEFAULT_FREQUENCY_MIN)
+					freq[i][j] -= val;
+				else
+					freq[i][j] = AVA7_DEFAULT_FREQUENCY_MIN;
+			}
 		}
 	} else {
-		if (freq[miner_id - 1] <= val)
-			freq[miner_id - 1] = AVA7_DEFAULT_FREQUENCY_MIN;
+		for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
+			if (freq[miner_id][i] <= val)
+				freq[miner_id][i] = AVA7_DEFAULT_FREQUENCY_MIN;
 
-		if (freq[miner_id - 1] >= AVA7_DEFAULT_FREQUENCY_MIN)
-			freq[miner_id - 1] -= val;
-		else
-			freq[miner_id - 1] -= AVA7_DEFAULT_FREQUENCY_MIN;
+			if (freq[miner_id][i] >= AVA7_DEFAULT_FREQUENCY_MIN)
+				freq[miner_id][i] -= val;
+			else
+				freq[miner_id][i] -= AVA7_DEFAULT_FREQUENCY_MIN;
+		}
 	}
 }
 
@@ -1537,7 +1579,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 	struct timeval current;
 	double device_tdiff;
 	int64_t h;
-	int i, j, count = 0;
+	int i, j, k, count = 0;
 	int temp_max;
 	bool update_settings = false;
 	bool freq_dec_check = false;
@@ -1592,8 +1634,8 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 				avalon7_freq_dec(avalon7, i, 0, info->set_frequency[i], opt_avalon7_delta_freq + 50);
 				applog(LOG_DEBUG, "%s-%d-%d: set freq after temp check %d-%d",
 					avalon7->drv->name, avalon7->device_id, i,
-					info->set_frequency[i][0],
-					info->set_frequency[i][info->miner_count[i] - 1]);
+					info->set_frequency[i][0][0],
+					info->set_frequency[i][info->miner_count[i] - 1][0]);
 				info->freq_mode[i] = AVA7_FREQ_TEMPADJ_MODE;
 			}
 		}
@@ -1603,8 +1645,11 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 			update_settings = true;
 			info->temp_cutoff[i] = 1;
 			info->polling_first = 1;
-			for (j = 0; j < info->miner_count[i]; j++)
-				info->set_frequency[i][j] = AVA7_DEFAULT_FREQUENCY_MIN;
+			for (j = 0; j < info->miner_count[i]; j++) {
+				for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
+					info->set_frequency[i][j][k] = AVA7_DEFAULT_FREQUENCY;
+			}
+
 			info->freq_mode[i] = AVA7_FREQ_CUTOFF_MODE;
 		}
 
@@ -1618,8 +1663,11 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		switch (info->freq_mode[i]) {
 			case AVA7_FREQ_INIT_MODE:
 				update_settings = true;
-				for (j = 0; j < info->miner_count[i]; j++)
-					info->set_frequency[i][j] = opt_avalon7_freq;
+				for (j = 0; j < info->miner_count[i]; j++) {
+					for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
+						info->set_frequency[i][j][k] = opt_avalon7_freq[k];
+				}
+
 				avalon7_init_setting(avalon7, i);
 
 				info->freq_mode[i] = AVA7_FREQ_PLLADJ_MODE;
@@ -1627,8 +1675,11 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 			case AVA7_FREQ_CUTOFF_MODE:
 				if (!info->temp_cutoff[i]) {
 					update_settings = true;
-					for (j = 0; j < info->miner_count[i]; j++)
-						info->set_frequency[i][j] = opt_avalon7_freq;
+					for (j = 0; j < info->miner_count[i]; j++) {
+						for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
+							info->set_frequency[i][j][k] = opt_avalon7_freq[k];
+					}
+
 					info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
 				}
 				break;
@@ -1646,14 +1697,17 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 					avalon7_freq_dec(avalon7, i, 0, info->set_frequency[i], opt_avalon7_delta_freq);
 					applog(LOG_DEBUG, "%s-%d-%d: update freq (%d-%d) AVA7_FREQ_PLLADJ_MODE",
 							avalon7->drv->name, avalon7->device_id, i,
-							info->set_frequency[i][0],
-							info->set_frequency[i][info->miner_count[i] - 1]);
+							info->set_frequency[i][0][0],
+							info->set_frequency[i][info->miner_count[i] - 1][0]);
 				}
 
 				if (get_temp_max(info, i) <= (info->temp_target[i] - opt_avalon7_delta_temp)) {
 					update_settings = true;
-					for (j = 0; j < info->miner_count[i]; j++)
-						info->set_frequency[i][j] = opt_avalon7_freq;
+					for (j = 0; j < info->miner_count[i]; j++) {
+						for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
+							info->set_frequency[i][j][k] = opt_avalon7_freq[k];
+					}
+
 					info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
 					break;
 				}
@@ -1672,7 +1726,9 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		if (update_settings) {
 			cg_wlock(&info->update_lock);
 			avalon7_set_voltage(avalon7, i, info->set_voltage[i]);
-			avalon7_set_freq(avalon7, i, info->set_frequency[i]);
+			for (j = 0; j < info->miner_count[i]; j++)
+				avalon7_set_freq(avalon7, i, j, info->set_frequency[i][j]);
+
 			cg_wunlock(&info->update_lock);
 		}
 	}
@@ -1709,10 +1765,11 @@ static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)
 
 	mhsmm = 0;
 	for (i = 0; i < info->miner_count[modular_id]; i++) {
-		tmp_freq[i] = info->set_frequency[modular_id][i];
+		for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
+			tmp_freq[j] = info->set_frequency[modular_id][i][j];
 
 		for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
-			mhsmm += (info->get_pll[modular_id][i][j] * tmp_freq[i]);
+			mhsmm += (info->get_pll[modular_id][i][j] * tmp_freq[j]);
 	}
 
 	return mhsmm;
@@ -1845,12 +1902,16 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		strcat(statbuf, buf);
 
 		if (opt_debug) {
-			strcat(statbuf, " SF[");
 			for (j = 0; j < info->miner_count[i]; j++) {
-				sprintf(buf, "%d ", info->set_frequency[i][j]);
+				sprintf(buf, " SF%d[", j);
 				strcat(statbuf, buf);
+				for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++) {
+					sprintf(buf, "%d ", info->set_frequency[i][j][k]);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
 			}
-			statbuf[strlen(statbuf) - 1] = ']';
 
 			strcat(statbuf, " PMUV[");
 			for (j = 0; j < AVA7_DEFAULT_PMU_CNT; j++) {
@@ -1975,7 +2036,7 @@ char *set_avalon7_device_voltage(struct cgpu_info *avalon7, char *arg)
 char *set_avalon7_device_freq(struct cgpu_info *avalon7, char *arg)
 {
 	struct avalon7_info *info = avalon7->device_data;
-	unsigned int val, addr = 0, i, j;
+	unsigned int val, addr = 0, i, j, k;
 	uint32_t miner_id = 0;
 
 	if (!(*arg))
@@ -2006,22 +2067,35 @@ char *set_avalon7_device_freq(struct cgpu_info *avalon7, char *arg)
 			if (!info->enable[i])
 				continue;
 
-			if (miner_id)
-				info->set_frequency[i][miner_id - 1] = val;
-			else {
-				for (j = 0; j < info->miner_count[i]; j++)
-					info->set_frequency[i][j] = val;
+			if (miner_id) {
+				for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
+					info->set_frequency[i][miner_id - 1][k] = val;
+
+				avalon7_set_freq(avalon7, i, miner_id, info->set_frequency[i][miner_id]);
+			} else {
+				for (j = 0; j < info->miner_count[i]; j++) {
+					for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
+						info->set_frequency[i][j][k] = val;
+
+					avalon7_set_freq(avalon7, i, j, info->set_frequency[i][j]);
+				}
 			}
-			avalon7_set_freq(avalon7, i, info->set_frequency[i]);
 		}
 	} else {
-		if (miner_id)
-			info->set_frequency[addr][miner_id - 1] = val;
-		else {
-			for (j = 0; j < info->miner_count[addr]; j++)
-				info->set_frequency[addr][j] = val;
+		if (miner_id) {
+			for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
+				info->set_frequency[addr][miner_id - 1][k] = val;
+
+			avalon7_set_freq(avalon7, addr, miner_id, info->set_frequency[addr][miner_id]);
+
+		} else {
+			for (j = 0; j < info->miner_count[addr]; j++) {
+				for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
+					info->set_frequency[addr][j][k] = val;
+
+				avalon7_set_freq(avalon7, addr, j, info->set_frequency[addr][j]);
+			}
 		}
-		avalon7_set_freq(avalon7, addr, info->set_frequency[addr]);
 	}
 
 	applog(LOG_NOTICE, "%s-%d: Update frequency to %d",
