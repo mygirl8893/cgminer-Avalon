@@ -52,7 +52,7 @@
 #define AVA7_PWM_MAX	0x3FF
 #define AVA7_DRV_DIFFMAX	1024
 #define AVA7_ASIC_CORE_CONST	9216 /* 128 * ASIC_COUNT */
-#define AVA7_ASIC_TIMEOUT_CONST	0x682aaaaa /* 2 ^ 32 / 128 * 25 * cpu_freq / bus_freq */
+#define AVA7_ASIC_TIMEOUT_CONST	0x2000000 /* 2 ^ 32 / 128 */
 
 #define AVA7_MODULE_DETECT_INTERVAL	30 /* 30 s */
 

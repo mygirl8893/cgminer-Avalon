@@ -1373,7 +1373,6 @@ static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 
 static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 {
-	struct avalon7_info *info = avalon7->device_data;
 	struct avalon7_pkg send_pkg;
 	uint32_t tmp;
 
@@ -1381,8 +1380,7 @@ static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 
 	/* TODO:ss/ssp mode */
 
-	tmp = (uint32_t)(AVA7_ASIC_TIMEOUT_CONST / info->miner_count[addr] / info->set_frequency[addr][0][AVA7_DEFAULT_PLL_CNT - 1]);
-	tmp = be32toh(tmp);
+	tmp = be32toh(opt_avalon7_ntime_offset);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
 	/* adjust flag [0-5]: reserved, 6: nonce check, 7: autof*/
@@ -1445,13 +1443,17 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 
 	tmp = be32toh(opt_avalon7_freq_sel);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4, &tmp, 4);
-	tmp = (uint32_t)(AVA7_ASIC_TIMEOUT_CONST / info->miner_count[addr] / freq[0] * (opt_avalon7_ntime_offset + 1));
+
+	tmp = freq[0];
+	for (i = 1; i < AVA7_DEFAULT_PLL_CNT; i++)
+		tmp = tmp > freq[i] ? tmp : freq[i];
+
+	tmp = AVA7_ASIC_TIMEOUT_CONST / tmp;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4 + 4, &tmp, 4);
-
-	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %d, (%d-%d)",
+	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %d-%d",
 			avalon7->drv->name, avalon7->device_id, addr,
-			send_pkg.idx, freq[0], freq[info->miner_count[addr] - 1]);
+			miner_id, be32toh(tmp));
 
 	/* Package the data */
 	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, miner_id + 1, AVA7_DEFAULT_MINER_CNT);
