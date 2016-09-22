@@ -1340,7 +1340,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_CBARG("--avalon7-freq",
 		     set_avalon7_freq, NULL, &opt_set_avalon7_freq,
 		     "Set Avalon7 default frequency, range:[100, 500], step: 25, example: 500"),
-	OPT_WITH_CBARG("--avalon7-freq-sel",
+	OPT_WITH_ARG("--avalon7-freq-sel",
 		     set_int_0_to_5, opt_show_intval, &opt_avalon7_freq_sel,
 		     "Set Avalon7 default frequency pll, range:[0, 5], step: 1, example: 3"),
 	OPT_WITH_CBARG("--avalon7-fan",
