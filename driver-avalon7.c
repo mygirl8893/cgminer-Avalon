@@ -235,19 +235,20 @@ char *set_avalon7_freq(char *arg)
 {
 	int val[AVA7_DEFAULT_PLL_CNT];
 	char *colon, *data;
-	int i, j;
+	int i;
 
 	if (!(*arg))
 		return NULL;
 
 	data = arg;
-	memset(val, 0, AVA7_DEFAULT_PLL_CNT);
+	memset(val, 0, sizeof(val));
 
 	for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
 		colon = strchr(data, ':');
 		if (colon)
 			*(colon++) = '\0';
 		else {
+			/* last value */
 			if (*data) {
 				val[i] = atoi(data);
 				if (val[i] < AVA7_DEFAULT_FREQUENCY_MIN || val[i] > AVA7_DEFAULT_FREQUENCY_MAX)
@@ -265,21 +266,10 @@ char *set_avalon7_freq(char *arg)
 	}
 
 	for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
-		if (!val[i]) {
-			if (i) {
-				for (j = i; j < AVA7_DEFAULT_PLL_CNT; j++)
-					val[j] = val[j - 1];
-			} else {
-				for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++)
-					val[j] = AVA7_DEFAULT_FREQUENCY;
-			}
-
-			break;
-		}
-	}
-
-	for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++)
+		if (!val[i] && i)
+			val[i] = val[i - 1];
 		opt_avalon7_freq[i] = val[i];
+	}
 
 	return NULL;
 }
