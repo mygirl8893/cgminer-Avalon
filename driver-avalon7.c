@@ -425,7 +425,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		nonce2 = be32toh(nonce2);
 		nonce = be32toh(nonce);
 
-		applog(LOG_DEBUG, "%s-%d-%d: Found! P:%d - N2:%08x N:%08x NR:%d [M:%d - MW: (%d,%d,%d,%d)]",
+		applog(LOG_NOTICE, "%s-%d-%d: Found! P:%d - N2:%08x N:%08x NR:%d [M:%d - MW: (%d,%d,%d,%d)]",
 		       avalon7->drv->name, avalon7->device_id, modular_id,
 		       pool_no, nonce2, nonce, ntime,
 		       miner,
@@ -1428,7 +1428,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 {
 	struct avalon7_info *info = avalon7->device_data;
 	struct avalon7_pkg send_pkg;
-	uint32_t tmp;
+	uint32_t tmp, f;
 	uint8_t i;
 
 	send_pkg.idx = 0; 	/* TODO: This is only for broadcast to all miners
@@ -1441,14 +1441,16 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
 
-	tmp = be32toh(opt_avalon7_freq_sel);
+	f = freq[0];
+	for (i = 1; i < AVA7_DEFAULT_PLL_CNT; i++)
+		f = f > freq[i] ? f : freq[i];
+
+
+	tmp = AVA7_ASIC_TIMEOUT_CONST / f * 1900 / 1000;
+	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4, &tmp, 4);
 
-	tmp = freq[0];
-	for (i = 1; i < AVA7_DEFAULT_PLL_CNT; i++)
-		tmp = tmp > freq[i] ? tmp : freq[i];
-
-	tmp = AVA7_ASIC_TIMEOUT_CONST / tmp;
+	tmp = AVA7_ASIC_TIMEOUT_CONST / f * 7 / 10;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4 + 4, &tmp, 4);
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %d-%d",
