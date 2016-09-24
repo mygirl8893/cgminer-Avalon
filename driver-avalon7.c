@@ -38,7 +38,6 @@ int opt_avalon7_polling_delay = AVA7_DEFAULT_POLLING_DELAY;
 int opt_avalon7_aucspeed = AVA7_AUC_SPEED;
 int opt_avalon7_aucxdelay = AVA7_AUC_XDELAY;
 
-int opt_avalon7_ntime_offset = AVA7_DEFAULT_NTIME_OFFSET;
 int opt_avalon7_smart_speed = AVA7_DEFAULT_SMART_SPEED;
 /*
  * smart speed have 2 modes
@@ -1380,7 +1379,7 @@ static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 
 	/* TODO:ss/ssp mode */
 
-	tmp = be32toh(opt_avalon7_ntime_offset);
+	tmp = be32toh(opt_avalon7_freq_sel);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
 	/* adjust flag [0-5]: reserved, 6: nonce check, 7: autof*/
@@ -1450,7 +1449,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4, &tmp, 4);
 
-	tmp = AVA7_ASIC_TIMEOUT_CONST / f * 7 / 10;
+	tmp = AVA7_ASIC_TIMEOUT_CONST / f * 3 / 10;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4 + 4, &tmp, 4);
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %d-%d",

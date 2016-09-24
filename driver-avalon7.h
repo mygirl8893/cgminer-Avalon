@@ -41,7 +41,6 @@
 #define AVA7_DEFAULT_PMU_CNT	2
 
 #define AVA7_DEFAULT_POLLING_DELAY	20 /* ms */
-#define AVA7_DEFAULT_NTIME_OFFSET	3
 
 #define AVA7_DEFAULT_SMARTSPEED_OFF 0
 #define AVA7_DEFAULT_SMARTSPEED_MODE1 1
@@ -254,7 +253,6 @@ extern int opt_avalon7_overheat;
 extern int opt_avalon7_polling_delay;
 extern int opt_avalon7_aucspeed;
 extern int opt_avalon7_aucxdelay;
-extern int opt_avalon7_ntime_offset;
 extern int opt_avalon7_smart_speed;
 extern bool opt_avalon7_iic_detect;
 extern int opt_avalon7_freqadj_time;
