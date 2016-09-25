@@ -552,7 +552,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		}
 		break;
 	default:
-		applog(LOG_DEBUG, "%s-%d-%d: Unknown response", avalon7->drv->name, avalon7->device_id, modular_id);
+		applog(LOG_DEBUG, "%s-%d-%d: Unknown response %x", avalon7->drv->name, avalon7->device_id, modular_id, ar->type);
 		break;
 	}
 	return 0;
@@ -1125,7 +1125,7 @@ static bool avalon7_prepare(struct thr_info *thr)
 	return true;
 }
 
-static int check_module_exist(struct cgpu_info *avalon7, uint8_t mm_dna[AVA7_MM_DNA_LEN + 1])
+static int check_module_exist(struct cgpu_info *avalon7, uint8_t mm_dna[AVA7_MM_DNA_LEN])
 {
 	struct avalon7_info *info = avalon7->device_data;
 	int i;
@@ -1186,7 +1186,6 @@ static void detect_modules(struct cgpu_info *avalon7)
 		info->enable[i] = 1;
 		cgtime(&info->elapsed[i]);
 		memcpy(info->mm_dna[i], ret_pkg.data, AVA7_MM_DNA_LEN);
-		info->mm_dna[i][AVA7_MM_DNA_LEN] = '\0';
 		memcpy(info->mm_version[i], ret_pkg.data + AVA7_MM_DNA_LEN, AVA7_MM_VER_LEN);
 		memcpy(&tmp, ret_pkg.data + AVA7_MM_DNA_LEN + AVA7_MM_VER_LEN, 4);
 		tmp = be32toh(tmp);
@@ -1452,7 +1451,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 	tmp = AVA7_ASIC_TIMEOUT_CONST / f * 3 / 10;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4 + 4, &tmp, 4);
-	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %d-%d",
+	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %x-%x",
 			avalon7->drv->name, avalon7->device_id, addr,
 			miner_id, be32toh(tmp));
 

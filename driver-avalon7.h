@@ -192,8 +192,8 @@ struct avalon7_info {
 
 	struct timeval elapsed[AVA7_DEFAULT_MODULARS];
 
-	uint8_t mm_dna[AVA7_DEFAULT_MODULARS][AVA7_MM_DNA_LEN + 1];
-	char mm_version[AVA7_DEFAULT_MODULARS][AVA7_MM_VER_LEN + 1];
+	uint8_t mm_dna[AVA7_DEFAULT_MODULARS][AVA7_MM_DNA_LEN];
+	char mm_version[AVA7_DEFAULT_MODULARS][AVA7_MM_VER_LEN + 1]; /* It's a string */
 	uint32_t total_asics[AVA7_DEFAULT_MODULARS];
 
 	int mod_type[AVA7_DEFAULT_MODULARS];
