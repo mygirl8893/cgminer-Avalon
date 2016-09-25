@@ -1146,7 +1146,8 @@ static void detect_modules(struct cgpu_info *avalon7)
 	struct avalon7_pkg send_pkg;
 	struct avalon7_ret ret_pkg;
 	uint32_t tmp;
-	int i, j, err;
+	int i, j, err, rlen;
+	uint8_t rbuf[AVA7_AUC_P_SIZE];
 
 	/* Detect new modules here */
 	for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
@@ -1229,8 +1230,17 @@ static void detect_modules(struct cgpu_info *avalon7)
 		info->error_code[i][j] = 0;
 		info->error_polling_cnt[i] = 0;
 
-		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d]",
-		       avalon7->drv->name, avalon7->device_id, i);
+		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d-%x]",
+		       avalon7->drv->name, avalon7->device_id, i, info->mm_dna[i][AVA7_MM_DNA_LEN - 1]);
+
+		/* Tell MM, it has been detected */
+		memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
+		memcpy(send_pkg.data, info->mm_dna[i],  AVA7_MM_DNA_LEN);
+		avalon7_init_pkg(&send_pkg, AVA7_P_SYNC, 1, 1);
+		avalon7_iic_xfer_pkg(avalon7, i, &send_pkg, &ret_pkg);
+		/* Keep the usb buffer is empty */
+		usb_buffer_clear(avalon7);
+		usb_read(avalon7, (char *)rbuf, AVA7_AUC_P_SIZE, &rlen, C_AVA7_READ);
 	}
 }
 

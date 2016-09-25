@@ -99,7 +99,7 @@
 
 /* Have to send with I2C address */
 #define AVA7_P_POLLING	0x30
-#define AVA7_P_REQUIRE	0x31
+#define AVA7_P_SYNC	0x31
 #define AVA7_P_TEST	0x32
 #define AVA7_P_RSTMMTX	0x33
 #define AVA7_P_GET_VOLT	0x34
