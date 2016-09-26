@@ -46,6 +46,12 @@
 #define AVA7_DEFAULT_SMARTSPEED_MODE1 1
 #define AVA7_DEFAULT_SMART_SPEED	(AVA7_DEFAULT_SMARTSPEED_OFF)
 
+#define AVA7_DEFAULT_TH_PASS	(0xffff / 250)
+#define AVA7_DEFAULT_TH_FAIL	(0xffff / 10)
+#define AVA7_DEFAULT_TH_INIT	(0xffff / 2)
+#define AVA7_DEFAULT_TH_MS	1
+#define AVA7_DEFAULT_TH_TIMEOUT	0
+
 #define AVA7_DEFAULT_IIC_DETECT	false
 
 #define AVA7_PWM_MAX	0x3FF
@@ -97,6 +103,7 @@
 #define AVA7_P_SET_VOLT	0x22
 #define AVA7_P_SET_PMU	0x24
 #define AVA7_P_SET_PLL	0x25
+#define AVA7_P_SET_SS	0x26
 
 /* Have to send with I2C address */
 #define AVA7_P_POLLING	0x30
@@ -261,5 +268,10 @@ extern int opt_avalon7_delta_temp;
 extern int opt_avalon7_delta_freq;
 extern int opt_avalon7_freqadj_temp;
 extern int opt_avalon7_freq_sel;
+extern uint32_t opt_avalon7_th_pass;
+extern uint32_t opt_avalon7_th_fail;
+extern uint32_t opt_avalon7_th_init;
+extern uint32_t opt_avalon7_th_ms;
+extern uint32_t opt_avalon7_th_timeout;
 #endif /* USE_AVALON7 */
 #endif	/* _AVALON7_H_ */

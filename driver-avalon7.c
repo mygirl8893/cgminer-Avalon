@@ -50,6 +50,12 @@ int opt_avalon7_delta_temp = AVA7_DEFAULT_DELTA_T;
 int opt_avalon7_delta_freq = AVA7_DEFAULT_DELTA_FREQ;
 int opt_avalon7_freqadj_temp = AVA7_MM711_TEMP_FREQADJ;
 
+uint32_t opt_avalon7_th_pass = AVA7_DEFAULT_TH_PASS;
+uint32_t opt_avalon7_th_fail = AVA7_DEFAULT_TH_FAIL;
+uint32_t opt_avalon7_th_init = AVA7_DEFAULT_TH_INIT;
+uint32_t opt_avalon7_th_ms = AVA7_DEFAULT_TH_MS;
+uint32_t opt_avalon7_th_timeout = AVA7_DEFAULT_TH_TIMEOUT;
+
 uint32_t cpm_table[] =
 {
 	0x0173f813,
@@ -1474,6 +1480,55 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 		avalon7_iic_xfer_pkg(avalon7, addr, &send_pkg, NULL);
 }
 
+static void avalon7_set_ss_param(struct cgpu_info *avalon7, int addr)
+{
+	struct avalon7_pkg send_pkg;
+	uint32_t tmp;
+
+	if (!opt_avalon7_smart_speed)
+		return;
+
+	memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
+
+	tmp = be32toh(opt_avalon7_th_pass);
+	memcpy(send_pkg.data, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set th pass %u",
+			avalon7->drv->name, avalon7->device_id, addr,
+			opt_avalon7_th_pass);
+
+	tmp = be32toh(opt_avalon7_th_fail);
+	memcpy(send_pkg.data + 4, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set th fail %u",
+			avalon7->drv->name, avalon7->device_id, addr,
+			opt_avalon7_th_fail);
+
+	tmp = be32toh(opt_avalon7_th_init);
+	memcpy(send_pkg.data + 8, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set th init %u",
+			avalon7->drv->name, avalon7->device_id, addr,
+			opt_avalon7_th_init);
+
+	tmp = be32toh(opt_avalon7_th_ms);
+	memcpy(send_pkg.data + 12, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set th ms %u",
+			avalon7->drv->name, avalon7->device_id, addr,
+			opt_avalon7_th_ms);
+
+	tmp = be32toh(opt_avalon7_th_timeout);
+	memcpy(send_pkg.data + 16, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set th timeout %u",
+			avalon7->drv->name, avalon7->device_id, addr,
+			opt_avalon7_th_timeout);
+
+	/* Package the data */
+	avalon7_init_pkg(&send_pkg, AVA7_P_SET_SS, 1, 1);
+
+	if (addr == AVA7_MODULE_BROADCAST)
+		avalon7_send_bc_pkgs(avalon7, &send_pkg);
+	else
+		avalon7_iic_xfer_pkg(avalon7, addr, &send_pkg, NULL);
+}
+
 static void avalon7_stratum_finish(struct cgpu_info *avalon7)
 {
 	struct avalon7_pkg send_pkg;
@@ -1739,6 +1794,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 			avalon7_set_voltage(avalon7, i, info->set_voltage[i]);
 			for (j = 0; j < info->miner_count[i]; j++)
 				avalon7_set_freq(avalon7, i, j, info->set_frequency[i][j]);
+			avalon7_set_ss_param(avalon7, i);
 
 			avalon7_set_finish(avalon7, i);
 			cg_wunlock(&info->update_lock);
