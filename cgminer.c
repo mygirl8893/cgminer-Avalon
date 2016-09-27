@@ -785,11 +785,6 @@ char *set_long_range(const char *arg, long *i, long min, long max)
 	return NULL;
 }
 
-static char *set_long_0_to_4294967295(const char *arg, long *i)
-{
-	return set_long_range(arg, i, 0, 4294967295);
-}
-
 static char *set_int_0_to_65535(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 65535);
@@ -1389,19 +1384,19 @@ static struct opt_table opt_config_table[] = {
 		     "Set Avalon7 smart speed, range 0-1. 0 means Disable"),
 	OPT_WITH_ARG("--avalon7-th-pass",
 		     set_int_0_to_65535, opt_show_intval, &opt_avalon7_th_pass,
-		     "Set Avalon7 th pass value"),
+		     "Set A3212 th pass value"),
 	OPT_WITH_ARG("--avalon7-th-fail",
 		     set_int_0_to_65535, opt_show_intval, &opt_avalon7_th_fail,
-		     "Set Avalon7 th fail value"),
+		     "Set A3212 th fail value"),
 	OPT_WITH_ARG("--avalon7-th-init",
 		     set_int_0_to_65535, opt_show_intval, &opt_avalon7_th_init,
-		     "Set Avalon7 th init value"),
+		     "Set A3212 th init value"),
 	OPT_WITH_ARG("--avalon7-th-ms",
 		     set_int_0_to_65535, opt_show_intval, &opt_avalon7_th_ms,
-		     "Set Avalon7 th ms value"),
+		     "Set A3212 th ms value"),
 	OPT_WITH_ARG("--avalon7-th-timeout",
-		     set_long_0_to_4294967295, opt_show_longval, &opt_avalon7_th_timeout,
-		     "Set Avalon7 th timeout value"),
+		     opt_set_uintval, opt_show_uintval, &opt_avalon7_th_timeout,
+		     "Set A3212 th timeout value"),
 	OPT_WITHOUT_ARG("--avalon7-iic-detect",
 		     opt_set_bool, &opt_avalon7_iic_detect,
 		     "Enable Avalon7 detect through iic controller"),
@@ -5176,6 +5171,7 @@ void write_config(FILE *fcfg)
 			if (opt->type & OPT_HASARG &&
 			    ((void *)opt->cb_arg == (void *)opt_set_intval ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_65535 ||
 			     (void *)opt->cb_arg == (void *)set_int_1_to_65535 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_5 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_10 ||

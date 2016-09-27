@@ -41,7 +41,7 @@ int opt_avalon7_aucxdelay = AVA7_AUC_XDELAY;
 int opt_avalon7_smart_speed = AVA7_DEFAULT_SMART_SPEED;
 /*
  * smart speed have 2 modes
- * 1. auto speed by A3218 chips
+ * 1. auto speed by A3212 chips
  * 2. option 1 + adjust by average frequency
  */
 bool opt_avalon7_iic_detect = AVA7_DEFAULT_IIC_DETECT;
