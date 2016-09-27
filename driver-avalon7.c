@@ -1937,7 +1937,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 				strcat(statbuf, buf);
 				for (k = 0; k < info->asic_count[i]; k++) {
 					if (info->get_asic[i][j][k][0])
-						sprintf(buf, "%.2f%% ", (double)(info->get_asic[i][j][k][1] * 100.0 / info->get_asic[i][j][k][0]));
+						sprintf(buf, "%.2f%% ", (double)(info->get_asic[i][j][k][1] * 100.0 / (info->get_asic[i][j][k][0] + info->get_asic[i][j][k][1])));
 					else
 						sprintf(buf, "%.2f%% ", 0.0);
 					strcat(statbuf, buf);
@@ -2242,9 +2242,10 @@ static void avalon7_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	struct avalon7_info *info = avalon7->device_data;
 	int temp = -273;
 	int fanmin = AVA7_DEFAULT_FAN_MAX;
-	int i;
+	int i, j, k;
 	uint32_t frequency = 0;
 	float ghs_sum = 0, mhsmm = 0;
+	double pass_num = 0.0, fail_num = 0.0;
 
 	for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
@@ -2259,13 +2260,20 @@ static void avalon7_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		mhsmm = avalon7_hash_cal(avalon7, i);
 		frequency += (mhsmm / AVA7_ASIC_CORE_CONST);
 		ghs_sum += (mhsmm / 1000);
+
+		for (j = 0; j < info->miner_count[i]; j++) {
+			for (k = 0; k < info->asic_count[i]; k++) {
+				pass_num += info->get_asic[i][j][k][0];
+				fail_num += info->get_asic[i][j][k][1];
+			}
+		}
 	}
 
 	if (info->mm_count)
 		frequency /= info->mm_count;
 
-	tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS %2dC %3d%%", frequency,
-			ghs_sum, temp, fanmin);
+	tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS %2dC %.2f%% %3d%%", frequency,
+			ghs_sum, temp, fail_num * 100.0 / (pass_num + pass_num), fanmin);
 }
 
 struct device_drv avalon7_drv = {
