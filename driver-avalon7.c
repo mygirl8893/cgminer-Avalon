@@ -1794,7 +1794,8 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 			avalon7_set_voltage(avalon7, i, info->set_voltage[i]);
 			for (j = 0; j < info->miner_count[i]; j++)
 				avalon7_set_freq(avalon7, i, j, info->set_frequency[i][j]);
-			avalon7_set_ss_param(avalon7, i);
+			if (opt_avalon7_smart_speed)
+				avalon7_set_ss_param(avalon7, i);
 
 			avalon7_set_finish(avalon7, i);
 			cg_wunlock(&info->update_lock);
