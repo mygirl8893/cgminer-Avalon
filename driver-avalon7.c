@@ -2333,7 +2333,7 @@ static void avalon7_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		frequency /= info->mm_count;
 
 	tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS %2dC %.2f%% %3d%%", frequency,
-			ghs_sum, temp, (pass_num + pass_num) ? fail_num * 100.0 / (pass_num + pass_num) : 0, fanmin);
+			ghs_sum, temp, (fail_num + pass_num) ? fail_num * 100.0 / (fail_num + pass_num) : 0, fanmin);
 }
 
 struct device_drv avalon7_drv = {
