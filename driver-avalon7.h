@@ -55,7 +55,7 @@
 #define AVA7_DEFAULT_IIC_DETECT	false
 
 #define AVA7_PWM_MAX	0x3FF
-#define AVA7_DRV_DIFFMAX	1024
+#define AVA7_DRV_DIFFMAX	500
 #define AVA7_ASIC_CORE_CONST	9216 /* 128 * ASIC_COUNT */
 #define AVA7_ASIC_TIMEOUT_CONST	0x2000000 /* 2 ^ 32 / 128 */
 
@@ -203,6 +203,7 @@ struct avalon7_info {
 	uint8_t mm_dna[AVA7_DEFAULT_MODULARS][AVA7_MM_DNA_LEN];
 	char mm_version[AVA7_DEFAULT_MODULARS][AVA7_MM_VER_LEN + 1]; /* It's a string */
 	uint32_t total_asics[AVA7_DEFAULT_MODULARS];
+	uint32_t max_ntime;
 
 	int mod_type[AVA7_DEFAULT_MODULARS];
 	uint8_t miner_count[AVA7_DEFAULT_MODULARS];

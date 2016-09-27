@@ -430,9 +430,12 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		nonce2 = be32toh(nonce2);
 		nonce = be32toh(nonce);
 
-		applog(LOG_NOTICE, "%s-%d-%d: Found! P:%d - N2:%08x N:%08x NR:%d [M:%d - MW: (%d,%d,%d,%d)]",
+		if (ntime > info->max_ntime)
+			info->max_ntime = ntime;
+
+		applog(LOG_NOTICE, "%s-%d-%d: Found! P:%d - N2:%08x N:%08x NR:%d/%d [M:%d - MW: (%d,%d,%d,%d)]",
 		       avalon7->drv->name, avalon7->device_id, modular_id,
-		       pool_no, nonce2, nonce, ntime,
+		       pool_no, nonce2, nonce, ntime, info->max_ntime,
 		       miner,
 		       info->chip_matching_work[modular_id][miner][0],
 		       info->chip_matching_work[modular_id][miner][1],
@@ -1460,7 +1463,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 		f = f > freq[i] ? f : freq[i];
 
 
-	tmp = (AVA7_ASIC_TIMEOUT_CONST / f) * 40 / 4;
+	tmp = ((AVA7_ASIC_TIMEOUT_CONST / f) * 40 / 4) * 2;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4, &tmp, 4);
 
