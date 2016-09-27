@@ -86,13 +86,14 @@
 #define AVA7_P_MERKLES	0x14
 #define AVA7_P_HEADER	0x15
 #define AVA7_P_TARGET	0x16
+#define AVA7_P_JOB_FIN	0x17
 
 /* ss package */
 #define AVA7_P_MID	0xa7
 
 /* Broadcase or with I2C address */
 #define AVA7_P_SET	0x20
-#define AVA7_P_FINISH	0x21
+#define AVA7_P_SET_FIN	0x21
 #define AVA7_P_SET_VOLT	0x22
 #define AVA7_P_SET_PMU	0x24
 #define AVA7_P_SET_PLL	0x25

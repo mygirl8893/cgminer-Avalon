@@ -1479,8 +1479,17 @@ static void avalon7_stratum_finish(struct cgpu_info *avalon7)
 	struct avalon7_pkg send_pkg;
 
 	memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
-	avalon7_init_pkg(&send_pkg, AVA7_P_FINISH, 1, 1);
+	avalon7_init_pkg(&send_pkg, AVA7_P_JOB_FIN, 1, 1);
 	avalon7_send_bc_pkgs(avalon7, &send_pkg);
+}
+
+static void avalon7_set_finish(struct cgpu_info *avalon7, int addr)
+{
+	struct avalon7_pkg send_pkg;
+
+	memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
+	avalon7_init_pkg(&send_pkg, AVA7_P_SET_FIN, 1, 1);
+	avalon7_iic_xfer_pkg(avalon7, addr, &send_pkg, NULL);
 }
 
 /* miner [0, miner_count], 0 means all miners */
@@ -1731,6 +1740,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 			for (j = 0; j < info->miner_count[i]; j++)
 				avalon7_set_freq(avalon7, i, j, info->set_frequency[i][j]);
 
+			avalon7_set_finish(avalon7, i);
 			cg_wunlock(&info->update_lock);
 		}
 	}
