@@ -218,7 +218,7 @@ struct avalon7_info {
 	int temp[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][5];
 	int temp_mm[AVA7_DEFAULT_MODULARS];
 
-	uint8_t temp_cutoff[AVA7_DEFAULT_MODULARS];
+	uint8_t cutoff[AVA7_DEFAULT_MODULARS];
 	int temp_target[AVA7_DEFAULT_MODULARS];
 	int temp_last_max[AVA7_DEFAULT_MODULARS];
 	int temp_overheat[AVA7_DEFAULT_MODULARS];

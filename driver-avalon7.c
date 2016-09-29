@@ -384,7 +384,7 @@ static inline uint32_t adjust_fan(struct avalon7_info *info, int id)
 		(info->freq_mode[id] == AVA7_FREQ_TEMPADJ_MODE))
 		pwm = get_fan_pwm(opt_avalon7_fan_max);
 
-	if (info->temp_cutoff[id])
+	if (info->cutoff[id])
 		pwm = get_fan_pwm(opt_avalon7_fan_max);
 
 	applog(LOG_DEBUG, "[%d], Adjust_fan: %dC-%d%%(%03x)", id, t, info->fan_pct[id], pwm);
@@ -1270,7 +1270,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		memset(info->set_frequency[i], 0, sizeof(unsigned int) * info->miner_count[i] * AVA7_DEFAULT_PLL_CNT);
 
 		info->led_indicator[i] = 0;
-		info->temp_cutoff[i] = 0;
+		info->cutoff[i] = 0;
 		info->fan_cpm[i] = 0;
 		info->temp_mm[i] = -273;
 		info->temp_last_max[i] = -273;
@@ -1758,7 +1758,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		/* Enter too hot */
 		if (temp_max >= info->temp_overheat[i]) {
 			update_settings = true;
-			info->temp_cutoff[i] = 1;
+			info->cutoff[i] = 1;
 			info->polling_first = 1;
 			for (j = 0; j < info->miner_count[i]; j++) {
 				for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
@@ -1769,8 +1769,8 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		}
 
 		/* Exit too hot */
-		if (info->temp_cutoff[i] && (temp_max <= (info->temp_overheat[i] - 10)))
-			info->temp_cutoff[i] = 0;
+		if (info->cutoff[i] && (temp_max <= (info->temp_overheat[i] - 10)))
+			info->cutoff[i] = 0;
 
 		/* State machine for settings
 		 * https://en.bitcoin.it/wiki/Avalon6#Frequency_Statechart
@@ -1788,7 +1788,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 				info->freq_mode[i] = AVA7_FREQ_PLLADJ_MODE;
 				break;
 			case AVA7_FREQ_CUTOFF_MODE:
-				if (!info->temp_cutoff[i]) {
+				if (!info->cutoff[i]) {
 					update_settings = true;
 					for (j = 0; j < info->miner_count[i]; j++) {
 						for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
