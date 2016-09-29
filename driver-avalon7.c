@@ -24,12 +24,12 @@ int opt_avalon7_fan_min = AVA7_DEFAULT_FAN_MIN;
 int opt_avalon7_fan_max = AVA7_DEFAULT_FAN_MAX;
 
 int opt_avalon7_voltage = AVA7_DEFAULT_VOLTAGE;
-int opt_avalon7_freq[AVA7_DEFAULT_PLL_CNT] = {AVA7_DEFAULT_FREQUENCY,
-					      AVA7_DEFAULT_FREQUENCY,
-					      AVA7_DEFAULT_FREQUENCY,
-					      AVA7_DEFAULT_FREQUENCY,
-					      AVA7_DEFAULT_FREQUENCY,
-					      AVA7_DEFAULT_FREQUENCY};
+int opt_avalon7_freq[AVA7_DEFAULT_PLL_CNT] = {AVA7_DEFAULT_FREQUENCY_0,
+					      AVA7_DEFAULT_FREQUENCY_1,
+					      AVA7_DEFAULT_FREQUENCY_2,
+					      AVA7_DEFAULT_FREQUENCY_3,
+					      AVA7_DEFAULT_FREQUENCY_4,
+					      AVA7_DEFAULT_FREQUENCY_5};
 
 int opt_avalon7_freq_sel = AVA7_DEFAULT_FREQUENCY_SEL;
 
@@ -1756,7 +1756,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 			info->polling_first = 1;
 			for (j = 0; j < info->miner_count[i]; j++) {
 				for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
-					info->set_frequency[i][j][k] = AVA7_DEFAULT_FREQUENCY;
+					info->set_frequency[i][j][k] = opt_avalon7_freq[k];
 			}
 
 			info->freq_mode[i] = AVA7_FREQ_CUTOFF_MODE;
