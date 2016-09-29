@@ -197,6 +197,17 @@ static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32
 	return (volt * AVA7_VOLT_ADC_RATIO / info->asic_count[modular_id]);
 }
 
+static double decode_pvt_temp(uint16_t pvt_code)
+{
+	double a4 = -1.1876E-11;
+	double a3 =  6.6675E-08;
+	double a2 = -1.7724E-04;
+	double a1 =  3.3691E-01;
+	double a0 = -6.0605E+01;
+
+	return a4 * pow(pvt_code, 4) + a3 * pow(pvt_code, 3) + a2 * pow(pvt_code, 2) + a1 * pow(pvt_code, 1) + a0;
+}
+
 #define UNPACK32(x, str)			\
 {						\
 	*((str) + 3) = (uint8_t) ((x)      );	\
@@ -339,17 +350,26 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 
 static inline int get_temp_max(struct avalon7_info *info, int addr)
 {
-	return info->temp[addr];
+	int i;
+	int max = 0;
+
+	for (i = 0; i < AVA7_DEFAULT_MINER_CNT; i++) {
+		if (info->temp[addr][i][3] > max)
+			max = info->temp[addr][i][3];
+	}
+
+	return max;
 }
 
 static inline uint32_t adjust_fan(struct avalon7_info *info, int id)
 {
 	uint32_t pwm;
-	int t = info->temp[id], diff, fandiff = opt_avalon7_fan_max - opt_avalon7_fan_min;;
+	int t, diff, fandiff = opt_avalon7_fan_max - opt_avalon7_fan_min;;
 
 	/* Scale fan% non linearly relatively to target temperature. It will
 	 * not try to keep the temperature at temp_target that accurately but
 	 * avoids temperature overshoot in both directions. */
+	t = get_temp_max(info, id);
 	diff = t - opt_avalon7_temp_target + 30;
 	if (diff > 32)
 		diff = 32;
@@ -479,8 +499,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		hexdump(ar->data, 32);
 		memcpy(&tmp, ar->data, 4);
 		tmp = be32toh(tmp);
-		info->temp[modular_id] = tmp;
-		avalon7->temp = tmp;
+		info->temp_mm[modular_id] = tmp;
+		avalon7->temp = get_temp_max(info, modular_id);
 
 		memcpy(&tmp, ar->data + 4, 4);
 		tmp = be32toh(tmp);
@@ -523,6 +543,32 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
 			memcpy(&tmp, ar->data + i * 4, 4);
 			info->get_pll[modular_id][ar->idx][i] = be32toh(tmp);
+		}
+		break;
+	case AVA7_P_STATUS_PVT:
+		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_PVT", avalon7->drv->name, avalon7->device_id, modular_id);
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			memcpy(&tmp, ar->data + i * 8, 4);
+			tmp = be32toh(tmp);
+			info->temp[modular_id][i][0] = (tmp >> 24) & 0xff;
+			info->temp[modular_id][i][1] = (tmp >> 16) & 0xff;
+			info->temp[modular_id][i][2] = tmp & 0xffff;
+
+			memcpy(&tmp, ar->data + (i + 1) * 8 - 4, 4);
+			tmp = be32toh(tmp);
+			info->temp[modular_id][i][3] = (tmp >> 16) & 0xffff;
+			info->temp[modular_id][i][4] = tmp & 0xffff;
+
+			/* Update the X value to real temperature */
+			applog(LOG_NOTICE, "(%d-%d)PVT TEMP: %d-%d-%d-%d-%d", modular_id, i,
+				info->temp[modular_id][i][0],
+				info->temp[modular_id][i][1],
+				info->temp[modular_id][i][2],
+				info->temp[modular_id][i][3],
+				info->temp[modular_id][i][4]);
+			info->temp[modular_id][i][2] = (int)decode_pvt_temp((uint16_t)info->temp[modular_id][i][2]);
+			info->temp[modular_id][i][3] = (int)decode_pvt_temp((uint16_t)info->temp[modular_id][i][3]);
+			info->temp[modular_id][i][4] = (int)decode_pvt_temp((uint16_t)info->temp[modular_id][i][4]);
 		}
 		break;
 	case AVA7_P_STATUS_ASIC:
@@ -1226,7 +1272,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		info->led_indicator[i] = 0;
 		info->temp_cutoff[i] = 0;
 		info->fan_cpm[i] = 0;
-		info->temp[i] = -273;
+		info->temp_mm[i] = -273;
 		info->temp_last_max[i] = -273;
 		info->local_works[i] = 0;
 		info->hw_works[i] = 0;
@@ -1913,7 +1959,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		sprintf(buf, " DH[%.3f%%]", hwp);
 		strcat(statbuf, buf);
 
-		sprintf(buf, " Temp[%d]", info->temp[i]);
+		sprintf(buf, " Temp[%d]", info->temp_mm[i]);
 		strcat(statbuf, buf);
 
 		sprintf(buf, " Fan[%d]", info->fan_cpm[i]);
@@ -2027,6 +2073,18 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		strcat(statbuf, " CRC[");
 		for (j = 0; j < info->miner_count[i]; j++) {
 			sprintf(buf, "%d ", info->error_crc[i][j]);
+			strcat(statbuf, buf);
+		}
+		statbuf[strlen(statbuf) - 1] = ']';
+
+		strcat(statbuf, " PVT_T[");
+		for (j = 0; j < info->miner_count[i]; j++) {
+			sprintf(buf, "%d-%d/%d-%d/%d ",
+				info->temp[i][j][0],
+				info->temp[i][j][2],
+				info->temp[i][j][1],
+				info->temp[i][j][3],
+				info->temp[i][j][4]);
 			strcat(statbuf, buf);
 		}
 		statbuf[strlen(statbuf) - 1] = ']';

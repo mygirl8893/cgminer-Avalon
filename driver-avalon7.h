@@ -122,6 +122,7 @@
 #define AVA7_P_STATUS_PLL	0x49
 #define AVA7_P_STATUS_LOG	0x4a
 #define AVA7_P_STATUS_ASIC	0x4b
+#define AVA7_P_STATUS_PVT	0x4c
 
 #define AVA7_MODULE_BROADCAST	0
 /* End of avalon7 protocol package type */
@@ -213,7 +214,10 @@ struct avalon7_info {
 	int led_indicator[AVA7_DEFAULT_MODULARS];
 	int fan_pct[AVA7_DEFAULT_MODULARS];
 	int fan_cpm[AVA7_DEFAULT_MODULARS];
-	int temp[AVA7_DEFAULT_MODULARS];
+
+	int temp[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][5];
+	int temp_mm[AVA7_DEFAULT_MODULARS];
+
 	uint8_t temp_cutoff[AVA7_DEFAULT_MODULARS];
 	int temp_target[AVA7_DEFAULT_MODULARS];
 	int temp_last_max[AVA7_DEFAULT_MODULARS];
