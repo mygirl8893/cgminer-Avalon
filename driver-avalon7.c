@@ -559,13 +559,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 			info->temp[modular_id][i][3] = (tmp >> 16) & 0xffff;
 			info->temp[modular_id][i][4] = tmp & 0xffff;
 
-			/* Update the X value to real temperature */
-			applog(LOG_NOTICE, "(%d-%d)PVT TEMP: %d-%d-%d-%d-%d", modular_id, i,
-				info->temp[modular_id][i][0],
-				info->temp[modular_id][i][1],
-				info->temp[modular_id][i][2],
-				info->temp[modular_id][i][3],
-				info->temp[modular_id][i][4]);
+			/* Update the pvt code to real temperature */
 			info->temp[modular_id][i][2] = (int)decode_pvt_temp((uint16_t)info->temp[modular_id][i][2]);
 			info->temp[modular_id][i][3] = (int)decode_pvt_temp((uint16_t)info->temp[modular_id][i][3]);
 			info->temp[modular_id][i][4] = (int)decode_pvt_temp((uint16_t)info->temp[modular_id][i][4]);
