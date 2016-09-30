@@ -15,15 +15,15 @@
 
 #ifdef USE_AVALON7
 
-#define AVA7_MM711_TEMP_FREQADJ		70
+#define AVA7_MM711_TEMP_FREQADJ		100
 #define AVA7_MM711_ASIC_CNT		18
 #define AVA7_MM711_FREQUENCY_MAX	1404
 
 #define AVA7_DEFAULT_FAN_MIN	50 /* % */
 #define AVA7_DEFAULT_FAN_MAX	100
 
-#define AVA7_DEFAULT_TEMP_TARGET	65
-#define AVA7_DEFAULT_TEMP_OVERHEAT	85
+#define AVA7_DEFAULT_TEMP_TARGET	90
+#define AVA7_DEFAULT_TEMP_OVERHEAT	105
 
 #define AVA7_DEFAULT_VOLTAGE_MIN	3889
 #define AVA7_DEFAULT_VOLTAGE	4825
@@ -267,7 +267,6 @@ extern char *set_avalon7_fan(char *arg);
 extern char *set_avalon7_freq(char *arg);
 extern char *set_avalon7_voltage(char *arg);
 extern int opt_avalon7_temp_target;
-extern int opt_avalon7_overheat;
 extern int opt_avalon7_polling_delay;
 extern int opt_avalon7_aucspeed;
 extern int opt_avalon7_aucxdelay;

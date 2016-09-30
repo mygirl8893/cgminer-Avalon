@@ -18,7 +18,6 @@
 #define get_fan_pwm(v)	(AVA7_PWM_MAX - (v) * AVA7_PWM_MAX / 100)
 
 int opt_avalon7_temp_target = AVA7_DEFAULT_TEMP_TARGET;
-int opt_avalon7_overheat = AVA7_DEFAULT_TEMP_OVERHEAT;
 
 int opt_avalon7_fan_min = AVA7_DEFAULT_FAN_MIN;
 int opt_avalon7_fan_max = AVA7_DEFAULT_FAN_MAX;
@@ -1246,9 +1245,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 			info->mod_type[i] = AVA7_TYPE_MM711;
 			info->miner_count[i] = AVA7_DEFAULT_MINER_CNT;
 			info->asic_count[i] = AVA7_MM711_ASIC_CNT;
-			info->temp_overheat[i] = opt_avalon7_overheat;
-			if (info->temp_overheat[i] > AVA7_DEFAULT_TEMP_OVERHEAT)
-				info->temp_overheat[i] = AVA7_DEFAULT_TEMP_OVERHEAT;
+			info->temp_overheat[i] = AVA7_DEFAULT_TEMP_OVERHEAT;
 
 			info->temp_target[i] = opt_avalon7_temp_target;
 			if (info->temp_target[i] > AVA7_DEFAULT_TEMP_TARGET)
