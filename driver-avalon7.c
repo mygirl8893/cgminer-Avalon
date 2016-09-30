@@ -2355,7 +2355,11 @@ static void avalon7_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	uint32_t frequency = 0;
 	float ghs_sum = 0, mhsmm = 0;
 	double pass_num = 0.0, fail_num = 0.0;
+	struct timeval current;
+	double mm_runtime_max = 0;
+	double device_tdiff;
 
+	cgtime(&current);
 	for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
 			continue;
@@ -2376,13 +2380,17 @@ static void avalon7_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 				fail_num += info->get_asic[i][j][k][1];
 			}
 		}
+		device_tdiff = tdiff(&current, &(info->elapsed[i]));
+		if (mm_runtime_max < device_tdiff)
+			mm_runtime_max = device_tdiff;
 	}
 
 	if (info->mm_count)
 		frequency /= info->mm_count;
 
-	tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS %2dC %.2f%% %3d%%", frequency,
-			ghs_sum, temp, (fail_num + pass_num) ? fail_num * 100.0 / (fail_num + pass_num) : 0, fanmin);
+	tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS/%.2fGHS %2dC %.2f%% %3d%%", frequency,
+			ghs_sum, avalon7->diff1 * 4 / mm_runtime_max,
+			temp, (fail_num + pass_num) ? fail_num * 100.0 / (fail_num + pass_num) : 0, fanmin);
 }
 
 struct device_drv avalon7_drv = {
