@@ -172,7 +172,7 @@ struct avalon7_info {
 	/* Public data */
 	double newnonce;
 
-	int polling_first;
+	bool polling_first;
 	int mm_count;
 	int xfer_err_cnt;
 	int pool_no;
@@ -209,7 +209,7 @@ struct avalon7_info {
 	uint8_t mm_dna[AVA7_DEFAULT_MODULARS][AVA7_MM_DNA_LEN];
 	char mm_version[AVA7_DEFAULT_MODULARS][AVA7_MM_VER_LEN + 1]; /* It's a string */
 	uint32_t total_asics[AVA7_DEFAULT_MODULARS];
-	uint32_t max_ntime;
+	uint32_t max_ntime; /* Maximum: 7200 */
 
 	int mod_type[AVA7_DEFAULT_MODULARS];
 	uint8_t miner_count[AVA7_DEFAULT_MODULARS];
@@ -231,19 +231,20 @@ struct avalon7_info {
 	uint32_t set_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t set_frequency[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
 
-	int get_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
-	int get_pll[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
-	int get_asic[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_ASIC_MAX][11];
+	uint32_t get_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
+	uint32_t get_pll[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
+	/* spd_pass(4B), spd_fail(4B), sum_failed(4B), sum_num(4B), sum_xor(4B), PLL(6 * 4B) */
+	uint32_t get_asic[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_ASIC_MAX][11];
 
 	uint64_t local_works[AVA7_DEFAULT_MODULARS];
 	uint64_t local_works_i[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint64_t hw_works[AVA7_DEFAULT_MODULARS];
 	uint64_t hw_works_i[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
-	int chip_matching_work[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_ASIC_MAX];
+	uint64_t chip_matching_work[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_ASIC_MAX];
 
-	int error_code[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT + 1];
+	uint32_t error_code[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT + 1];
 	uint32_t error_crc[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
-	int error_polling_cnt[AVA7_DEFAULT_MODULARS];
+	uint8_t error_polling_cnt[AVA7_DEFAULT_MODULARS];
 
 	uint8_t power_good[AVA7_DEFAULT_MODULARS];
 	char pmu_version[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_PMU_CNT][5];

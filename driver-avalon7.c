@@ -1152,7 +1152,7 @@ static bool avalon7_prepare(struct thr_info *thr)
 	struct cgpu_info *avalon7 = thr->cgpu;
 	struct avalon7_info *info = avalon7->device_data;
 
-	info->polling_first = 1;
+	info->polling_first = true;
 	info->newnonce = 0;
 	info->mm_count = 0;
 	info->xfer_err_cnt = 0;
@@ -1268,7 +1268,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		info->local_works[i] = 0;
 		info->hw_works[i] = 0;
 		for (j = 0; j < info->miner_count[i]; j++) {
-			memset(info->chip_matching_work[i][j], 0, sizeof(int) * info->asic_count[i]);
+			memset(info->chip_matching_work[i][j], 0, sizeof(uint64_t) * info->asic_count[i]);
 			info->local_works_i[i][j] = 0;
 			info->hw_works_i[i][j] = 0;
 			info->error_code[i][j] = 0;
@@ -1314,7 +1314,7 @@ static int polling(struct cgpu_info *avalon7)
 	/* Wait the DC-DC is power good */
 	if (info->polling_first) {
 		cgsleep_ms(600);
-		info->polling_first = 0;
+		info->polling_first = false;
 	}
 
 	cgtime(&current_fan);
@@ -1749,7 +1749,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		if (temp_max >= info->temp_overheat[i]) {
 			update_settings = true;
 			info->cutoff[i] = 1;
-			info->polling_first = 1;
+			info->polling_first = true;
 			for (j = 0; j < info->miner_count[i]; j++) {
 				for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
 					info->set_frequency[i][j][k] = opt_avalon7_freq[k];
