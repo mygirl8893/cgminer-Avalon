@@ -1683,8 +1683,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 	struct cgpu_info *avalon7 = thr->cgpu;
 	struct avalon7_info *info = avalon7->device_data;
 	struct timeval current;
-	double device_tdiff;
-	int64_t h;
+	double device_tdiff, h;
 	int i, j, k, count = 0;
 	int temp_max;
 	bool update_settings = false;
@@ -1862,7 +1861,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		copy_time(&(avalon7->dev_start_tv), &(info->firsthash));
 	}
 
-	return h * 0xffffffffull;
+	return (int64_t)(h * 0xffffffffull);
 }
 
 static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)

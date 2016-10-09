@@ -170,7 +170,7 @@ struct avalon7_pkg {
 
 struct avalon7_info {
 	/* Public data */
-	uint32_t newnonce;
+	double newnonce;
 
 	int polling_first;
 	int mm_count;
