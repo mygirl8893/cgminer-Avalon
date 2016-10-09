@@ -452,7 +452,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 		if (ntime > info->max_ntime)
 			info->max_ntime = ntime;
 
-		applog(LOG_DEBUG, "%s-%d-%d: Found! P:%d - N2:%08x N:%08x NR:%d/%d [M:%d - MW: (%d,%d,%d,%d)]",
+		applog(LOG_DEBUG, "%s-%d-%d: Found! P:%d - N2:%08x N:%08x NR:%d/%d [M:%d - MW: (%"PRIu64",%"PRIu64",%"PRIu64",%"PRIu64")]",
 		       avalon7->drv->name, avalon7->device_id, modular_id,
 		       pool_no, nonce2, nonce, ntime, info->max_ntime,
 		       miner,
@@ -1994,7 +1994,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 			sprintf(buf, " MW%d[", j);
 			strcat(statbuf, buf);
 			for (k = 0; k < info->asic_count[i]; k++) {
-				sprintf(buf, "%d ", info->chip_matching_work[i][j][k]);
+				sprintf(buf, "%"PRIu64" ", info->chip_matching_work[i][j][k]);
 				strcat(statbuf, buf);
 			}
 
