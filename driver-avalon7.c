@@ -1883,7 +1883,8 @@ static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)
 	return mhsmm;
 }
 
-#define STATBUFLEN (8 * 1024)
+#define STATBUFLEN_WITHOUT_DBG (6 * 1024)
+#define STATBUFLEN_WITH_DBG (6 * 7 * 1024)
 static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 {
 	struct api_data *root = NULL;
@@ -1892,18 +1893,22 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 	uint32_t a, b;
 	double hwp;
 	char buf[256];
-	char statbuf[STATBUFLEN];
+	char *statbuf = NULL;
 	struct timeval current;
 	float mhsmm;
 
 	cgtime(&current);
+	if (opt_debug)
+		statbuf = cgcalloc(STATBUFLEN_WITH_DBG, 1);
+	else
+		statbuf = cgcalloc(STATBUFLEN_WITHOUT_DBG, 1);
+
 	for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
 			continue;
 
-		memset(statbuf, 0, STATBUFLEN);
 		sprintf(buf, "Ver[%s]", info->mm_version[i]);
-		strcat(statbuf, buf);
+		strcpy(statbuf, buf);
 
 		sprintf(buf, " DNA[%02x%02x%02x%02x%02x%02x%02x%02x]",
 				info->mm_dna[i][0],
@@ -2078,10 +2083,12 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 			strcat(statbuf, buf);
 		}
 		statbuf[strlen(statbuf) - 1] = ']';
+		statbuf[strlen(statbuf)] = '\0';
 
 		sprintf(buf, "MM ID%d", i);
 		root = api_add_string(root, buf, statbuf, true);
 	}
+	free(statbuf);
 
 	root = api_add_int(root, "MM Count", &(info->mm_count), true);
 	root = api_add_int(root, "Smart Speed", &opt_avalon7_smart_speed, true);
