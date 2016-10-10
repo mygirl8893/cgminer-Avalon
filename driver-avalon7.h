@@ -56,6 +56,7 @@
 #define AVA7_DEFAULT_TH_INIT	(0xffff / 2)
 #define AVA7_DEFAULT_TH_MS	1
 #define AVA7_DEFAULT_TH_TIMEOUT	0
+#define AVA7_DEFAULT_NONCE_MASK 32
 
 #define AVA7_DEFAULT_IIC_DETECT	false
 
@@ -283,5 +284,6 @@ extern uint32_t opt_avalon7_th_fail;
 extern uint32_t opt_avalon7_th_init;
 extern uint32_t opt_avalon7_th_ms;
 extern uint32_t opt_avalon7_th_timeout;
+extern uint32_t opt_avalon7_nonce_mask;
 #endif /* USE_AVALON7 */
 #endif	/* _AVALON7_H_ */

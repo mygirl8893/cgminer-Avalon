@@ -54,6 +54,7 @@ uint32_t opt_avalon7_th_fail = AVA7_DEFAULT_TH_FAIL;
 uint32_t opt_avalon7_th_init = AVA7_DEFAULT_TH_INIT;
 uint32_t opt_avalon7_th_ms = AVA7_DEFAULT_TH_MS;
 uint32_t opt_avalon7_th_timeout = AVA7_DEFAULT_TH_TIMEOUT;
+uint32_t opt_avalon7_nonce_mask = AVA7_DEFAULT_NONCE_MASK;
 
 uint32_t cpm_table[] =
 {
@@ -1445,6 +1446,7 @@ static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 		tmp = 0;
 	tmp |= 2; /* Enable nonce check */
 	send_pkg.data[8] = tmp & 0xff;
+	send_pkg.data[9] = opt_avalon7_nonce_mask & 0xff;
 
 	/* Package the data */
 	avalon7_init_pkg(&send_pkg, AVA7_P_SET, 1, 1);

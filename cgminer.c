@@ -860,6 +860,11 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
+static char *set_int_24_to_32(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 24, 32);
+}
+
 static char __maybe_unused *set_int_0_to_4(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 4);
@@ -1409,6 +1414,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon7-freqadj-temp",
 		     opt_set_intval, opt_show_intval, &opt_avalon7_freqadj_temp,
 		     "Set Avalon7 check temperature when run into AVA7_FREQ_TEMPADJ_MODE"),
+	OPT_WITH_ARG("--avalon7-nonce-mask",
+		     set_int_24_to_32, opt_show_intval, &opt_avalon7_nonce_mask,
+		     "Set A3212 nonce mask, range 24-32."),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
@@ -5173,6 +5181,7 @@ void write_config(FILE *fcfg)
 			     (void *)opt->cb_arg == (void *)set_int_0_to_5 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
 			     (void *)opt->cb_arg == (void *)set_int_1_to_10 ||
+			     (void *)opt->cb_arg == (void *)set_int_24_to_32 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
 			     (void *)opt->cb_arg == (void *)set_int_1_to_255 ||
