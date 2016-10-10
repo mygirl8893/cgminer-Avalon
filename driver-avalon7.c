@@ -1080,6 +1080,7 @@ static struct cgpu_info *avalon7_iic_detect(void)
 	       I2C_BUS);
 
 	avalon7->device_data = cgcalloc(sizeof(struct avalon7_info), 1);
+	memset(avalon7->device_data, 0, sizeof(struct avalon7_info));
 	info = avalon7->device_data;
 
 	for (i = 0; i < AVA7_DEFAULT_MODULARS; i++) {
@@ -1129,6 +1130,7 @@ static struct cgpu_info *avalon7_auc_detect(struct libusb_device *dev, struct us
 	       avalon7->device_path);
 
 	avalon7->device_data = cgcalloc(sizeof(struct avalon7_info), 1);
+	memset(avalon7->device_data, 0, sizeof(struct avalon7_info));
 	info = avalon7->device_data;
 	memcpy(info->auc_version, auc_ver, AVA7_AUC_VER_LEN);
 	info->auc_version[AVA7_AUC_VER_LEN] = '\0';
