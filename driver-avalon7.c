@@ -576,15 +576,17 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 					avalon7->drv->name, avalon7->device_id, modular_id,
 					x_miner_id, x_asic_id);
 			memcpy(&tmp, ar->data + 0, 4);
-			info->get_asic[modular_id][x_miner_id][x_asic_id][0] += be32toh(tmp);
-			memcpy(&tmp, ar->data + 4, 4);
-			info->get_asic[modular_id][x_miner_id][x_asic_id][1] += be32toh(tmp);
-			memcpy(&tmp, ar->data + 8, 4);
-			info->get_asic[modular_id][x_miner_id][x_asic_id][2] += be32toh(tmp);
-			memcpy(&tmp, ar->data + 12, 4);
-			info->get_asic[modular_id][x_miner_id][x_asic_id][3] += be32toh(tmp);
-			memcpy(&tmp, ar->data + 16, 4);
-			info->get_asic[modular_id][x_miner_id][x_asic_id][4] += be32toh(tmp);
+			if (tmp) {
+				info->get_asic[modular_id][x_miner_id][x_asic_id][0] = be32toh(tmp);
+				memcpy(&tmp, ar->data + 4, 4);
+				info->get_asic[modular_id][x_miner_id][x_asic_id][1] = be32toh(tmp);
+				memcpy(&tmp, ar->data + 8, 4);
+				info->get_asic[modular_id][x_miner_id][x_asic_id][2] = be32toh(tmp);
+				memcpy(&tmp, ar->data + 12, 4);
+				info->get_asic[modular_id][x_miner_id][x_asic_id][3] = be32toh(tmp);
+				memcpy(&tmp, ar->data + 16, 4);
+				info->get_asic[modular_id][x_miner_id][x_asic_id][4] = be32toh(tmp);
+			}
 			tmp = *(ar->data + 20);
 			info->get_asic[modular_id][x_miner_id][x_asic_id][5] = tmp;
 			tmp = *(ar->data + 21);
@@ -1890,7 +1892,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 	struct api_data *root = NULL;
 	struct avalon7_info *info = avalon7->device_data;
 	int i, j, k;
-	uint32_t a, b;
+	uint32_t a, b, tmp;
 	double hwp;
 	char buf[256];
 	char *statbuf = NULL;
@@ -2048,7 +2050,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 			}
 			int l;
 			/* i: modular, j: miner, k:asic, l:value */
-			for (l = 0; l < 11; l++) {
+			for (l = 0; l < 5; l++) {
 				for (j = 0; j < info->miner_count[i]; j++) {
 					sprintf(buf, " C_%d_%02d[", j, l);
 					strcat(statbuf, buf);
@@ -2059,6 +2061,19 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 
 					statbuf[strlen(statbuf) - 1] = ']';
 				}
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " GHSmm%02d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					mhsmm = 0;
+					for (l = 5; l < 11; l++)
+						mhsmm += (info->get_asic[i][j][k][l] * info->set_frequency[i][j][l - 5]);
+					sprintf(buf, "%.2f ", mhsmm / 1000);
+					strcat(statbuf, buf);
+				}
+				statbuf[strlen(statbuf) - 1] = ']';
 			}
 		}
 
