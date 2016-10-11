@@ -1506,7 +1506,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 		f = f > freq[i] ? f : freq[i];
 
 
-	tmp = ((AVA7_ASIC_TIMEOUT_CONST / f) * 40 / 4) * 2;
+	tmp = ((AVA7_ASIC_TIMEOUT_CONST / f) * 40 / 4);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4, &tmp, 4);
 
