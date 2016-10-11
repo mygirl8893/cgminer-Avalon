@@ -55,6 +55,7 @@ uint32_t opt_avalon7_th_init = AVA7_DEFAULT_TH_INIT;
 uint32_t opt_avalon7_th_ms = AVA7_DEFAULT_TH_MS;
 uint32_t opt_avalon7_th_timeout = AVA7_DEFAULT_TH_TIMEOUT;
 uint32_t opt_avalon7_nonce_mask = AVA7_DEFAULT_NONCE_MASK;
+bool opt_avalon7_asic_debug = AVA7_DEFAULT_ASIC_DEBUG;
 
 uint32_t cpm_table[] =
 {
@@ -1445,8 +1446,9 @@ static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 	/* adjust flag [0-5]: reserved, 6: nonce check, 7: autof*/
 	tmp = 1;
 	if (!opt_avalon7_smart_speed)
-		tmp = 0;
-	tmp |= 2; /* Enable nonce check */
+	      tmp = 0;
+	tmp |= (1 << 1); /* Enable nonce check */
+	tmp |= (opt_avalon7_asic_debug << 2);
 	send_pkg.data[8] = tmp & 0xff;
 	send_pkg.data[9] = opt_avalon7_nonce_mask & 0xff;
 
@@ -1504,7 +1506,6 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 	f = freq[0];
 	for (i = 1; i < AVA7_DEFAULT_PLL_CNT; i++)
 		f = f > freq[i] ? f : freq[i];
-
 
 	tmp = ((AVA7_ASIC_TIMEOUT_CONST / f) * 40 / 4);
 	tmp = be32toh(tmp);

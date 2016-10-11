@@ -1417,6 +1417,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon7-nonce-mask",
 		     set_int_24_to_32, opt_show_intval, &opt_avalon7_nonce_mask,
 		     "Set A3212 nonce mask, range 24-32."),
+	OPT_WITHOUT_ARG("--avalon7-asic-debug",
+		     opt_set_bool, &opt_avalon7_asic_debug,
+		     "Enable A3212 debug."),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
