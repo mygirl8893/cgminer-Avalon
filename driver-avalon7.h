@@ -76,6 +76,13 @@
 #define AVA7_CONNECTER_AUC	1
 #define AVA7_CONNECTER_IIC	2
 
+#define AVA7_A3212_PVT_MODE_P_ULVT	0
+#define AVA7_A3212_PVT_MODE_P_LVT	1
+#define AVA7_A3212_PVT_MODE_P_SVT	2
+#define AVA7_A3212_PVT_MODE_V	3
+#define AVA7_A3212_PVT_MODE_T	4
+#define AVA7_A3212_PVT_MODE_COUNT	5
+
 /* avalon7 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon7/firmware/protocol.h */
 #define AVA7_MM_VER_LEN	15
@@ -130,6 +137,7 @@
 #define AVA7_P_STATUS_LOG	0x4a
 #define AVA7_P_STATUS_ASIC	0x4b
 #define AVA7_P_STATUS_PVT	0x4c
+#define AVA7_P_STATUS_PVT_DEBUG	0x4d
 
 #define AVA7_MODULE_BROADCAST	0
 /* End of avalon7 protocol package type */
@@ -237,6 +245,8 @@ struct avalon7_info {
 	uint32_t get_pll[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
 	/* spd_pass(4B), spd_fail(4B), sum_failed(4B), sum_num(4B), sum_xor(4B), PLL(6 * 4B) */
 	uint32_t get_asic[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_ASIC_MAX][11];
+
+	uint16_t get_pvt_code[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_A3212_PVT_MODE_COUNT][AVA7_DEFAULT_ASIC_MAX];
 
 	uint64_t local_works[AVA7_DEFAULT_MODULARS];
 	uint64_t local_works_i[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];

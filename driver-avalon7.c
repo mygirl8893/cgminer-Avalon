@@ -603,6 +603,35 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 			info->get_asic[modular_id][x_miner_id][x_asic_id][10] = tmp;
 		}
 		break;
+	case AVA7_P_STATUS_PVT_DEBUG:
+		{
+			int pvt_miner_id;
+			int pvt_asic_id;
+			uint16_t pvt_code;
+
+			pvt_miner_id = ar->idx / AVA7_MM711_ASIC_CNT;
+			pvt_asic_id  = ar->idx % AVA7_MM711_ASIC_CNT;
+
+			applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_PVT_DEBUG %d-%d",
+					avalon7->drv->name, avalon7->device_id, modular_id,
+					pvt_miner_id, pvt_asic_id);
+			memcpy(&pvt_code, ar->data + 0, 2);
+			pvt_code = htobe16(pvt_code);
+			info->get_pvt_code[modular_id][pvt_miner_id][AVA7_A3212_PVT_MODE_P_ULVT][pvt_asic_id] = pvt_code;
+			memcpy(&pvt_code, ar->data + 2, 2);
+			pvt_code = htobe16(pvt_code);
+			info->get_pvt_code[modular_id][pvt_miner_id][AVA7_A3212_PVT_MODE_P_LVT][pvt_asic_id] = pvt_code;
+			memcpy(&pvt_code, ar->data + 4, 2);
+			pvt_code = htobe16(pvt_code);
+			info->get_pvt_code[modular_id][pvt_miner_id][AVA7_A3212_PVT_MODE_P_SVT][pvt_asic_id] = pvt_code;
+			memcpy(&pvt_code, ar->data + 6, 2);
+			pvt_code = htobe16(pvt_code);
+			info->get_pvt_code[modular_id][pvt_miner_id][AVA7_A3212_PVT_MODE_V][pvt_asic_id] = pvt_code;
+			memcpy(&pvt_code, ar->data + 8, 2);
+			pvt_code = htobe16(pvt_code);
+			info->get_pvt_code[modular_id][pvt_miner_id][AVA7_A3212_PVT_MODE_T][pvt_asic_id] = pvt_code;
+		}
+		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d-%d: Unknown response %x", avalon7->drv->name, avalon7->device_id, modular_id, ar->type);
 		break;
@@ -2021,6 +2050,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		sprintf(buf, " ECMM[%d]", info->error_code[i][j]);
 		strcat(statbuf, buf);
 
+
 		if (opt_debug) {
 			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " SF%d[", j);
@@ -2066,6 +2096,61 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 
 					statbuf[strlen(statbuf) - 1] = ']';
 				}
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " PVT_P_ULVT_%d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					sprintf(buf, "%5d ", info->get_pvt_code[i][j][AVA7_A3212_PVT_MODE_P_ULVT][k]);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " PVT_P_LVT_%d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					sprintf(buf, "%5d ", info->get_pvt_code[i][j][AVA7_A3212_PVT_MODE_P_LVT][k]);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " PVT_P_SVT_%d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					sprintf(buf, "%5d ", info->get_pvt_code[i][j][AVA7_A3212_PVT_MODE_P_SVT][k]);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " PVT_V_%d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					sprintf(buf, "%5d ", info->get_pvt_code[i][j][AVA7_A3212_PVT_MODE_V][k]);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " PVT_T_%d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					sprintf(buf, "%5d ", info->get_pvt_code[i][j][AVA7_A3212_PVT_MODE_T][k]);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
 			}
 
 			for (j = 0; j < info->miner_count[i]; j++) {
