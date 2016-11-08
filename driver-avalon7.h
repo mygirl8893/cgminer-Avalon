@@ -293,5 +293,6 @@ extern uint32_t opt_avalon7_th_ms;
 extern uint32_t opt_avalon7_th_timeout;
 extern uint32_t opt_avalon7_nonce_mask;
 extern bool opt_avalon7_asic_debug;
+extern bool opt_avalon7_ssplus_enable;
 #endif /* USE_AVALON7 */
 #endif	/* _AVALON7_H_ */

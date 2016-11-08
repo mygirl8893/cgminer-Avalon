@@ -83,6 +83,7 @@ char *curly = ":D";
 
 #ifdef USE_AVALON7
 #include "driver-avalon7.h"
+#include "libssplus.h"
 #endif
 
 #ifdef USE_AVALON_MINER
@@ -1446,6 +1447,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-avalon7-asic-debug",
 		     opt_set_invbool, &opt_avalon7_asic_debug,
 		     "Disable A3212 debug."),
+	OPT_WITHOUT_ARG("--avalon7-ssplus-enable",
+		     opt_set_invbool, &opt_avalon7_ssplus_enable,
+		     "Enable avalon7 smart speed plus."),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
@@ -10009,6 +10013,12 @@ int main(int argc, char *argv[])
 #endif
 	};
 
+#ifdef USE_AVALON7
+	if (opt_avalon7_ssplus_enable) {
+		sorter_init();
+		hasher_init();
+	}
+#endif
 begin_bench:
 	total_mhashes_done = 0;
 	for (i = 0; i < total_devices; i++) {
@@ -10077,8 +10087,13 @@ begin_bench:
 		int ts, max_staged = max_queue;
 		struct pool *pool;
 
-		if (opt_work_update)
+		if (opt_work_update) {
 			signal_work_update();
+#ifdef USE_AVALON7
+			if (opt_avalon7_ssplus_enable)
+				hasher_update_stratum(true);
+#endif
+		}
 		opt_work_update = false;
 
 		mutex_lock(stgd_lock);

@@ -56,6 +56,7 @@ uint32_t opt_avalon7_th_ms = AVA7_DEFAULT_TH_MS;
 uint32_t opt_avalon7_th_timeout = AVA7_DEFAULT_TH_TIMEOUT;
 uint32_t opt_avalon7_nonce_mask = AVA7_DEFAULT_NONCE_MASK;
 bool opt_avalon7_asic_debug = true;
+bool opt_avalon7_ssplus_enable = false;
 
 uint32_t cpm_table[] =
 {
