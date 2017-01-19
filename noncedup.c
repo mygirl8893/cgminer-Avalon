@@ -12,7 +12,7 @@
 
 // Nonce
 typedef struct nitem {
-	uint32_t work_id;
+	uint64_t nonce2;
 	uint32_t nonce;
 	struct timeval when;
 } NITEM;
@@ -70,7 +70,7 @@ bool isdupnonce(struct cgpu_info *cgpu, struct work *work, uint32_t nonce)
 	K_WLOCK(dup->nfree_list);
 	item = dup->nonce_list->tail;
 	while (unique && item) {
-		if (DATAN(item)->work_id == work->id && DATAN(item)->nonce == nonce) {
+		if (DATAN(item)->nonce2 == work->nonce2 && DATAN(item)->nonce == nonce) {
 			unique = false;
 			applog(LOG_WARNING, "%s%d: Duplicate nonce %08x",
 					    cgpu->drv->name, cgpu->device_id, nonce);
@@ -79,7 +79,7 @@ bool isdupnonce(struct cgpu_info *cgpu, struct work *work, uint32_t nonce)
 	}
 	if (unique) {
 		item = k_unlink_head(dup->nfree_list);
-		DATAN(item)->work_id = work->id;
+		DATAN(item)->nonce2 = work->nonce2;
 		DATAN(item)->nonce = nonce;
 		memcpy(&(DATAN(item)->when), &now, sizeof(now));
 		k_add_head(dup->nonce_list, item);
