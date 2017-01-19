@@ -31,6 +31,9 @@ void dupalloc(struct cgpu_info *cgpu, int timelimit)
 {
 	struct dupdata *dup;
 
+	if (cgpu->dup_data)
+		free(cgpu->dup_data);
+
 	dup = calloc(1, sizeof(*dup));
 	if (unlikely(!dup))
 		quithere(1, "Failed to calloc dupdata");

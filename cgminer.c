@@ -7672,7 +7672,9 @@ static bool new_nonce(struct thr_info *thr, uint32_t nonce)
  * nonce submitted by this device. */
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
-	if (new_nonce(thr, nonce) && test_nonce(work, nonce))
+	struct cgpu_info *cgpu = thr->cgpu;
+
+	if (!isdupnonce(cgpu, work, nonce) && test_nonce(work, nonce))
 		submit_tested_work(thr, work);
 	else {
 		inc_hw_errors(thr);
@@ -9517,6 +9519,8 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	    strlen(cgpu->usbdev->serial_string) > 4)
 		cgpu->unique_id = str_text(cgpu->usbdev->serial_string);
 #endif
+	dupalloc(cgpu, 10);
+
 	return true;
 }
 
