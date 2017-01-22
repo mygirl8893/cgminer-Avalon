@@ -1713,12 +1713,11 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 	for (i = 1; i < AVA7_DEFAULT_PLL_CNT; i++)
 		f = f > freq[i] ? f : freq[i];
 
-	tmp = ((AVA7_ASIC_TIMEOUT_CONST / f) * 40 / 4);
+	tmp = (AVA7_ASIC_TIMEOUT_CONST / f);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4, &tmp, 4);
 
-	tmp = AVA7_ASIC_TIMEOUT_CONST / f * 98 / 100;
-	tmp = be32toh(tmp);
+	tmp = 0;
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4 + 4, &tmp, 4);
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set freq miner %x-%x",
 			avalon7->drv->name, avalon7->device_id, addr,
