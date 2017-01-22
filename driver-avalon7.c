@@ -33,8 +33,6 @@ int opt_avalon7_freq[AVA7_DEFAULT_PLL_CNT] = {AVA7_DEFAULT_FREQUENCY_0,
 					      AVA7_DEFAULT_FREQUENCY_4,
 					      AVA7_DEFAULT_FREQUENCY_5};
 
-int opt_avalon7_freq_sel = AVA7_DEFAULT_FREQUENCY_SEL;
-
 int opt_avalon7_polling_delay = AVA7_DEFAULT_POLLING_DELAY;
 
 int opt_avalon7_aucspeed = AVA7_AUC_SPEED;
@@ -55,6 +53,9 @@ uint32_t opt_avalon7_th_ms = AVA7_DEFAULT_TH_MS;
 uint32_t opt_avalon7_th_timeout = AVA7_DEFAULT_TH_TIMEOUT;
 uint32_t opt_avalon7_nonce_mask = AVA7_DEFAULT_NONCE_MASK;
 bool opt_avalon7_asic_debug = true;
+bool opt_x11_dnw_sel = false;
+bool opt_x11_func_sel = false;
+uint32_t opt_x11_spd_sel = X11_DEFAULT_SPD_SEL;
 
 uint32_t cpm_table[] =
 {
@@ -570,6 +571,7 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 		memcpy(&nonce2, ar->data + 4, 4);
 		memcpy(&ntime, ar->data + 8, 4);
 		memcpy(&nonce, ar->data + 12, 4);
+		simplelog(LOG_NOTICE, "nonce[31:28] = %d", nonce >> 28);
 		job_id[0] = ar->data[16];
 		job_id[1] = ar->data[17];
 		pool_no = (ar->data[18] | (ar->data[19] << 8));
@@ -1645,15 +1647,16 @@ static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 
 	/* TODO:ss/ssp mode */
 
-	tmp = be32toh(opt_avalon7_freq_sel);
+	tmp = be32toh(opt_x11_spd_sel);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
-	/* adjust flag [0-5]: reserved, 6: nonce check, 7: autof*/
 	tmp = 1;
 	if (!opt_avalon7_smart_speed)
 	      tmp = 0;
 	tmp |= (1 << 1); /* Enable nonce check */
 	tmp |= (opt_avalon7_asic_debug << 2);
+	tmp |= (opt_x11_dnw_sel << 3);
+	tmp |= (opt_x11_func_sel << 4);
 	send_pkg.data[8] = tmp & 0xff;
 	send_pkg.data[9] = opt_avalon7_nonce_mask & 0xff;
 
@@ -2258,6 +2261,9 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 	root = api_add_bool(root, "Connection Overloaded", &info->conn_overloaded, true);
 	root = api_add_int(root, "Voltage Offset", &opt_avalon7_voltage_offset, true);
 	root = api_add_uint32(root, "Nonce Mask", &opt_avalon7_nonce_mask, true);
+	root = api_add_hex32(root, "SPD Sel", &opt_x11_spd_sel, true);
+	root = api_add_bool(root, "DNW Sel", &opt_x11_dnw_sel, true);
+	root = api_add_bool(root, "FUNC Sel", &opt_x11_func_sel, true);
 
 	return root;
 }

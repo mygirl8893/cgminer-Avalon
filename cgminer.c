@@ -1401,9 +1401,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_CBARG("--avalon7-freq",
 		     set_avalon7_freq, NULL, &opt_set_avalon7_freq,
 		     "Set Avalon7 default frequency, range:[24, 1404], step: 12, example: 500"),
-	OPT_WITH_ARG("--avalon7-freq-sel",
-		     set_int_0_to_5, opt_show_intval, &opt_avalon7_freq_sel,
-		     "Set Avalon7 default frequency select, range:[0, 5], step: 1, example: 3"),
 	OPT_WITH_CBARG("--avalon7-fan",
 		     set_avalon7_fan, NULL, &opt_set_avalon7_fan,
 		     "Set Avalon7 target fan speed, range:[0, 100], step: 1, example: 0-100"),
@@ -1443,9 +1440,15 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon7-nonce-mask",
 		     set_int_24_to_32, opt_show_intval, &opt_avalon7_nonce_mask,
 		     "Set A3212 nonce mask, range 24-32."),
-	OPT_WITHOUT_ARG("--no-avalon7-asic-debug",
-		     opt_set_invbool, &opt_avalon7_asic_debug,
-		     "Disable A3212 debug."),
+	OPT_WITHOUT_ARG("--x11-dnw-select",
+		     opt_set_bool, &opt_x11_dnw_sel,
+		     "Enable DNW zone for X11."),
+	OPT_WITHOUT_ARG("--x11-func-select",
+		     opt_set_bool, &opt_x11_func_sel,
+		     "Select func to 1 for X11."),
+	OPT_WITH_ARG("--x11-spd-sel",
+		     opt_set_ulongval, opt_show_ulongval, &opt_x11_spd_sel,
+		     "Set SPD SEL for X11."),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
@@ -9697,7 +9700,6 @@ static void initialise_usb(void) {
 #else
 #define initialise_usb() {}
 #endif
-
 int main(int argc, char *argv[])
 {
 	struct sigaction handler;

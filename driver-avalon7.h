@@ -67,6 +67,8 @@
 #define AVA7_DEFAULT_TH_TIMEOUT	0
 #define AVA7_DEFAULT_NONCE_MASK 29
 
+#define X11_DEFAULT_SPD_SEL	0
+
 #define AVA7_DEFAULT_IIC_DETECT	false
 
 #define AVA7_PWM_MAX	0x3FF
@@ -308,5 +310,8 @@ extern uint32_t opt_avalon7_th_ms;
 extern uint32_t opt_avalon7_th_timeout;
 extern uint32_t opt_avalon7_nonce_mask;
 extern bool opt_avalon7_asic_debug;
+extern bool opt_x11_dnw_sel;
+extern bool opt_x11_func_sel;
+extern uint32_t opt_x11_spd_sel;
 #endif /* USE_AVALON7 */
 #endif	/* _AVALON7_H_ */
