@@ -27,11 +27,7 @@ int opt_avalon7_voltage = AVA7_INVALID_VOLTAGE;
 int opt_avalon7_voltage_offset = AVA7_DEFAULT_VOLTAGE_OFFSET;
 
 int opt_avalon7_freq[AVA7_DEFAULT_PLL_CNT] = {AVA7_DEFAULT_FREQUENCY_0,
-					      AVA7_DEFAULT_FREQUENCY_1,
-					      AVA7_DEFAULT_FREQUENCY_2,
-					      AVA7_DEFAULT_FREQUENCY_3,
-					      AVA7_DEFAULT_FREQUENCY_4,
-					      AVA7_DEFAULT_FREQUENCY_5};
+					      AVA7_DEFAULT_FREQUENCY_1};
 
 int opt_avalon7_polling_delay = AVA7_DEFAULT_POLLING_DELAY;
 
@@ -1716,7 +1712,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 	for (i = 1; i < AVA7_DEFAULT_PLL_CNT; i++)
 		f = f > freq[i] ? f : freq[i];
 
-	tmp = (AVA7_ASIC_TIMEOUT_CONST / f);
+	tmp = (AVA7_ASIC_TIMEOUT_CONST / f / info->miner_count[addr]);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA7_DEFAULT_PLL_CNT * 4, &tmp, 4);
 
@@ -2206,7 +2202,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 				strcat(statbuf, buf);
 				for (k = 0; k < info->asic_count[i]; k++) {
 					mhsmm = 0;
-					for (l = 5; l < 11; l++)
+					for (l = 5; l < 5 + AVA7_DEFAULT_PLL_CNT; l++)
 						mhsmm += (info->get_asic[i][j][k][l] * info->set_frequency[i][j][l - 5]);
 					sprintf(buf, "%.2f ", mhsmm / 1000);
 					strcat(statbuf, buf);
