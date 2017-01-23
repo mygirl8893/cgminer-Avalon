@@ -571,7 +571,6 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 		memcpy(&nonce2, ar->data + 4, 4);
 		memcpy(&ntime, ar->data + 8, 4);
 		memcpy(&nonce, ar->data + 12, 4);
-		simplelog(LOG_NOTICE, "nonce[31:28] = %d", nonce >> 28);
 		job_id[0] = ar->data[16];
 		job_id[1] = ar->data[17];
 		pool_no = (ar->data[18] | (ar->data[19] << 8));
@@ -589,6 +588,7 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 		}
 		nonce2 = be32toh(nonce2);
 		nonce = be32toh(nonce);
+		simplelog(LOG_NOTICE, "nonce[31:28] = %d", nonce >> 28);
 
 		if (ntime > info->max_ntime)
 			info->max_ntime = ntime;
