@@ -554,7 +554,7 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 	int pool_no;
 	uint32_t i;
 	int64_t last_diff1;
-	uint16_t vin;
+	uint16_t vin, cin;
 
 	if (likely(avalon7->thr))
 		thr = avalon7->thr[0];
@@ -693,6 +693,23 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 			memcpy(&vin, ar->data + 8 + i * 2, 2);
 			info->get_vin[modular_id][i] = decode_vin(info, modular_id, be16toh(vin));
 		}
+		break;
+	case AVA7_P_STATUS_MCU:
+		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_MCU", avalon7->drv->name, avalon7->device_id, modular_id);
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			memcpy(&cin, ar->data + i * 2, 2);
+			info->get_cin[modular_id][i] = be16toh(cin);
+		}
+
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			memcpy(&vin, ar->data + 8 + i * 2, 2);
+			info->get_vin[modular_id][i] = decode_vin(info, modular_id, be16toh(vin));
+		}
+
+		info->power_good[modular_id] = ar->data[16];
+
+		memcpy(&info->mcu_version[modular_id], ar->data + 21, 4);
+		info->mcu_version[modular_id][4] = '\0';
 		break;
 	case AVA7_P_STATUS_VOLT:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_VOLT", avalon7->drv->name, avalon7->device_id, modular_id);
@@ -1471,6 +1488,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 			else
 				info->set_voltage[i][j] = opt_avalon7_voltage;
 			info->get_voltage[i][j] = 0;
+			info->get_cin[i][j] = 0;
 			info->get_vin[i][j] = 0;
 
 			for (k = 0; k < 5; k++)

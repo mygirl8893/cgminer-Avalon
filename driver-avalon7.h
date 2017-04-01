@@ -137,6 +137,7 @@
 #define AVA7_P_STATUS_LOG	0x4a
 #define AVA7_P_STATUS_ASIC	0x4b
 #define AVA7_P_STATUS_PVT	0x4c
+#define AVA7_P_STATUS_MCU	0x4d
 
 #define AVA7_MODULE_BROADCAST	0
 /* End of avalon7 protocol package type */
@@ -245,6 +246,7 @@ struct avalon7_info {
 	uint32_t set_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t set_frequency[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
 
+	uint16_t get_cin[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint16_t get_vin[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t get_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t get_pll[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
@@ -262,6 +264,7 @@ struct avalon7_info {
 	uint8_t error_polling_cnt[AVA7_DEFAULT_MODULARS];
 
 	uint8_t power_good[AVA7_DEFAULT_MODULARS];
+	char mcu_version[AVA7_DEFAULT_MODULARS][5];
 	char pmu_version[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_PMU_CNT][5];
 	uint64_t diff1[AVA7_DEFAULT_MODULARS];
 
