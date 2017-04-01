@@ -167,6 +167,11 @@
 #define AVA7_MM741_VOUT_ADC_RATIO	(3.3 / 1024.0 * 63.0 / 20.0 * 10000.0 * 100.0)
 #define AVA7_MM761_VOUT_ADC_RATIO	(3.3 / 1024.0 * 26.0 / 6.0 * 10000.0 * 100.0)
 
+#define AVA7_MM711_DEV_TABLE_IDX	0
+#define AVA7_MM721_DEV_TABLE_IDX	1
+#define AVA7_MM741_DEV_TABLE_IDX	2
+#define AVA7_MM761_DEV_TABLE_IDX	3
+
 struct avalon7_pkg {
 	uint8_t head[2];
 	uint8_t type;

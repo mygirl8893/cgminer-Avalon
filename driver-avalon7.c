@@ -2127,6 +2127,16 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		}
 		statbuf[strlen(statbuf) - 1] = ']';
 
+		if (!strncmp((char *)&(info->mm_version[i]), (char *)(avalon7_dev_table[AVA7_MM761_DEV_TABLE_IDX].dev_id_str), 3)) {
+			sprintf(buf, " Ci[");
+			strcat(statbuf, buf);
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, "%d ", info->get_cin[i][j]);
+				strcat(statbuf, buf);
+			}
+			statbuf[strlen(statbuf) - 1] = ']';
+		}
+
 		sprintf(buf, " Vo[");
 		strcat(statbuf, buf);
 		for (j = 0; j < info->miner_count[i]; j++) {
@@ -2195,12 +2205,18 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 				statbuf[strlen(statbuf) - 1] = ']';
 			}
 
-			strcat(statbuf, " PMUV[");
-			for (j = 0; j < AVA7_DEFAULT_PMU_CNT; j++) {
-				sprintf(buf, "%s ", info->pmu_version[i][j]);
+			if (!strncmp((char *)&(info->mm_version[i]), (char *)(avalon7_dev_table[AVA7_MM761_DEV_TABLE_IDX].dev_id_str), 3)) {
+				strcat(statbuf, " MCUV[");
+				sprintf(buf, "%s]", info->mcu_version[i]);
 				strcat(statbuf, buf);
+			} else {
+				strcat(statbuf, " PMUV[");
+				for (j = 0; j < AVA7_DEFAULT_PMU_CNT; j++) {
+					sprintf(buf, "%s ", info->pmu_version[i][j]);
+					strcat(statbuf, buf);
+				}
+				statbuf[strlen(statbuf) - 1] = ']';
 			}
-			statbuf[strlen(statbuf) - 1] = ']';
 
 			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " ERATIO%d[", j);
