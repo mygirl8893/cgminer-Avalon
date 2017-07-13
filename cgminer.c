@@ -1222,6 +1222,7 @@ static void load_temp_cutoffs()
 	}
 }
 
+#ifdef USE_ICARUS
 static char *set_float_100_to_500(const char *arg, float *i)
 {
 	char *err = opt_set_floatval(arg, i);
@@ -1234,6 +1235,7 @@ static char *set_float_100_to_500(const char *arg, float *i)
 
 	return NULL;
 }
+#endif
 
 static char *set_float_125_to_500(const char *arg, float *i)
 {
