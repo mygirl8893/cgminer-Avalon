@@ -7725,6 +7725,21 @@ bool test_nonce(struct work *work, uint32_t nonce)
 	uint32_t *hash_32 = (uint32_t *)(work->hash + 28);
 
 	rebuild_nonce(work, nonce);
+	{
+		double d64, s64;
+		uint8_t exp_hash_hdr, get_hash_hdr;
+
+		d64 = truediffone;
+		s64 = le256todouble(work->hash);
+
+		d64 = d64 / s64;
+		exp_hash_hdr = 0xff - ((1 << (opt_avalon7_nonce_mask - 24)) - 1);
+		get_hash_hdr = work->hash[28];
+		if (get_hash_hdr <= exp_hash_hdr)
+			applog(LOG_NOTICE, "D: hash = 0x%02x-0x%02x-%f", get_hash_hdr, exp_hash_hdr, d64);
+		else
+			applog(LOG_NOTICE, "E: hash = 0x%02x-0x%02x-%f", get_hash_hdr, exp_hash_hdr, d64);
+	}
 	return (*hash_32 == 0);
 }
 

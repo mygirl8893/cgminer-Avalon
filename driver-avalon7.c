@@ -1775,7 +1775,7 @@ static void avalon7_init_setting(struct cgpu_info *avalon7, int addr)
 	tmp = 1;
 	if (!opt_avalon7_smart_speed)
 	      tmp = 0;
-	tmp |= (1 << 1); /* Enable nonce check */
+	tmp |= (0 << 1); /* Enable nonce check */
 	tmp |= (opt_avalon7_asic_debug << 2);
 	tmp |= (opt_avalon7_ssplus_enable << 3);
 	send_pkg.data[8] = tmp & 0xff;
