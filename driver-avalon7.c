@@ -2341,7 +2341,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 			}
 			int l;
 			/* i: modular, j: miner, k:asic, l:value */
-			for (l = 0; l < 5; l++) {
+			for (l = 0; l < 9; l++) {
 				for (j = 0; j < info->miner_count[i]; j++) {
 					sprintf(buf, " C_%d_%02d[", j, l);
 					strcat(statbuf, buf);
