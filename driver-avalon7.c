@@ -191,7 +191,7 @@ struct avalon7_dev_description avalon7_dev_table[] = {
 	{
 		"721",
 		721,
-		4,
+		1,
 		18,
 		AVA7_MM721_VIN_ADC_RATIO,
 		AVA7_MM721_VOUT_ADC_RATIO,
@@ -770,6 +770,10 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 			info->get_asic[modular_id][x_miner_id][x_asic_id][9] = tmp;
 			tmp = *(ar->data + 25);
 			info->get_asic[modular_id][x_miner_id][x_asic_id][10] = tmp;
+			tmp = *(ar->data + 26);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][11] = tmp;
+			tmp = *(ar->data + 27);
+			info->get_asic[modular_id][x_miner_id][x_asic_id][12] = tmp;
 		}
 		break;
 	case AVA7_P_STATUS_FAC:
@@ -2341,7 +2345,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 			}
 			int l;
 			/* i: modular, j: miner, k:asic, l:value */
-			for (l = 0; l < 5; l++) {
+			for (l = 0; l < 13; l++) {
 				for (j = 0; j < info->miner_count[i]; j++) {
 					sprintf(buf, " C_%d_%02d[", j, l);
 					strcat(statbuf, buf);
