@@ -1587,7 +1587,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
 		memset(info->set_frequency[i], 0, sizeof(unsigned int) * info->miner_count[i] * AVA7_DEFAULT_PLL_CNT);
 		memset(info->get_pll[i], 0, sizeof(uint32_t) * info->miner_count[i] * AVA7_DEFAULT_PLL_CNT);
-		memset(info->get_asic[i], 0, sizeof(uint32_t) * 11 * info->miner_count[i] * AVA7_DEFAULT_PLL_CNT);
+		memset(info->get_asic[i], 0, sizeof(uint32_t) * 13 * info->miner_count[i] * AVA7_DEFAULT_PLL_CNT);
 
 		info->led_indicator[i] = 0;
 		info->cutoff[i] = 0;
