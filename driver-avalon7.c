@@ -754,9 +754,9 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 				memcpy(&tmp, ar->data + 8, 4);
 				info->get_asic[modular_id][x_miner_id][x_asic_id][2] = be32toh(tmp);
 				memcpy(&tmp, ar->data + 12, 4);
-				info->get_asic[modular_id][x_miner_id][x_asic_id][3] = be32toh(tmp);
+				info->get_asic[modular_id][x_miner_id][x_asic_id][3] += be32toh(tmp);
 				memcpy(&tmp, ar->data + 16, 4);
-				info->get_asic[modular_id][x_miner_id][x_asic_id][4] = be32toh(tmp);
+				info->get_asic[modular_id][x_miner_id][x_asic_id][4] += be32toh(tmp);
 			}
 			tmp = *(ar->data + 20);
 			info->get_asic[modular_id][x_miner_id][x_asic_id][5] = tmp;
