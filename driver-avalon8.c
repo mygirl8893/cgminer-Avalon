@@ -634,7 +634,9 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_VOLT", avalon8->drv->name, avalon8->device_id, modular_id);
 		for (i = 0; i < info->miner_count[modular_id]; i++) {
 			memcpy(&tmp, ar->data + i * 4, 4);
-			info->get_voltage[modular_id][i] = decode_voltage(info, modular_id, be32toh(tmp));
+			info->get_voltage[modular_id][i] = be32toh(tmp);
+			/* NOTE: get_vin same as get_voltage */
+			info->get_vin[modular_id][i] = be32toh(tmp);
 		}
 		break;
 	case AVA8_P_STATUS_PLL:
