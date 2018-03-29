@@ -606,18 +606,29 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		info->error_crc[modular_id][ar->idx] += be32toh(tmp);
 		break;
 	case AVA8_P_STATUS_PMU:
-		/* TODO: decode ntc led from PMU */
-		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_PMU", avalon8->drv->name, avalon8->device_id, modular_id);
-		info->power_good[modular_id] = ar->data[16];
-		for (i = 0; i < AVA8_DEFAULT_PMU_CNT; i++) {
-			memcpy(&info->pmu_version[modular_id][i], ar->data + 24 + (i * 4), 4);
-			info->pmu_version[modular_id][i][4] = '\0';
-		}
 
-		for (i = 0; i < info->miner_count[modular_id]; i++) {
-			memcpy(&vin, ar->data + 8 + i * 2, 2);
-			info->get_vin[modular_id][i] = decode_vin(info, modular_id, be16toh(vin));
-		}
+		memcpy(&tmp, ar->data, 2);
+		tmp = be16toh(tmp);
+		/* current_out = (2.5 - (tmp * 3.3 / 1024)) / 0.04 */
+		info->current_out[modular_id][0] = 62500 - 80.566 * tmp;
+
+		memcpy(&tmp, ar->data + 2, 2);
+		tmp = be16toh(tmp);
+		/* current_top = (tmp * 3.3 / 1024) / 0.75 / 200 */
+		info->current_top[modular_id][0] = 0.021484 * tmp;
+
+		memcpy(&tmp, ar->data + 4, 2);
+		tmp = be16toh(tmp);
+		/* current_ioa = (tmp * 3.3 / 1024) / 0.75/ 200 */
+		info->current_ioa[modular_id][0] = 0.021484 * tmp;
+
+		memcpy(&tmp, ar->data + 6, 2);
+		tmp = be16toh(tmp);
+		/* current_ioa = (tmp * 3.3 / 1024) / 0.75 / 200 */
+		info->current_iob[modular_id][0] = 0.021484 * tmp;
+
+		memcpy(&info->pmu_version[modular_id][0], ar->data + 24, 4);
+		info->pmu_version[modular_id][0][4] = '\0';
 		break;
 	case AVA8_P_STATUS_VOLT:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_VOLT", avalon8->drv->name, avalon8->device_id, modular_id);
@@ -2071,6 +2082,12 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 		}
 		statbuf[strlen(statbuf) - 1] = ']';
 
+		sprintf(buf, " Cout[%d] Ctop[%d] Cioa[%d] Ciob[%d]", info->current_out[i][0],
+								     info->current_top[i][0],
+								     info->current_ioa[i][0],
+								     info->current_iob[i][0]);
+		strcat(statbuf, buf);
+
 		if (opt_debug) {
 			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " PLL%d[", j);
@@ -2137,12 +2154,8 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 				statbuf[strlen(statbuf) - 1] = ']';
 			}
 
-			strcat(statbuf, " PMUV[");
-			for (j = 0; j < AVA8_DEFAULT_PMU_CNT; j++) {
-				sprintf(buf, "%s ", info->pmu_version[i][j]);
-				strcat(statbuf, buf);
-			}
-			statbuf[strlen(statbuf) - 1] = ']';
+			sprintf(buf, " PMUV[%s]", info->pmu_version[i][0]);
+			strcat(statbuf, buf);
 
 			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " PVT_T%d[", j);
