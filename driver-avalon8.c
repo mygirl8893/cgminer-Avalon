@@ -177,6 +177,15 @@ static uint16_t decode_vin(struct avalon8_info *info, int modular_id, uint16_t v
 	return (volt * info->vin_adc_ratio[modular_id] / 1000);
 }
 
+static uint16_t decode_io(uint16_t volt)
+{
+	uint16_t tmp;
+
+	tmp = 6250.0 - volt * 2.014;
+
+	return tmp;
+}
+
 static double decode_pvt_temp(uint16_t pvt_code)
 {
 	double g = 60.0;
@@ -480,7 +489,7 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 	int pool_no;
 	uint32_t i;
 	int64_t last_diff1;
-	uint16_t vin;
+	uint16_t vin, io;
 
 	if (likely(avalon8->thr))
 		thr = avalon8->thr[0];
@@ -612,6 +621,11 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		for (i = 0; i < AVA8_DEFAULT_PMU_CNT; i++) {
 			memcpy(&info->pmu_version[modular_id][i], ar->data + 24 + (i * 4), 4);
 			info->pmu_version[modular_id][i][4] = '\0';
+		}
+
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			memcpy(&io, ar->data + i * 2, 2);
+			info->get_io[modular_id][i] = decode_io(be16toh(io));
 		}
 
 		for (i = 0; i < info->miner_count[modular_id]; i++) {
@@ -2070,6 +2084,24 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 			strcat(statbuf, buf);
 		}
 		statbuf[strlen(statbuf) - 1] = ']';
+
+		sprintf(buf, " Io[");
+		strcat(statbuf, buf);
+		for (j = 0; j < info->miner_count[i]; j++) {
+			sprintf(buf, "%d ", info->get_io[i][j]);
+			strcat(statbuf, buf);
+		}
+		statbuf[strlen(statbuf) - 1] = ']';
+
+		{
+			uint32_t tmp = 0;
+
+			for (j = 0; j < info->miner_count[i]; j++)
+				tmp += info->get_voltage[i][j] * info->asic_count[i] * info->get_io[i][j] / 10000;
+
+			sprintf(buf, " Power[%d]", tmp / 100);
+			strcat(statbuf, buf);
+		}
 
 		if (opt_debug) {
 			for (j = 0; j < info->miner_count[i]; j++) {
