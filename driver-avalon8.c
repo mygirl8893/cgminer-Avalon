@@ -673,6 +673,30 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 			}
 		}
 		break;
+	case AVA8_P_STATUS_ASIC:
+		{
+			int miner_id;
+			int asic_id;
+
+			if (!info->asic_count[modular_id])
+				break;
+
+			miner_id = ar->idx / info->asic_count[modular_id];
+			asic_id = ar->idx % info->asic_count[modular_id];
+
+			applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_ASIC %d-%d",
+					avalon8->drv->name, avalon8->device_id, modular_id,
+					miner_id, asic_id);
+
+			memcpy(&tmp, ar->data + 0, 4);
+			if (tmp) {
+				info->get_asic[modular_id][miner_id][asic_id][0] = be32toh(tmp);
+
+				memcpy(&tmp, ar->data + 4, 4);
+				info->get_asic[modular_id][miner_id][asic_id][1] = be32toh(tmp);
+			}
+		}
+		break;
 	case AVA8_P_STATUS_FAC:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_FAC", avalon8->drv->name, avalon8->device_id, modular_id);
 		info->factory_info[0] = ar->data[0];
@@ -2000,6 +2024,7 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 	struct api_data *root = NULL;
 	struct avalon8_info *info = avalon8->device_data;
 	int i, j, k, m;
+	double a, b, dh;
 	char buf[256];
 	char *statbuf = NULL;
 	struct timeval current;
@@ -2054,6 +2079,18 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 		statbuf[strlen(statbuf) - 1] = ']';
 
 		sprintf(buf, " HW[%"PRIu64"]", info->hw_works[i]);
+		strcat(statbuf, buf);
+
+		a = 0;
+		b = 0;
+		for (j = 0; j < info->miner_count[i]; j++) {
+			for (k = 0; k < info->asic_count[i]; k++) {
+				a += info->get_asic[i][j][k][0];
+				b += info->get_asic[i][j][k][1];
+			}
+		}
+		dh = b ? (b / (a + b)) * 100: 0;
+		sprintf(buf, " DH[%.3f%%]", dh);
 		strcat(statbuf, buf);
 
 		sprintf(buf, " Temp[%d]", info->temp_mm[i]);
@@ -2179,6 +2216,30 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 						sprintf(buf, "%d ", info->core_volt[i][j][k][m]);
 						strcat(statbuf, buf);
 					}
+
+					statbuf[strlen(statbuf) - 1] = ']';
+					statbuf[strlen(statbuf)] = '\0';
+				}
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				for (k = 0; k < info->asic_count[i]; k++) {
+					sprintf(buf, " NONCE_PASS%d_%d[", j, k);
+					strcat(statbuf, buf);
+					sprintf(buf, "%d ", info->get_asic[i][j][k][0]);
+					strcat(statbuf, buf);
+
+					statbuf[strlen(statbuf) - 1] = ']';
+					statbuf[strlen(statbuf)] = '\0';
+				}
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				for (k = 0; k < info->asic_count[i]; k++) {
+					sprintf(buf, " NONCE_FAIL%d_%d[", j, k);
+					strcat(statbuf, buf);
+					sprintf(buf, "%d ", info->get_asic[i][j][k][1]);
+					strcat(statbuf, buf);
 
 					statbuf[strlen(statbuf) - 1] = ']';
 					statbuf[strlen(statbuf)] = '\0';
