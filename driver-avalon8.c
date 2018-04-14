@@ -2014,6 +2014,7 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 	struct api_data *root = NULL;
 	struct avalon8_info *info = avalon8->device_data;
 	int i, j, k, m;
+	double a, b, dh;
 	char buf[256];
 	char *statbuf = NULL;
 	struct timeval current;
@@ -2068,6 +2069,18 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 		statbuf[strlen(statbuf) - 1] = ']';
 
 		sprintf(buf, " HW[%"PRIu64"]", info->hw_works[i]);
+		strcat(statbuf, buf);
+
+		a = 0;
+		b = 0;
+		for (j = 0; j < info->miner_count[i]; j++) {
+			for (k = 0; k < info->asic_count[i]; k++) {
+				a += info->get_asic[i][j][k][0];
+				b += info->get_asic[i][j][k][1];
+			}
+		}
+		dh = b ? (b / (a + b)) * 100: 0;
+		sprintf(buf, " DH[%.3f%%]", dh);
 		strcat(statbuf, buf);
 
 		sprintf(buf, " Temp[%d]", info->temp_mm[i]);
@@ -2582,9 +2595,10 @@ static void avalon8_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	struct avalon8_info *info = avalon8->device_data;
 	int temp = -273;
 	int fanmin = AVA8_DEFAULT_FAN_MAX;
-	int i;
+	int i, j, k;
 	uint32_t frequency = 0;
 	float ghs_sum = 0, mhsmm = 0;
+	double pass_num = 0.0, fail_num = 0.0;
 
 	for (i = 1; i < AVA8_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
@@ -2599,12 +2613,20 @@ static void avalon8_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		mhsmm = avalon8_hash_cal(avalon8, i);
 		frequency += (mhsmm / (info->asic_count[i] * info->miner_count[i] * 172));
 		ghs_sum += (mhsmm / 1000);
+
+		for (j = 0; j < info->miner_count[i]; j++) {
+			for (k = 0; k < info->asic_count[i]; k++) {
+				pass_num += info->get_asic[i][j][k][0];
+				fail_num += info->get_asic[i][j][k][1];
+			}
+		}
 	}
 
 	if (info->mm_count)
 		frequency /= info->mm_count;
 
-	tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS %2dC %3d%%", frequency, ghs_sum, temp, fanmin);
+	tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS %2dC %.2f%% %3d%%", frequency, ghs_sum, temp,
+				(fail_num + pass_num) ? fail_num * 100.0 / (fail_num + pass_num) : 0, fanmin);
 }
 
 struct device_drv avalon8_drv = {
