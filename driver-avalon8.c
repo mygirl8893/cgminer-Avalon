@@ -2209,6 +2209,48 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 					statbuf[strlen(statbuf)] = '\0';
 				}
 			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " ERATIO%d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					if (info->get_asic[i][j][k][0])
+						sprintf(buf, "%.2f%% ", (double)(info->get_asic[i][j][k][1] * 100.0 / (info->get_asic[i][j][k][0] + info->get_asic[i][j][k][1])));
+					else
+						sprintf(buf, "%.2f%% ", 0.0);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
+			}
+
+			int l;
+			/* i: modular, j: miner, k:asic, l:value */
+			for (l = 0; l < 2; l++) {
+				for (j = 0; j < info->miner_count[i]; j++) {
+					sprintf(buf, " C_%d_%02d[", j, l);
+					strcat(statbuf, buf);
+					for (k = 0; k < info->asic_count[i]; k++) {
+						sprintf(buf, "%6d ", info->get_asic[i][j][k][l]);
+						strcat(statbuf, buf);
+					}
+
+					statbuf[strlen(statbuf) - 1] = ']';
+				}
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " GHSmm%02d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					mhsmm = 0;
+					for (l = 2; l < 6; l++)
+						mhsmm += (info->get_asic[i][j][k][l] * info->set_frequency[i][j][l - 2]);
+					sprintf(buf, "%.2f ", mhsmm / 1000);
+					strcat(statbuf, buf);
+				}
+				statbuf[strlen(statbuf) - 1] = ']';
+			}
 		}
 
 		sprintf(buf, " FM[%d]", info->freq_mode[i]);
