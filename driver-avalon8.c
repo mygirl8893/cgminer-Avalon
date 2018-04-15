@@ -2117,10 +2117,15 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 		}
 		statbuf[strlen(statbuf) - 1] = ']';
 
-		sprintf(buf, " Cout[%d] Ctop[%d] Cioa[%d] Ciob[%d]", info->current_out[i][0],
-								     info->current_top[i][0],
-								     info->current_ioa[i][0],
-								     info->current_iob[i][0]);
+		mhsmm = (info->diff1[i] / tdiff(&current, &(info->elapsed[i])) * 60.0) / 60 * pow(2, 32) / pow(10, 9);
+		sprintf(buf, " Iout[%.3f] Itop[%.3f] Ioa[%.3f] Iob[%.3f] Power[%.2f] GHSav[%.2f] J/G[%.3f]",
+									info->current_out[i][0] / 1000.0,
+									info->current_top[i][0] / 1000.0,
+									info->current_ioa[i][0] / 1000.0,
+									info->current_iob[i][0] / 1000.0,
+									info->current_out[i][0] * info->core_volt[i][0][0][2] / 1000000.0,
+									mhsmm,
+									info->current_out[i][0] * info->core_volt[i][0][0][2] / 1000000.0 / mhsmm);
 		strcat(statbuf, buf);
 
 		if (opt_debug) {
