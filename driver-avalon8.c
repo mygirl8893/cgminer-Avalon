@@ -675,26 +675,20 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		break;
 	case AVA8_P_STATUS_ASIC:
 		{
-			int miner_id;
-			int asic_id;
-
 			if (!info->asic_count[modular_id])
 				break;
 
-			miner_id = ar->idx / info->asic_count[modular_id];
-			asic_id = ar->idx % info->asic_count[modular_id];
-
 			applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_ASIC %d-%d",
 					avalon8->drv->name, avalon8->device_id, modular_id,
-					miner_id, asic_id);
+					0, ar->idx);
 
 			memcpy(&tmp, ar->data + 0, 4);
-			if (tmp) {
-				info->get_asic[modular_id][miner_id][asic_id][0] = be32toh(tmp);
+			if (tmp)
+				info->get_asic[modular_id][0][ar->idx][0] = be32toh(tmp);
 
-				memcpy(&tmp, ar->data + 4, 4);
-				info->get_asic[modular_id][miner_id][asic_id][1] = be32toh(tmp);
-			}
+			memcpy(&tmp, ar->data + 4, 4);
+			if (tmp)
+				info->get_asic[modular_id][0][ar->idx][1] = be32toh(tmp);
 		}
 		break;
 	case AVA8_P_STATUS_FAC:
@@ -1441,6 +1435,8 @@ static void detect_modules(struct cgpu_info *avalon8)
 		info->power_good[i] = 0;
 		memset(info->pmu_version[i], 0, sizeof(char) * 5 * AVA8_DEFAULT_PMU_CNT);
 		info->diff1[i] = 0;
+
+		memset(info->get_asic, 0, sizeof(info->get_asic));
 
 		applog(LOG_NOTICE, "%s-%d: New module detected! ID[%d-%x]",
 		       avalon8->drv->name, avalon8->device_id, i, info->mm_dna[i][AVA8_MM_DNA_LEN - 1]);
@@ -2223,22 +2219,10 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 			}
 
 			for (j = 0; j < info->miner_count[i]; j++) {
-				for (k = 0; k < info->asic_count[i]; k++) {
-					sprintf(buf, " NONCE_PASS%d_%d[", j, k);
+				for (k = 0; k < AVA8_DEFAULT_CORE_COUNT; k++) {
+					sprintf(buf, " SPDLOG%d_%03d[", j, k);
 					strcat(statbuf, buf);
-					sprintf(buf, "%d ", info->get_asic[i][j][k][0]);
-					strcat(statbuf, buf);
-
-					statbuf[strlen(statbuf) - 1] = ']';
-					statbuf[strlen(statbuf)] = '\0';
-				}
-			}
-
-			for (j = 0; j < info->miner_count[i]; j++) {
-				for (k = 0; k < info->asic_count[i]; k++) {
-					sprintf(buf, " NONCE_FAIL%d_%d[", j, k);
-					strcat(statbuf, buf);
-					sprintf(buf, "%d ", info->get_asic[i][j][k][1]);
+					sprintf(buf, "%-5d %-5d", info->get_asic[i][j][k][0], info->get_asic[i][j][k][1]);
 					strcat(statbuf, buf);
 
 					statbuf[strlen(statbuf) - 1] = ']';
