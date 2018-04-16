@@ -63,6 +63,12 @@ uint32_t opt_avalon8_mux_h2l = AVA8_DEFAULT_MUX_H2L;
 uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
 uint32_t opt_avalon8_roll_enable = AVA8_DEFAULT_ROLL_ENABLE;
 
+uint16_t test_min_id[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][2];
+uint16_t test_max_id[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][2];
+uint16_t test_min_vl[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][2];
+uint16_t test_max_vl[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][2];
+uint16_t test_avg[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][2];
+
 uint32_t cpm_table[] =
 {
 	0x04400000,
@@ -478,7 +484,7 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 	uint32_t nonce, nonce2, ntime, miner, chip_id, tmp;
 	uint8_t job_id[2];
 	int pool_no;
-	uint32_t i;
+	uint32_t i, j;
 	int64_t last_diff1;
 	uint16_t vin;
 
@@ -642,6 +648,8 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_PVT", avalon8->drv->name, avalon8->device_id, modular_id);
 		{
 			uint16_t pvt_tmp;
+			uint32_t cnt[2];
+			uint32_t sum[2];
 
 			if (!info->asic_count[modular_id])
 				break;
@@ -657,6 +665,31 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 				memcpy(&pvt_tmp, ar->data + 2 + 2 * i, 2);
 				pvt_tmp = be16toh(pvt_tmp);
 				info->core_volt[modular_id][miner][chip_id][i] = decode_pvt_volt(pvt_tmp);
+			}
+
+			memset(sum, 0, sizeof(sum));
+			memset(cnt, 0, sizeof(cnt));
+
+			for (i = 0; i < 2; i++) {
+				if (info->core_volt[modular_id][miner][chip_id][2 + 2 * i] > test_max_vl[modular_id][miner][i]) {
+					test_max_vl[modular_id][miner][i] = info->core_volt[modular_id][miner][chip_id][2 + 2 * i];
+					test_max_id[modular_id][miner][i] = chip_id;
+				} else if (info->core_volt[modular_id][miner][chip_id][2 + 2 * i] < test_min_vl[modular_id][miner][i]) {
+					if (info->core_volt[modular_id][miner][chip_id][2 + 2 * i])
+						test_min_vl[modular_id][miner][i] = info->core_volt[modular_id][miner][chip_id][2 + 2 * i];
+
+					test_min_id[modular_id][miner][i] = chip_id;
+				}
+
+				for (j = 0; j < AVA8_DEFAULT_ASIC_MAX; j++) {
+					if (info->core_volt[modular_id][miner][j][2 + 2 * i])
+						sum[i] += info->core_volt[modular_id][miner][j][2 + 2 * i];
+					else
+						cnt[i]++;
+				}
+
+				if (cnt[i] < AVA8_DEFAULT_ASIC_MAX)
+					test_avg[modular_id][miner][i] = sum[i] / (AVA8_DEFAULT_ASIC_MAX - cnt[i]);
 			}
 		}
 		break;
@@ -1411,6 +1444,13 @@ static void detect_modules(struct cgpu_info *avalon8)
 
 		info->freq_mode[i] = AVA8_FREQ_INIT_MODE;
 		memset(info->get_pll[i], 0, sizeof(uint32_t) * info->miner_count[i] * AVA8_DEFAULT_PLL_CNT);
+
+		for (j = 0; j < info->miner_count[i]; j++) {
+			test_min_vl[i][j][0] = 0xffff;
+			test_min_vl[i][j][1] = 0xffff;
+			test_max_vl[i][j][0] = 0;
+			test_max_vl[i][j][1] = 0;
+		}
 
 		info->led_indicator[i] = 0;
 		info->cutoff[i] = 0;
@@ -2196,18 +2236,46 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 				statbuf[strlen(statbuf)] = '\0';
 			}
 
-			for (j = 0; j < info->miner_count[i]; j++) {
-				for (k = 0; k < info->asic_count[i]; k++) {
+			for (k = 0; k < info->asic_count[i]; k++) {
+				for (j = 0; j < info->miner_count[i]; j++) {
 					sprintf(buf, " PVT_V%d_%d[", j, k);
 					strcat(statbuf, buf);
 					for (m = 0; m < AVA8_DEFAULT_CORE_VOLT_CNT; m++) {
-						sprintf(buf, "%d ", info->core_volt[i][j][k][m]);
+						sprintf(buf, "%3d ", info->core_volt[i][j][k][m]);
 						strcat(statbuf, buf);
 					}
 
+					if (info->get_asic[i][j][k][0])
+						sprintf(buf, "%5.2f%% ", (double)(info->get_asic[i][j][k][1] * 100.0 / (info->get_asic[i][j][k][0] + info->get_asic[i][j][k][1])));
+					else
+						sprintf(buf, "%5.2f%% ", 0.0);
+
+					strcat(statbuf, buf);
 					statbuf[strlen(statbuf) - 1] = ']';
 					statbuf[strlen(statbuf)] = '\0';
 				}
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " PVT_V%d_AV[", j);
+				strcat(statbuf, buf);
+
+				sprintf(buf, "%3d %3d %3d %3d %3d %3d %3d %3d",
+							test_min_id[i][j][0],
+							test_min_vl[i][j][0],
+							test_max_id[i][j][0],
+							test_max_vl[i][j][0],
+							test_min_id[i][j][1],
+							test_min_vl[i][j][1],
+							test_max_id[i][j][1],
+							test_max_vl[i][j][1]);
+				strcat(statbuf, buf);
+
+				sprintf(buf, "%7.1f ", (test_avg[i][j][0] + test_avg[i][j][1]) / 2.0);
+
+				strcat(statbuf, buf);
+				statbuf[strlen(statbuf) - 1] = ']';
+				statbuf[strlen(statbuf)] = '\0';
 			}
 
 			for (j = 0; j < info->miner_count[i]; j++) {
