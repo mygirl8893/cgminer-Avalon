@@ -652,6 +652,10 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 			uint16_t pvt_tmp;
 			uint32_t cnt[2];
 			uint32_t sum[2];
+			uint16_t max_vl[2];
+			uint16_t max_id[2];
+			uint16_t min_vl[2];
+			uint16_t min_id[2];
 
 			if (!info->asic_count[modular_id])
 				break;
@@ -669,29 +673,48 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 				info->core_volt[modular_id][miner][chip_id][i] = decode_pvt_volt(pvt_tmp);
 			}
 
-			memset(sum, 0, sizeof(sum));
-			memset(cnt, 0, sizeof(cnt));
+			for (i = 0; i < 2; i++) {
+				max_id[i] = 0;
+				max_vl[i] = info->core_volt[modular_id][miner][max_id[i]][2 + 2 * i];
+
+				min_id[i] = 0;
+				min_vl[i] = info->core_volt[modular_id][miner][max_id[i]][2 + 2 * i];
+
+				sum[i] = 0;
+				cnt[i] = 0;
+			}
+
+			for (i = 0; i < info->asic_count[modular_id]; i++) {
+				for (j = 0; j < 2; j++) {
+					if (info->core_volt[modular_id][miner][i][2 + 2 * j] > max_vl[j]) {
+						max_vl[j] = info->core_volt[modular_id][miner][i][2 + 2 * j];
+						max_id[j] = i;
+					}
+
+					if (info->core_volt[modular_id][miner][i][2 + 2 * j] < min_vl[j]) {
+						min_vl[j] = info->core_volt[modular_id][miner][i][2 + 2 * j];
+						min_id[j] = i;
+					}
+
+					if (info->core_volt[modular_id][miner][i][2 + 2 * j])
+						sum[j] += info->core_volt[modular_id][miner][i][2 + 2 * j];
+					else
+						cnt[j]++;
+
+				}
+			}
 
 			for (i = 0; i < 2; i++) {
-				if (info->core_volt[modular_id][miner][chip_id][2 + 2 * i] > test_max_vl[modular_id][miner][i]) {
-					test_max_vl[modular_id][miner][i] = info->core_volt[modular_id][miner][chip_id][2 + 2 * i];
-					test_max_id[modular_id][miner][i] = chip_id;
-				} else if (info->core_volt[modular_id][miner][chip_id][2 + 2 * i] < test_min_vl[modular_id][miner][i]) {
-					if (info->core_volt[modular_id][miner][chip_id][2 + 2 * i])
-						test_min_vl[modular_id][miner][i] = info->core_volt[modular_id][miner][chip_id][2 + 2 * i];
-
-					test_min_id[modular_id][miner][i] = chip_id;
-				}
-
-				for (j = 0; j < AVA8_DEFAULT_ASIC_MAX; j++) {
-					if (info->core_volt[modular_id][miner][j][2 + 2 * i])
-						sum[i] += info->core_volt[modular_id][miner][j][2 + 2 * i];
-					else
-						cnt[i]++;
-				}
-
-				if (cnt[i] < AVA8_DEFAULT_ASIC_MAX)
+				if (cnt[i] < info->asic_count[modular_id])
 					test_avg[modular_id][miner][i] = sum[i] / (AVA8_DEFAULT_ASIC_MAX - cnt[i]);
+				else
+					test_avg[modular_id][miner][i] = 0;
+
+				test_max_vl[modular_id][miner][i] = max_vl[i];
+				test_max_id[modular_id][miner][i] = max_id[i];
+
+				test_min_vl[modular_id][miner][i] = min_vl[i];
+				test_min_id[modular_id][miner][i] = min_id[i];
 			}
 		}
 		break;
