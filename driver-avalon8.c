@@ -660,16 +660,17 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		if (!info->asic_count[modular_id])
 			break;
 
-		miner = ar->idx / info->asic_count[modular_id];
-		chip_id = ar->idx % info->asic_count[modular_id];
+		if (ar->idx < info->asic_count[modular_id]) {
+			for (i = 0; i < info->miner_count[modular_id]; i++) {
+				memcpy(&tmp, ar->data + i * 4, 2);
+				tmp = be16toh(tmp);
+				info->temp[modular_id][i][ar->idx] = decode_pvt_temp(tmp);
 
-		memcpy(&tmp, ar->data, 2);
-		tmp = be16toh(tmp);
-		info->temp[modular_id][miner][chip_id] = decode_pvt_temp(tmp);
-
-		memcpy(&tmp, ar->data + 2, 2);
-		tmp = be16toh(tmp);
-		info->core_volt[modular_id][miner][chip_id] = decode_pvt_volt(tmp);
+				memcpy(&tmp, ar->data + i * 4 + 2, 2);
+				tmp = be16toh(tmp);
+				info->core_volt[modular_id][i][ar->idx] = decode_pvt_volt(tmp);
+			}
+		}
 		break;
 	case AVA8_P_STATUS_ASIC:
 		{
