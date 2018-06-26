@@ -641,15 +641,18 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		break;
 	case AVA8_P_STATUS_PLL:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_PLL", avalon8->drv->name, avalon8->device_id, modular_id);
-		for (i = 0; i < AVA8_DEFAULT_PLL_CNT; i++) {
-			memcpy(&tmp, ar->data + i * 4, 4);
-			info->get_pll[modular_id][ar->idx][i] = be32toh(tmp);
-
-			memcpy(&tmp, ar->data + AVA8_DEFAULT_PLL_CNT * 4 + i * 4, 4);
-			tmp = be32toh(tmp);
-			if (tmp)
-				info->set_frequency[modular_id][ar->idx][i] = tmp;
-		}
+		if (ar->opt)
+			for (i = 0; i < AVA8_DEFAULT_PLL_CNT; i++) {
+				memcpy(&tmp, ar->data + i * 4, 4);
+				info->get_pll[modular_id][ar->idx][i] = be32toh(tmp);
+			}
+		else
+			for (i = 0; i < AVA8_DEFAULT_PLL_CNT; i++) {
+				memcpy(&tmp, ar->data + i * 4, 4);
+				tmp = be32toh(tmp);
+				if (tmp)
+					info->set_frequency[modular_id][ar->idx][i] = tmp;
+			}
 		break;
 	case AVA8_P_STATUS_PVT:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_PVT", avalon8->drv->name, avalon8->device_id, modular_id);

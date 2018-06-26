@@ -56,7 +56,7 @@
 #define AVA8_DEFAULT_MODULARS	7	/* Only support 6 modules maximum with one AUC */
 #define AVA8_DEFAULT_MINER_CNT	1
 #define AVA8_DEFAULT_ASIC_MAX	1
-#define AVA8_DEFAULT_PLL_CNT	4
+#define AVA8_DEFAULT_PLL_CNT	8
 #define AVA8_DEFAULT_PMU_CNT	2
 #define AVA8_DEFAULT_CORE_VOLT_CNT	8
 #define AVA8_DEFAULT_CORE_COUNT		172
