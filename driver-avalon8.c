@@ -32,6 +32,10 @@ int opt_avalon8_freq[AVA8_DEFAULT_PLL_CNT] =
 	AVA8_DEFAULT_FREQUENCY,
 	AVA8_DEFAULT_FREQUENCY,
 	AVA8_DEFAULT_FREQUENCY,
+	AVA8_DEFAULT_FREQUENCY,
+	AVA8_DEFAULT_FREQUENCY,
+	AVA8_DEFAULT_FREQUENCY,
+	AVA8_DEFAULT_FREQUENCY,
 	AVA8_DEFAULT_FREQUENCY
 };
 
@@ -62,6 +66,9 @@ uint32_t opt_avalon8_mux_l2h = AVA8_DEFAULT_MUX_L2H;
 uint32_t opt_avalon8_mux_h2l = AVA8_DEFAULT_MUX_H2L;
 uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
 uint32_t opt_avalon8_roll_enable = AVA8_DEFAULT_ROLL_ENABLE;
+
+/* Setting timeout need freq vlaues */
+uint32_t avalon8_set_timeout_freq = 1;
 
 uint32_t cpm_table[] =
 {
@@ -129,7 +136,11 @@ struct avalon8_dev_description avalon8_dev_table[] = {
 			AVA8_DEFAULT_FREQUENCY_0M,
 			AVA8_DEFAULT_FREQUENCY_0M,
 			AVA8_DEFAULT_FREQUENCY_0M,
-			AVA8_DEFAULT_FREQUENCY_650M
+			AVA8_DEFAULT_FREQUENCY_650M,
+			AVA8_DEFAULT_FREQUENCY_0M,
+			AVA8_DEFAULT_FREQUENCY_0M,
+			AVA8_DEFAULT_FREQUENCY_0M,
+			AVA8_DEFAULT_FREQUENCY_0M
 		}
 	},
 	{
@@ -1595,7 +1606,7 @@ static void avalon8_init_setting(struct cgpu_info *avalon8, int addr)
 
 	memset(send_pkg.data, 0, AVA8_P_DATA_LEN);
 
-	tmp = be32toh(opt_avalon8_freq_sel);
+	tmp = be32toh(opt_avalon8_freq_sel + 1);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
 	/*
@@ -1682,16 +1693,8 @@ static void avalon8_set_freq(struct cgpu_info *avalon8, int addr, int miner_id, 
 	for (i = 1; i < AVA8_DEFAULT_PLL_CNT; i++)
 		f = f > freq[i] ? f : freq[i];
 
-	f = f ? f : 1;
+	avalon8_set_timeout_freq = f ? f : 1;
 
-	/* TODO: adjust it according to frequency */
-	tmp = 100;
-	tmp = be32toh(tmp);
-	memcpy(send_pkg.data + AVA8_DEFAULT_PLL_CNT * 4, &tmp, 4);
-
-	tmp = AVA8_ASIC_TIMEOUT_CONST / f * 83 / 100;
-	tmp = be32toh(tmp);
-	memcpy(send_pkg.data + AVA8_DEFAULT_PLL_CNT * 4 + 4, &tmp, 4);
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set freq miner %x-%x",
 			avalon8->drv->name, avalon8->device_id, addr,
 			miner_id, be32toh(tmp));
@@ -1808,8 +1811,19 @@ static void avalon8_stratum_finish(struct cgpu_info *avalon8)
 static void avalon8_set_finish(struct cgpu_info *avalon8, int addr)
 {
 	struct avalon8_pkg send_pkg;
+	uint32_t tmp;
 
 	memset(send_pkg.data, 0, AVA8_P_DATA_LEN);
+
+	/* TODO: adjust it according to frequency */
+	tmp = 100;
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data, &tmp, 4);
+
+	tmp = AVA8_ASIC_TIMEOUT_CONST / avalon8_set_timeout_freq * 83 / 100;
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data + 4, &tmp, 4);
+
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET_FIN, 1, 1);
 	avalon8_iic_xfer_pkg(avalon8, addr, &send_pkg, NULL);
 }

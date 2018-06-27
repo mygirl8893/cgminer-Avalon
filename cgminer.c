@@ -851,9 +851,9 @@ static char *set_int_0_to_1(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 1);
 }
 
-static char *set_int_0_to_7(const char *arg, int *i)
+static char *set_int_0_to_6(const char *arg, int *i)
 {
-	return set_int_range(arg, i, 0, 7);
+	return set_int_range(arg, i, 0, 6);
 }
 #endif
 
@@ -1514,8 +1514,8 @@ static struct opt_table opt_config_table[] = {
 		     set_avalon8_freq, NULL, &opt_set_avalon8_freq,
 		     "Set Avalon8 default frequency, range:[25, 1200], step: 25, example: 800"),
 	OPT_WITH_ARG("--avalon8-freq-sel",
-		     set_int_0_to_4, opt_show_intval, &opt_avalon8_freq_sel,
-		     "Set Avalon8 default frequency select, range:[0, 4], step: 1, example: 3"),
+		     set_int_0_to_6, opt_show_intval, &opt_avalon8_freq_sel,
+		     "Set Avalon8 default frequency select, range:[0, 6], step: 1, example: 3"),
 	OPT_WITH_CBARG("--avalon8-fan",
 		     set_avalon8_fan, NULL, &opt_set_avalon8_fan,
 		     "Set Avalon8 target fan speed, range:[0, 100], step: 1, example: 0-100"),
