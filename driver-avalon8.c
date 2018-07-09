@@ -150,19 +150,6 @@ static uint32_t api_get_cpm(uint32_t freq)
 	return cpm_table[freq / 25];
 }
 
-static uint32_t encode_voltage(int volt_level)
-{
-	if (volt_level > AVA8_DEFAULT_VOLTAGE_LEVEL_MAX)
-	      volt_level = AVA8_DEFAULT_VOLTAGE_LEVEL_MAX;
-	else if (volt_level < AVA8_DEFAULT_VOLTAGE_LEVEL_MIN)
-	      volt_level = AVA8_DEFAULT_VOLTAGE_LEVEL_MIN;
-
-	if (volt_level < 0)
-		return 0x8080 | (-volt_level);
-
-	return 0x8000 | volt_level;
-}
-
 static uint32_t decode_voltage(struct avalon8_info *info, int modular_id, uint32_t volt)
 {
 	return (volt * info->vout_adc_ratio[modular_id] / info->asic_count[modular_id] / 100);
@@ -1645,8 +1632,7 @@ static void avalon8_set_voltage_level(struct cgpu_info *avalon8, int addr, unsig
 
 	/* NOTE: miner_count should <= 8 */
 	for (i = 0; i < info->miner_count[addr]; i++) {
-		tmp = be32toh(encode_voltage(voltage[i] +
-				opt_avalon8_voltage_level_offset));
+		tmp = be32toh(voltage[i] + opt_avalon8_voltage_level_offset);
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set voltage miner %d, (%d-%d)",
