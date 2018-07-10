@@ -592,23 +592,23 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 
 		memcpy(&tmp, ar->data, 2);
 		tmp = be16toh(tmp);
-		/* current_out = (2.5 - (tmp * 3.3 / 1024)) / 0.04 */
-		info->current_out[modular_id][0] = 62500 - 80.566 * tmp;
+		/* current_out = 3.3 / 1024 * tmp * 1000 / 0.05 */
+		info->current_out[modular_id][0] = 64.453 * tmp;
 
 		memcpy(&tmp, ar->data + 2, 2);
 		tmp = be16toh(tmp);
-		/* current_top = (tmp * 3.3 / 1024) / 0.75 / 200 */
-		info->current_top[modular_id][0] = 0.021484 * tmp;
+		/* current_top = 3.3 / 1024 * 5 * tmp */
+		info->current_top[modular_id][0] = 3.3 / 1024 * 5 * tmp;
 
 		memcpy(&tmp, ar->data + 4, 2);
 		tmp = be16toh(tmp);
-		/* current_ioa = (tmp * 3.3 / 1024) / 0.75/ 200 */
-		info->current_ioa[modular_id][0] = 0.021484 * tmp;
+		/* current_ioa = 3.3 / 1024 * 5 * tmp */
+		info->current_ioa[modular_id][0] = 3.3 / 1024 * 5 * tmp;
 
 		memcpy(&tmp, ar->data + 6, 2);
 		tmp = be16toh(tmp);
-		/* current_ioa = (tmp * 3.3 / 1024) / 0.75 / 200 */
-		info->current_iob[modular_id][0] = 0.021484 * tmp;
+		/* current_iob = 3.3 / 1024 * 5 * tmp */
+		info->current_iob[modular_id][0] = 3.3 / 1024 * 5 * tmp;
 
 		memcpy(&info->pmu_version[modular_id][0], ar->data + 24, 4);
 		info->pmu_version[modular_id][0][4] = '\0';
