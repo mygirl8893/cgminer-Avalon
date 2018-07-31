@@ -67,6 +67,19 @@ uint32_t opt_avalon8_mux_h2l = AVA8_DEFAULT_MUX_H2L;
 uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
 uint32_t opt_avalon8_roll_enable = AVA8_DEFAULT_ROLL_ENABLE;
 
+uint32_t opt_avalon8_lv2_th_msadd = AVA8_DEFAULT_LV2_TH_MSADD;
+uint32_t opt_avalon8_lv2_th_ms = AVA8_DEFAULT_LV2_TH_MS;
+uint32_t opt_avalon8_lv3_th_msadd = AVA8_DEFAULT_LV3_TH_MSADD;
+uint32_t opt_avalon8_lv3_th_ms = AVA8_DEFAULT_LV3_TH_MS;
+uint32_t opt_avalon8_lv4_th_msadd = AVA8_DEFAULT_LV4_TH_MSADD;
+uint32_t opt_avalon8_lv4_th_ms = AVA8_DEFAULT_LV4_TH_MS;
+uint32_t opt_avalon8_lv5_th_msadd = AVA8_DEFAULT_LV5_TH_MSADD;
+uint32_t opt_avalon8_lv5_th_ms = AVA8_DEFAULT_LV5_TH_MS;
+uint32_t opt_avalon8_lv6_th_msadd = AVA8_DEFAULT_LV6_TH_MSADD;
+uint32_t opt_avalon8_lv6_th_ms = AVA8_DEFAULT_LV6_TH_MS;
+uint32_t opt_avalon8_lv7_th_msadd = AVA8_DEFAULT_LV7_TH_MSADD;
+uint32_t opt_avalon8_lv7_th_ms = AVA8_DEFAULT_LV7_TH_MS;
+
 /* Setting timeout need freq vlaues */
 uint32_t avalon8_set_timeout_freq = 1;
 
@@ -1775,6 +1788,73 @@ static void avalon8_set_ss_param(struct cgpu_info *avalon8, int addr)
 		avalon8_iic_xfer_pkg(avalon8, addr, &send_pkg, NULL);
 }
 
+static void avalon8_set_ss_spdth(struct cgpu_info *avalon8, int addr)
+{
+	struct avalon8_pkg send_pkg;
+	uint32_t tmp;
+
+	if (!opt_avalon8_smart_speed)
+		return;
+
+	memset(send_pkg.data, 0, AVA8_P_DATA_LEN);
+
+	tmp = be32toh(opt_avalon8_lv2_th_msadd);
+	memcpy(send_pkg.data, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv2 th msadd %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv2_th_msadd);
+
+	tmp = be32toh(opt_avalon8_lv2_th_ms);
+	memcpy(send_pkg.data + 4, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv2 th ms %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv2_th_ms);
+
+	tmp = be32toh(opt_avalon8_lv3_th_msadd);
+	memcpy(send_pkg.data + 8, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv3 th msadd %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv3_th_msadd);
+
+	tmp = be32toh(opt_avalon8_lv3_th_ms);
+	memcpy(send_pkg.data + 12, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv3 th ms %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv3_th_ms);
+
+	tmp = be32toh(opt_avalon8_lv4_th_msadd);
+	memcpy(send_pkg.data + 16, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv4 th msadd %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv4_th_msadd);
+
+	tmp = be32toh(opt_avalon8_lv4_th_ms);
+	memcpy(send_pkg.data + 20, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv4 th ms %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv4_th_ms);
+
+	tmp = be32toh(opt_avalon8_lv5_th_msadd);
+	memcpy(send_pkg.data + 24, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv5 th msadd %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv5_th_msadd);
+
+	tmp = be32toh(opt_avalon8_lv5_th_ms);
+	memcpy(send_pkg.data + 28, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv5 th ms %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv5_th_ms);
+
+	/* Package the data */
+	avalon8_init_pkg(&send_pkg, AVA8_P_SET_SS_SPDTH, 1, 1);
+
+	if (addr == AVA8_MODULE_BROADCAST)
+		avalon8_send_bc_pkgs(avalon8, &send_pkg);
+	else
+		avalon8_iic_xfer_pkg(avalon8, addr, &send_pkg, NULL);
+}
+
 static void avalon8_stratum_finish(struct cgpu_info *avalon8)
 {
 	struct avalon8_pkg send_pkg;
@@ -1799,6 +1879,30 @@ static void avalon8_set_finish(struct cgpu_info *avalon8, int addr)
 	tmp = AVA8_ASIC_TIMEOUT_CONST / avalon8_set_timeout_freq * 83 / 100;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
+
+	tmp = be32toh(opt_avalon8_lv6_th_msadd);
+	memcpy(send_pkg.data + 8, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv6 th msadd %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv6_th_msadd);
+
+	tmp = be32toh(opt_avalon8_lv6_th_ms);
+	memcpy(send_pkg.data + 12, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv6 th ms %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv6_th_ms);
+
+	tmp = be32toh(opt_avalon8_lv7_th_msadd);
+	memcpy(send_pkg.data + 16, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv7 th msadd %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv7_th_msadd);
+
+	tmp = be32toh(opt_avalon8_lv7_th_ms);
+	memcpy(send_pkg.data + 20, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set lv7 th ms %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_lv7_th_ms);
 
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET_FIN, 1, 1);
 	avalon8_iic_xfer_pkg(avalon8, addr, &send_pkg, NULL);
@@ -1945,8 +2049,10 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 			avalon8_set_voltage_level(avalon8, i, info->set_voltage_level[i]);
 			for (j = 0; j < info->miner_count[i]; j++)
 				avalon8_set_freq(avalon8, i, j, info->set_frequency[i][j]);
-			if (opt_avalon8_smart_speed)
+			if (opt_avalon8_smart_speed) {
 				avalon8_set_ss_param(avalon8, i);
+				avalon8_set_ss_spdth(avalon8, i);
+			}
 
 			avalon8_set_finish(avalon8, i);
 			cg_wunlock(&info->update_lock);
