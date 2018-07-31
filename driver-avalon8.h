@@ -73,6 +73,7 @@
 #define AVA8_DEFAULT_TH_INIT	32767
 #define AVA8_DEFAULT_TH_ADD	1
 #define AVA8_DEFAULT_TH_MS	5
+#define AVA8_DEFAULT_TH_MSSEL	0
 #define AVA8_DEFAULT_TH_TIMEOUT	20000
 #define AVA8_DEFAULT_NONCE_MASK 24
 #define AVA8_DEFAULT_NONCE_CHECK	1
@@ -333,6 +334,7 @@ extern uint32_t opt_avalon8_th_init;
 extern uint32_t opt_avalon8_th_ms;
 extern uint32_t opt_avalon8_th_timeout;
 extern uint32_t opt_avalon8_th_add;
+extern uint32_t opt_avalon8_th_mssel;
 extern uint32_t opt_avalon8_nonce_mask;
 extern uint32_t opt_avalon8_nonce_check;
 extern uint32_t opt_avalon8_mux_l2h;

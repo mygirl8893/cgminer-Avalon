@@ -59,6 +59,7 @@ uint32_t opt_avalon8_th_init = AVA8_DEFAULT_TH_INIT;
 uint32_t opt_avalon8_th_ms = AVA8_DEFAULT_TH_MS;
 uint32_t opt_avalon8_th_timeout = AVA8_DEFAULT_TH_TIMEOUT;
 uint32_t opt_avalon8_th_add = AVA8_DEFAULT_TH_ADD;
+uint32_t opt_avalon8_th_mssel = AVA8_DEFAULT_TH_MSSEL;
 uint32_t opt_avalon8_nonce_mask = AVA8_DEFAULT_NONCE_MASK;
 uint32_t opt_avalon8_nonce_check = AVA8_DEFAULT_NONCE_CHECK;
 uint32_t opt_avalon8_mux_l2h = AVA8_DEFAULT_MUX_L2H;
@@ -1758,6 +1759,12 @@ static void avalon8_set_ss_param(struct cgpu_info *avalon8, int addr)
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set th add %u",
 			avalon8->drv->name, avalon8->device_id, addr,
 			opt_avalon8_th_add);
+
+	tmp = be32toh(opt_avalon8_th_mssel);
+	memcpy(send_pkg.data + 24, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set th mssel %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_th_mssel);
 
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET_SS, 1, 1);
