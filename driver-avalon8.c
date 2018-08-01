@@ -534,7 +534,7 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		applog(LOG_NOTICE, "%s-%d-%d: Found! P:%d - N2:%08x N:%08x NR:%d/%d [M:%d, A:%d, C:%d - MW: (%"PRIu64",%"PRIu64",%"PRIu64",%"PRIu64")]",
 		       avalon8->drv->name, avalon8->device_id, modular_id,
 		       pool_no, nonce2, nonce, ntime, info->max_ntime,
-		       miner, chip_id, nonce & 0x7f,
+		       miner, chip_id, nonce & 0xff,
 		       info->chip_matching_work[modular_id][miner][0],
 		       info->chip_matching_work[modular_id][miner][1],
 		       info->chip_matching_work[modular_id][miner][2],
