@@ -368,5 +368,7 @@ extern uint32_t opt_avalon8_lv6_th_msadd;
 extern uint32_t opt_avalon8_lv6_th_ms;
 extern uint32_t opt_avalon8_lv7_th_msadd;
 extern uint32_t opt_avalon8_lv7_th_ms;
+extern uint32_t opt_avalon8_spdlow;
+extern uint32_t opt_avalon8_spdhigh;
 #endif /* USE_AVALON8 */
 #endif /* _AVALON8_H_ */
