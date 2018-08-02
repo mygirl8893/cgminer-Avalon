@@ -929,6 +929,11 @@ static char __maybe_unused *set_int_0_to_2(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 2);
 }
 
+static char __maybe_unused *set_int_0_to_7(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 7);
+}
+
 static char __maybe_unused *set_int_0_to_4(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 4);
@@ -1612,6 +1617,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon8-h2ltime0-spd",
 		     set_int_0_to_255, opt_show_intval, &opt_avalon8_h2ltime0_spd,
 		     "Set Avalon8 h2ltime0 spd, range 0-255."),
+	OPT_WITH_ARG("--avalon8-spdlow",
+		     set_int_0_to_7, opt_show_intval, &opt_avalon8_spdlow,
+		     "Set Avalon8 spdlow, range 0-7."),
+	OPT_WITH_ARG("--avalon8-spdhigh",
+		     set_int_0_to_7, opt_show_intval, &opt_avalon8_spdhigh,
+		     "Set Avalon8 spdhigh, range 0-7."),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
